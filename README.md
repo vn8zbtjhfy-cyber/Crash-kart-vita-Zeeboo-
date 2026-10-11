@@ -6,7 +6,7 @@ Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **No es tod
 
 - **Primer enlace de ejecutable ELF para ARM/PS Vita aprobado:** GitHub Actions [38185478090](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38185478090), commit `4e2d24e`.
 - **Auditoría ARM y archivo ELF de diagnóstico aprobados:** GitHub Actions [38185657768](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38185657768), commit `8c18777`. Se verificaron `ELF32`, `ARM`, `main` y `cnk_vita_native_run`. El ejecutable no es instalable; el artefacto expira según la política de retención.
-- **129 de 129 pruebas de PC locales pasaron**, incluida la prueba del bucle nativo simulado y liberación de texturas. La validación automática de GitHub **sin ROM** también pasó con sus ocho pruebas seleccionadas; no equivale a probar una Vita real.
+- **129 de 129 pruebas de PC locales pasaron**, incluida la prueba del bucle nativo simulado y liberación de texturas. La validación automática de GitHub **sin ROM** ya pasó con **10 pruebas** (incluidos diagnósticos y seguridad del ZIP), ejecución [38185881976](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38185881976); no equivale a probar una Vita real.
 - Corregidas dependencias de enlace: `vitaGL`, `stdc++`, `mathneon`, `taihen_stub` y stubs del sistema, además de la llamada obsoleta `vglEnd()`.
 
 ## Qué todavía falta
