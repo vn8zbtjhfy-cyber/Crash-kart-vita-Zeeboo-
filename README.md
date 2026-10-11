@@ -1,14 +1,18 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
-Port nativo en C aún inacabado. No hay ELF ni VPK funcional certificado.
+Repositorio **privado** de código fuente para el port nativo de Zeebo a PS Vita. **Todavía no es un juego completo ni existe un VPK verificado.**
 
-## Estado de avance 107
+## Estado: avance 107 publicado (11 de octubre de 2026)
 
-- 129/129 pruebas PC/Linux en CTest y 2/2 pruebas focalizadas ASan/UBSan.
-- Mejorada salida de errores Vita, registro en ux0:data/cnk3d_last_status.txt.
-- En GitHub privado existe el flujo VitaSDK, pero antes de publicar este ZIP de fuentes limpias no está el código completo.
-- Imagen oficial de VitaSDK: vitasdk/vitasdk:2026.08.
+- Publicadas las **171 entradas de fuentes/configuración del paquete limpio**, manteniendo el `.gitignore` protector que ya existía.
+- **129/129 pruebas de PC** aprobadas en la sesión de desarrollo. Esas pruebas no demuestran ejecución en la consola.
+- Los workflows `Validación de código (sin ROM)` y `VitaSDK diagnostic ELF` se ejecutan después de publicar en `main`.
+- La compilación con VitaSDK, el enlace ARM, el arranque en PS Vita, la jugabilidad y el rendimiento deben comprobarse **por separado**. Un ELF compilado no equivaldría todavía a un juego terminado.
 
-Para publicar solo código, extrae este ZIP en la raíz del repositorio, o usa scripts/publicar_fuentes_git.ps1 desde Windows con git instalado y autenticado. Nunca publiques el ZIP completo de recursos originales.
+## Fuentes y recursos
 
-La acción de GitHub debe enlazar un ELF de diagnóstico. Esto no demuestra funcionamiento en consola y NO genera VPK.
+**Nunca publicar** `data.vfs`, `cnk2.mod`, `cnk2.sig`, ROMs, archivos musicales o texturas/modelos originales en este repositorio. El ZIP completo del proyecto se mantiene separado para las pruebas privadas.
+
+## Diagnóstico de compilación
+
+El archivo `.github/workflows/vita-elf-link.yml` intenta ejecutar `scripts/vita_elf_preflight.sh` con el contenedor VitaSDK. **Ese flujo NO produce SELF ni VPK**. Los errores y logs de GitHub Actions son el punto de partida para corregir la compilación.
