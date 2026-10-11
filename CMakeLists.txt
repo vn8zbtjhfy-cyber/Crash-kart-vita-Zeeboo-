@@ -732,7 +732,7 @@ else()
       # The real VitaSDK/vitaGL libraries must be installed by the developer.
       # Keep the list overridable for SDK/version-specific installations.
       set(CNK_VITA_LINK_LIBS
-          "vitaGL;vitashark;png;z;m;SceProcessmgr_stub;SceCtrl_stub;SceDisplay_stub;SceAudioOut_stub;SceGxm_stub;SceLibKernel_stub;SceKernelThreadMgr_stub;SceShaccCg_stub;SceShaccCgExt;SceSysmodule_stub;SceIofilemgr_stub"
+          "vitaGL;vitashark;png;z;m;SceProcessmgr_stub;SceCtrl_stub;SceDisplay_stub;SceAudio_stub;SceGxm_stub;SceLibKernel_stub;SceKernelThreadMgr_stub;SceShaccCg_stub;SceShaccCgExt;SceSysmodule_stub;SceIofilemgr_stub"
           CACHE STRING "VitaSDK libraries required by ELF link check")
       add_executable(cnk_vita_elf_link_check src/vita_main.c)
       target_link_libraries(cnk_vita_elf_link_check PRIVATE
