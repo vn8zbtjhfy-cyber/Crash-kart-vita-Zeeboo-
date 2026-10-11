@@ -1,0 +1,32 @@
+# Compile-only diagnostic: NO SELF, NO VPK, no copyrighted assets.
+name: VitaSDK diagnostic ELF
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'CMakeLists.txt'
+      - 'scripts/vita_elf_preflight.sh'
+      - '.github/workflows/vita-elf-link.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  vita-elf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    container:
+      image: vitasdk/vitasdk:2026.08
+    steps:
+      - name: Checkout source-only repository
+        uses: actions/checkout@v4
+      - name: Check source and reject original assets
+        run: |
+          test -f CMakeLists.txt
+          test -f src/vita_main.c
+          test -f src/cnk_vita_native_app.c
+          test ! -e data.vfs
+          test ! -e assets/cnk2.mod
+          test ! -e assets/cnk2.sig
+      - name: Link native PS Vita diagnostic ELF
+        run: bash scripts/vita_elf_preflight.sh "$GITHUB_WORKSPACE/build-vita-elf"
