@@ -861,7 +861,7 @@ cleanup:
   cnk_character_pack_free(&character_pack);
   if(gallery_skins)cnk_gallery_skins_free(gallery_skins);
   if(kart_skins)cnk_kart_skins_free(kart_skins);
-  vglEnd();
+  /* vitaGL does not expose a public vglEnd() teardown API. All\n   * application-owned GPU resources were released above; the runtime\n   * releases its remaining internals when the process terminates. */
  }
  free(gallery_skins);
  free(kart_skins);
