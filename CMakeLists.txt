@@ -71,6 +71,7 @@ add_library(cnk_native_core STATIC
     src/cnk_frontend_actions.c
     src/cnk_app_runtime.c
     src/cnk_vita_diagnostics.c
+    src/cnk_vita_telemetry.c
     src/cnk_sound_cues.c
     src/cnk_track_catalog.c
 )
@@ -664,6 +665,11 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_vita_diagnostics PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_vita_diagnostics PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME vita_diagnostics COMMAND cnk_test_vita_diagnostics)
+
+  add_executable(cnk_test_vita_telemetry tests/test_native_vita_telemetry.c)
+  target_link_libraries(cnk_test_vita_telemetry PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_vita_telemetry PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME vita_telemetry COMMAND cnk_test_vita_telemetry)
 
   add_executable(cnk_test_vita_controls
     tests/test_native_vita_controls.c src/cnk_vita_controls.c)

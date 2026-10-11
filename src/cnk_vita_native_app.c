@@ -13,6 +13,7 @@
 #include "cnk_kart_skins.h"
 #include "cnk_vita_audio_worker.h"
 #include "cnk_vita_diagnostics.h"
+#include "cnk_vita_telemetry.h"
 #include "cnk_sound_cues.h"
 #include "cnk_music_cues.h"
 #include "cnk_driver_bindings.h"
@@ -449,6 +450,7 @@ int cnk_vita_native_run_with_kart_skins(const char *vfs_path,
  cnk_pad_layout pad_layout={0};
  int result=-1;
  int gpu_started=0;
+ cnk_vita_telemetry perf={0};
  cnk_texture_manifest manifest={0};
  cnk_png_catalog png={0};
  cnk_racer_assets racer_assets={0};
@@ -480,6 +482,7 @@ int cnk_vita_native_run_with_kart_skins(const char *vfs_path,
   * opened; this also makes a missing app0:/data.vfs diagnosable on Vita. */
  (void)sceIoMkdir("ux0:data",0777);
  if(!vfs_path || fufs_open(vfs_path,&vfs)){
+  (void)cnk_vita_telemetry_write("ux0:data/cnk3d_perf.txt",&perf,-1);
   (void)cnk_vita_diagnostic_write("ux0:data/cnk3d_last_status.txt",-1);
   fprintf(stderr,"CNK Vita: -1 %s\n",cnk_vita_diagnostic_name(-1));
   return -1;
@@ -847,6 +850,8 @@ int cnk_vita_native_run_with_kart_skins(const char *vfs_path,
    * This does not pretend to reproduce Zeebo frame pacing or physics. */
   vglSwapBuffers(GL_FALSE);
   if(sceDisplayWaitVblankStart()<0){result=-13;break;}
+  /* Record only successfully presented frames, never aborted GL draws. */
+  cnk_vita_telemetry_present(&perf,sceKernelGetProcessTimeWide());
  }
 cleanup:
  /* Join playback first. Only THEN may cue PCM backing be freed. */
@@ -875,6 +880,7 @@ cleanup:
  fufs_close(&vfs);
  /* Best-effort breadcrumb; never override the original failure code. A
   * normal exit overwrites an old error so stale logs are not misleading. */
+ (void)cnk_vita_telemetry_write("ux0:data/cnk3d_perf.txt",&perf,result);
  (void)cnk_vita_diagnostic_write("ux0:data/cnk3d_last_status.txt",result);
  if(result)fprintf(stderr,"CNK Vita: %d %s\n",result,
                     cnk_vita_diagnostic_name(result));
