@@ -1,4 +1,6 @@
-# Compile-only diagnostic: NO SELF, NO VPK, no copyrighted assets.
+# VitaSDK link diagnosis, not a VPK build or PS Vita hardware test.
+# Upload only original project source and these scripts to the private repo.
+# Do NOT commit licensed ROM assets, data.vfs, extracted music or textures.
 name: VitaSDK diagnostic ELF
 on:
   push:
@@ -20,7 +22,7 @@ jobs:
     steps:
       - name: Checkout source-only repository
         uses: actions/checkout@v4
-      - name: Check source and reject original assets
+      - name: Verify project sources have been uploaded
         run: |
           test -f CMakeLists.txt
           test -f src/vita_main.c
@@ -28,5 +30,5 @@ jobs:
           test ! -e data.vfs
           test ! -e assets/cnk2.mod
           test ! -e assets/cnk2.sig
-      - name: Link native PS Vita diagnostic ELF
+      - name: Cross-compile and link diagnostic native ELF
         run: bash scripts/vita_elf_preflight.sh "$GITHUB_WORKSPACE/build-vita-elf"
