@@ -1,18 +1,22 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
-Repositorio **privado** de código fuente para el port nativo de Zeebo a PS Vita. **Todavía no es un juego completo ni existe un VPK verificado.**
+Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **No es todavía un juego completo ni hay un VPK verificado.**
 
-## Estado: avance 107 publicado (11 de octubre de 2026)
+## Avance 108 (11 de octubre de 2026)
 
-- Publicados **171 archivos del paquete limpio**, más **142 archivos de pruebas y herramientas de compilación**, manteniendo el `.gitignore` protector que ya existía.
-- **129/129 pruebas de PC** aprobadas en la sesión de desarrollo con los recursos locales. La validación automatizada sin ROM de GitHub Actions para el commit `9463b8b` **pasó** con las ocho pruebas portátiles configuradas. Esto no demuestra ejecución en la consola.
-- Los workflows `Validación de código (sin ROM)` y `VitaSDK diagnostic ELF` se ejecutan después de publicar en `main`.
-- Corregida una llamada a `vglEnd()` que no existe en la versión actual de la API pública de vitaGL. La compilación con VitaSDK y el enlace ARM se comprueban con GitHub Actions. El arranque en PS Vita, la jugabilidad y el rendimiento siguen pendientes y deben comprobarse **por separado**. Un ELF compilado no equivaldría todavía a un juego terminado.
+- **Primer enlace de ejecutable ELF para ARM/PS Vita aprobado:** GitHub Actions [38185478090](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38185478090), commit `4e2d24e`.
+- **Auditoría ARM y archivo ELF de diagnóstico aprobados:** GitHub Actions [38185657768](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38185657768), commit `8c18777`. Se verificaron `ELF32`, `ARM`, `main` y `cnk_vita_native_run`. El ejecutable no es instalable; el artefacto expira según la política de retención.
+- **129 de 129 pruebas de PC locales pasaron**, incluida la prueba del bucle nativo simulado y liberación de texturas. La validación automática de GitHub **sin ROM** también pasó con sus ocho pruebas seleccionadas; no equivale a probar una Vita real.
+- Corregidas dependencias de enlace: `vitaGL`, `stdc++`, `mathneon`, `taihen_stub` y stubs del sistema, además de la llamada obsoleta `vglEnd()`.
 
-## Fuentes y recursos
+## Qué todavía falta
 
-**Nunca publicar** `data.vfs`, `cnk2.mod`, `cnk2.sig`, ROMs, archivos musicales o texturas/modelos originales en este repositorio. El ZIP completo del proyecto se mantiene separado para las pruebas privadas.
+La compilación ARM **no certifica** que arranque el juego en la consola. Siguen pendientes las pruebas en PS Vita física, compatibilidad de gráficos y audio, memoria real, reproducción de todos los recursos y mecánicas originales, optimización y verificación final de jugabilidad. El porcentaje global estimado se conserva en **45.9 %** hasta obtener pruebas en consola.
 
-## Diagnóstico de compilación
+## Integridad y derechos de datos
 
-El archivo `.github/workflows/vita-elf-link.yml` intenta ejecutar `scripts/vita_elf_preflight.sh` con el contenedor VitaSDK. **Ese flujo NO produce SELF ni VPK**. Los errores y logs de GitHub Actions son el punto de partida para corregir la compilación.
+Este repositorio contiene **solamente código, herramientas, pruebas y configuración**. No incorporar a GitHub `data.vfs`, `cnk2.mod`, `cnk2.sig`, ROM, música, modelos ni texturas originales. El paquete privado con materiales proporcionados por el usuario se conserva **separado** del código limpio.
+
+## Cómo comprobarlo
+
+Los workflows `.github/workflows/verificacion.yml` y `.github/workflows/vita-elf-link.yml` verifican código en Linux y enlazan el ELF mediante VitaSDK. El segundo ejecuta `scripts/vita_elf_preflight.sh`, audita la arquitectura y archiva el ELF de diagnóstico. **No se genera SELF ni VPK.**
