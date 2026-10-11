@@ -53,7 +53,7 @@ jobs:
       - name: Pruebas portátiles (no usan ROM)
         run: >-
           ctest --test-dir build --output-on-failure
-          -R '^(projectile_threat|item_visibility|weapons|hazard_priority|projectile_priority|item_transaction|pickup_order|vita_controls)$'
+          -R '^(projectile_threat|item_visibility|weapons|hazard_priority|projectile_priority|item_transaction|pickup_order|vita_controls|vita_diagnostics|source_zip_safety)$'
 
       - name: Informe de cobertura limitada
         if: always()
@@ -63,7 +63,7 @@ jobs:
             echo '### Resultado de la revisión automática'
             echo ''
             echo '- Compilación del código C portátil para Linux.'
-            echo '- Solo se ejecutan ocho pruebas que NO necesitan data.vfs.'
+            echo '- Se ejecutan diez pruebas que NO necesitan data.vfs.'
             echo '- Las pruebas con ROM, VitaSDK y PS Vita física NO se ejecutan.'
             echo '- No se crea VPK.'
           } >> "$GITHUB_STEP_SUMMARY"
