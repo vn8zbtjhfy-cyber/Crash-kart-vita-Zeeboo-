@@ -31,7 +31,7 @@ def audit(path):
                 raise ValueError('binary/original asset in source ZIP: ' + name)
             # The source package is intentionally limited to source/build files.
             if not (name in {'README.md', '.gitignore', 'CMakeLists.txt'}
-                    or name.startswith(('src/', 'scripts/', '.github/'))):
+                    or name.startswith(('src/', 'scripts/', 'tests/', 'tools/', '.github/'))):
                 raise ValueError('unexpected distribution entry: ' + name)
     return len(names)
 
