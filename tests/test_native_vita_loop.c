@@ -90,7 +90,8 @@ int sceDisplayWaitVblankStart(void){
  struct timespec audio_slice={0,1000000};nanosleep(&audio_slice,NULL);
  return (fail_vblank_on && vblank_waits==fail_vblank_on)?-1:0;
 }
-void vglEnd(void){shutdowns++;}
+/* The public vitaGL API does not provide a teardown call. */
+void vglEnd(void){shutdowns++;assert(!"unsupported vitaGL teardown called");}
 void glBegin(GLenum mode){assert(mode==GL_QUADS);overlay_quads++;}
 void glEnd(void){}
 void glVertex2f(float x,float y){assert(isfinite(x)&&isfinite(y));}
@@ -109,7 +110,7 @@ int main(int argc,char **argv){
  assert(inits==0 && shutdowns==0 && swaps==0);
  int rc=cnk_vita_native_run(argv[1]);
  assert(rc==0);
- assert(inits==1&&shutdowns==0);
+ assert(inits==1&&shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  assert(vblank_waits==swaps);
  assert(swaps==(int)(sizeof(playback)/sizeof(playback[0])-1));
  assert(controller_reads==(int)(sizeof(playback)/sizeof(playback[0])));
@@ -124,7 +125,7 @@ int main(int argc,char **argv){
  controller_reads=swaps=vblank_waits=inits=shutdowns=overlay_quads=0;
  clocks=1000000;cnk_test_gl_reset(UINT32_MAX);
  assert(cnk_vita_native_run(argv[1])==0);
- assert(swaps==(int)(active_playback_len-1) && inits==1 && shutdowns==0);
+ assert(swaps==(int)(active_playback_len-1) && inits==1 && shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  assert(cnk_test_gl.invalid==0 && cnk_test_gl.matrix_stack_depth==0);
  active_playback=playback;
  active_playback_len=sizeof(playback)/sizeof(playback[0]);
@@ -133,7 +134,7 @@ int main(int argc,char **argv){
  controller_reads=swaps=vblank_waits=inits=shutdowns=overlay_quads=0;
  clocks=1000000;cnk_test_gl_reset(UINT32_MAX);fail_vblank_on=3;
  assert(cnk_vita_native_run(argv[1])==-13);
- assert(vblank_waits==3 && swaps==3 && inits==1 && shutdowns==0);
+ assert(vblank_waits==3 && swaps==3 && inits==1 && shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  assert(cnk_test_gl.invalid==0 && cnk_test_gl.matrix_stack_depth==0);
  fail_vblank_on=0;
  /* Regression: errors can also be reported asynchronously by the GPU even
@@ -141,7 +142,7 @@ int main(int argc,char **argv){
  controller_reads=swaps=vblank_waits=inits=shutdowns=overlay_quads=0;
  clocks=1000000;cnk_test_gl_reset(UINT32_MAX);inject_gl_error_on_vblank=2;
  assert(cnk_vita_native_run(argv[1])==-48);
- assert(vblank_waits==2 && swaps==2 && inits==1 && shutdowns==0);
+ assert(vblank_waits==2 && swaps==2 && inits==1 && shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  assert(controller_reads==3); /* third frame sampled but never presented */
  assert(cnk_test_gl.invalid==0 && cnk_test_gl.matrix_stack_depth==0);
  inject_gl_error_on_vblank=0;
@@ -180,7 +181,7 @@ int main(int argc,char **argv){
  assert(cnk_test_gl.handles_created==1);
  assert(cnk_test_gl.handles_deleted==1);
  assert(cnk_test_gl.invalid==0);
- assert(inits==1&&shutdowns==0);
+ assert(inits==1&&shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  assert(vblank_waits==swaps);
  /* One more integration: scene change must DELETE all GPU textures of the
   * preceding circuit before allocating any for the next. */
@@ -212,7 +213,7 @@ int main(int argc,char **argv){
  assert(cnk_test_gl.handles_deleted==2);
  assert(cnk_test_gl.textured_calls>0);
  assert(cnk_test_gl.invalid==0);
- assert(inits==1&&shutdowns==0);
+ assert(inits==1&&shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  assert(vblank_waits==swaps);
  /* Actual native application additionally attaches a user-selected ORIGINAL
   * 3DOB resource to a racer, without claiming this is the correct character. */
@@ -257,7 +258,7 @@ int main(int argc,char **argv){
  clocks=1000000;cnk_test_gl_reset(UINT32_MAX);
  assert(cnk_vita_native_run_with_assets(argv[1],NULL,modelpath)==0);
  assert(cnk_test_gl.matrix_multiplications>0);
- assert(cnk_test_gl.invalid==0 && inits==1 && shutdowns==0);
+ assert(cnk_test_gl.invalid==0 && inits==1 && shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  /* An invalid model identity must fail BEFORE any GPU initialization. */
  FILE *invalid_file=fopen(modelpath,"wb");assert(invalid_file);
  assert(fprintf(invalid_file,"0\t0\t00000000\t1\t0\t0\t0\t0\t1\t0\t0\t0\t0\t1\t0\t0\t0\t0\t1\n")>0);
@@ -283,7 +284,7 @@ extern int cnk_host_audio_fail_at;
  assert(cnk_host_audio_opens==opens+1&&cnk_host_audio_closes==closes+1);
  assert(cnk_host_audio_outputs>outputs);
  assert(cnk_host_audio_signal_blocks>signals);
- assert(inits==1&&shutdowns==0);
+ assert(inits==1&&shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  /* A mismatched ID must fail BEFORE starting the GPU or audio thread. */
  sf=fopen(soundpath,"wb");assert(sf);
  assert(fprintf(sf,"APP\tRACE_STARTED\t44\t00000000\t0.5\n")>0);
@@ -307,7 +308,7 @@ extern int cnk_host_audio_fail_at;
  active_playback=playback;
  active_playback_len=sizeof(playback)/sizeof(playback[0]);
  assert(cnk_host_audio_opens==opens+1&&cnk_host_audio_closes==closes+1);
- assert(inits==1&&shutdowns==0);
+ assert(inits==1&&shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  assert(!remove(soundpath));
  /* SYNTHETIC soundtrack associations used ONLY inside this host test.
   * Track IDs are authentic Zeebo music, but menu/scene assignment is not. */
@@ -324,7 +325,7 @@ extern int cnk_host_audio_fail_at;
  assert(cnk_vita_native_run_with_music(argv[1],NULL,NULL,NULL,musicpath,
    CNK_SOURCE_ROOT "/assets/music_wav")==0);
  assert(cnk_host_audio_opens==opens+1&&cnk_host_audio_closes==closes+1);
- assert(cnk_host_audio_outputs>outputs&&inits==1&&shutdowns==0);
+ assert(cnk_host_audio_outputs>outputs&&inits==1&&shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  /* A false original-MP3 ID must be rejected before graphics start. */
  mf=fopen(musicpath,"wb");assert(mf);
  assert(fprintf(mf,"RACE\t*\t999\t0.8\t1\n")>0);
@@ -363,7 +364,7 @@ extern int cnk_host_audio_fail_at;
  assert(cnk_test_gl.textured_calls>0);
  assert(cnk_test_gl.images_uploaded==3);
  assert(cnk_test_gl.handles_created==3&&cnk_test_gl.handles_deleted==3);
- assert(!cnk_test_gl.invalid&&inits==1&&shutdowns==0);
+ assert(!cnk_test_gl.invalid&&inits==1&&shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  /* A driver sidecar without a source-checked kart is rejected BEFORE GPU. */
  inits=shutdowns=0;
  assert(cnk_vita_native_run_with_driver_assets(argv[1],NULL,NULL,
@@ -375,7 +376,7 @@ extern int cnk_host_audio_fail_at;
  cnk_test_gl.fail_upload_on_number=2;
  assert(cnk_vita_native_run_with_driver_assets(argv[1],NULL,pairkart,
      NULL,NULL,NULL,pairdriver)==-27);
- assert(inits==1&&shutdowns==0);
+ assert(inits==1&&shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  assert(cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  driverfile=fopen(pairdriver,"wb");assert(driverfile);
  assert(fprintf(driverfile,"0\tunknown\t1\t0\t0\t0\t0\t1\t0\t0\t0\t0\t1\t0\t0\t0\t0\t1\n")>0);
@@ -404,7 +405,7 @@ extern int cnk_host_audio_fail_at;
  assert(cnk_test_gl.images_uploaded==4); /* kart body + three characters */
  assert(cnk_test_gl.handles_created==4&&cnk_test_gl.handles_deleted==4);
  assert(cnk_test_gl.matrix_multiplications>=2 && cnk_test_gl.textured_calls>0);
- assert(!cnk_test_gl.invalid&&inits==1&&shutdowns==0);
+ assert(!cnk_test_gl.invalid&&inits==1&&shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  /* A mismatched main-body material must fail, with no remaining GPU data. */
  skinfile=fopen(kartskinpath,"wb");assert(skinfile);
  assert(fprintf(skinfile,"0\tOtherUnverifiedBody.png\t2\t01d12af6\n")>0);
@@ -413,7 +414,7 @@ extern int cnk_host_audio_fail_at;
  clocks=1000000;cnk_test_gl_reset(UINT32_MAX);
  assert(cnk_vita_native_run_with_kart_skins(argv[1],NULL,pairkart,
       NULL,NULL,NULL,pairdriver,kartskinpath)==-29);
- assert(inits==1&&shutdowns==0);
+ assert(inits==1&&shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  assert(cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  /* Three genuine 3DOB source LODs with TWO test-only PNG associations.
   * The low-detail model contains TWO distinct POLY selectors for Wheel_t,
@@ -440,7 +441,7 @@ extern int cnk_host_audio_fail_at;
  cnk_test_gl.fail_upload_on_number=2;
  assert(cnk_vita_native_run_with_kart_skins(argv[1],NULL,pairkart,
       NULL,NULL,NULL,pairdriver,kartskinpath)==-29);
- assert(inits==1&&shutdowns==0);
+ assert(inits==1&&shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  assert(cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  assert(!remove(kartskinpath));
  assert(!remove(pairkart));assert(!remove(pairdriver));
@@ -460,7 +461,7 @@ extern int cnk_host_audio_fail_at;
  assert(cnk_test_gl.handles_created==3&&cnk_test_gl.handles_deleted==3);
  assert(cnk_test_gl.textured_calls>=3);
  assert(!cnk_test_gl.invalid && !cnk_test_gl.matrix_stack_depth);
- assert(inits==1 && shutdowns==0 && swaps==vblank_waits);
+ assert(inits==1 && shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted && swaps==vblank_waits);
  /* Both opt-in viewers may be installed; source vehicle gallery takes
   * precedence and never uploads guessed body textures or driver identity. */
  FILE *vehicle_flag=fopen("app0:/source_kart_gallery.flag","wb");
@@ -476,7 +477,7 @@ extern int cnk_host_audio_fail_at;
  assert(cnk_test_gl.images_uploaded==0 && cnk_test_gl.textured_calls==0);
  assert(cnk_test_gl.matrix_multiplications>=6);
  assert(cnk_test_gl.invalid==0 && cnk_test_gl.matrix_stack_depth==0);
- assert(inits==1&&shutdowns==0&&swaps==vblank_waits);
+ assert(inits==1&&shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted&&swaps==vblank_waits);
  /* R LOD navigation must affect actual GPU triangle counts, without
   * selecting a different race or creating a source body-texture mapping. */
  controller_reads=swaps=vblank_waits=inits=shutdowns=overlay_quads=0;
@@ -521,7 +522,7 @@ extern int cnk_host_audio_fail_at;
  assert(cnk_vita_native_run(argv[1])==0);
  assert(cnk_test_gl.images_uploaded==1 && cnk_test_gl.textured_calls>0);
  assert(cnk_test_gl.handles_created==1 && cnk_test_gl.handles_deleted==1);
- assert(!cnk_test_gl.invalid && inits==1 && shutdowns==0);
+ assert(!cnk_test_gl.invalid && inits==1 && shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  /* A wrong original FUFS ID rejects the sidecar before drawing the gallery.
   * The application must still shut down GL and its other state. */
  gallery_mapping=fopen("app0:/verified_gallery_textures.tsv","wb");
@@ -532,7 +533,7 @@ extern int cnk_host_audio_fail_at;
  clocks=1000000;cnk_test_gl_reset(UINT32_MAX);
  assert(cnk_vita_native_run(argv[1])==-42);
  assert(!cnk_test_gl.handles_created && !cnk_test_gl.textured_calls);
- assert(inits==1 && shutdowns==0);
+ assert(inits==1 && shutdowns==0 && cnk_test_gl.handles_created==cnk_test_gl.handles_deleted);
  assert(!remove("app0:/verified_gallery_textures.tsv"));
  assert(!remove("app0:/source_kart_gallery.flag"));
  assert(!remove("app0:/source_character_gallery.flag"));
