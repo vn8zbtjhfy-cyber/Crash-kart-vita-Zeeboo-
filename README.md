@@ -4,10 +4,10 @@ Repositorio **privado** de código fuente para el port nativo de Zeebo a PS Vita
 
 ## Estado: avance 107 publicado (11 de octubre de 2026)
 
-- Publicadas las **171 entradas de fuentes/configuración del paquete limpio**, manteniendo el `.gitignore` protector que ya existía.
-- **129/129 pruebas de PC** aprobadas en la sesión de desarrollo. Esas pruebas no demuestran ejecución en la consola.
+- Publicados **171 archivos del paquete limpio**, más **142 archivos de pruebas y herramientas de compilación**, manteniendo el `.gitignore` protector que ya existía.
+- **129/129 pruebas de PC** aprobadas en la sesión de desarrollo con los recursos locales. La validación automatizada sin ROM de GitHub Actions para el commit `9463b8b` **pasó** con las ocho pruebas portátiles configuradas. Esto no demuestra ejecución en la consola.
 - Los workflows `Validación de código (sin ROM)` y `VitaSDK diagnostic ELF` se ejecutan después de publicar en `main`.
-- La compilación con VitaSDK, el enlace ARM, el arranque en PS Vita, la jugabilidad y el rendimiento deben comprobarse **por separado**. Un ELF compilado no equivaldría todavía a un juego terminado.
+- Corregida una llamada a `vglEnd()` que no existe en la versión actual de la API pública de vitaGL. La compilación con VitaSDK y el enlace ARM se comprueban con GitHub Actions. El arranque en PS Vita, la jugabilidad y el rendimiento siguen pendientes y deben comprobarse **por separado**. Un ELF compilado no equivaldría todavía a un juego terminado.
 
 ## Fuentes y recursos
 
