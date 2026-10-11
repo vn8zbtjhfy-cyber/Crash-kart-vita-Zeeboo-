@@ -1,0 +1,69 @@
+name: Validación de código (sin ROM)
+
+on:
+  push:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'tools/**'
+      - 'scripts/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/verificacion.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'tools/**'
+      - 'scripts/**'
+      - 'CMakeLists.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compilacion-y-pruebas-portatiles:
+    name: C / PC (sin data.vfs)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+
+      - name: Instalar dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build zlib1g-dev libpng-dev python3
+
+      - name: Comprobar que NO haya ROM ni VPK
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find . -type f \( -iname 'data.vfs' -o -iname '*.vpk' -o -iname '*.self' -o -iname '*.velf' -o -iname '*.mod' -o -iname '*.sig' -o -iname '*.wav' \) | grep -q .; then
+            echo 'ERROR: recursos originales o instalables detectados.'
+            exit 1
+          fi
+
+      - name: Configurar CMake Release
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Compilar código y pruebas
+        run: cmake --build build --parallel 2
+
+      - name: Pruebas portátiles (no usan ROM)
+        run: >-
+          ctest --test-dir build --output-on-failure
+          -R '^(projectile_threat|item_visibility|weapons|hazard_priority|projectile_priority|item_transaction|pickup_order|vita_controls)$'
+
+      - name: Informe de cobertura limitada
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### Resultado de la revisión automática'
+            echo ''
+            echo '- Compilación del código C portátil para Linux.'
+            echo '- Solo se ejecutan ocho pruebas que NO necesitan data.vfs.'
+            echo '- Las pruebas con ROM, VitaSDK y PS Vita física NO se ejecutan.'
+            echo '- No se crea VPK.'
+          } >> "$GITHUB_STEP_SUMMARY"
