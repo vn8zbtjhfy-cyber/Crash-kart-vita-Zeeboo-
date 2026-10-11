@@ -42,13 +42,11 @@ jobs:
           grep -Eq 'Class:.*ELF32' /tmp/cnk_elf_header.txt
           grep -Eq 'Machine:.*ARM' /tmp/cnk_elf_header.txt
           "$VITASDK/bin/arm-vita-eabi-readelf" -Ws "$elf" > /tmp/cnk_elf_symbols.txt
-          grep -Eq '[[:space:]]main
- /tmp/cnk_elf_symbols.txt
-          grep -Eq '[[:space:]]cnk_vita_native_run
- /tmp/cnk_elf_symbols.txt
+          grep -Eq '[[:space:]]main$' /tmp/cnk_elf_symbols.txt
+          grep -Eq '[[:space:]]cnk_vita_native_run$' /tmp/cnk_elf_symbols.txt
           "$VITASDK/bin/arm-vita-eabi-size" "$elf"
           sha256sum "$elf"
-          printf 'Verified 32-bit ARM ELF with main and native runner. NOT a VPK.\\n'
+          printf 'Verified ELF32 ARM binary; NOT a VPK.\n'
       - name: Archive non-installable ARM ELF diagnostic
         uses: actions/upload-artifact@v4
         with:
