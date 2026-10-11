@@ -27,6 +27,14 @@ with tempfile.NamedTemporaryFile(suffix='.zip') as tmp:
         for file in required:
             out.writestr(file, 'x')
     assert validator.audit(tmp.name) == len(required)
+# Host tests and code-only helper tools are needed to compile the full CMake tree.
+with tempfile.NamedTemporaryFile(suffix='.zip') as tmp:
+    with zipfile.ZipFile(tmp.name, 'w') as out:
+        for file in required:
+            out.writestr(file, 'x')
+        out.writestr('tests/test_native_vita_loop.c', 'int main(void) {return 0;}')
+        out.writestr('tools/exportar_catalogo_pistas.c', 'int main(void) {return 0;}')
+    assert validator.audit(tmp.name) == len(required) + 2
 for unsafe in ('data.vfs', 'assets/cnk2.mod', 'assets/cnk2.sig', 'src/../../private.txt', 'assets/photo.png', 'data.zip'):
     assert_rejected(unsafe)
 print('PASS: source ZIP sanitizer rejects original assets and unsafe paths')
