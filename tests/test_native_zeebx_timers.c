@@ -91,14 +91,11 @@ int main(void){
  assert(successful_api(&c)==0u);
  invoke(&c,12u,0u,ctx,0u);
  assert(successful_api(&c)==0u && !c.timer_count);
- /* Null timer function rejects as BREW_API without changing state. */
+ /* Zeebx returns EBADPARM=2 for NULL, without scheduling. */
  invoke(&c,11u,0u,0u,ctx);
- uint32_t calls=0u;
- assert(!cnk_zeebx_arm_bootstrap(&c,20u,&result,&calls));
- assert(result.reason==CNK_ARM_API && result.api_slot==11u);
+ assert(successful_api(&c)==2u);
  assert(c.timer_count==0u);
- assert(!cnk_zeebx_arm_return_from_api(&c,1u));
- assert(c.regs[15]==CNK_ARM_RETURN_MAGIC);
+ uint32_t calls=0u;
 
  /* Wrong object pointer must never impersonate the BREW Shell. */
  invoke(&c,11u,1u,fn,ctx);
