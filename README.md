@@ -1,5 +1,19 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 133: estados gráficos del OpenGL original en vitaGL
+
+- El puente Zeebx ejecuta ahora las llamadas originales BREW IGL para
+  profundidad, transparencias, orientación y descartado de caras, color fijo
+  16.16 y máscara de canales mediante callbacks **reales de vitaGL**.
+- Los códigos de operación y parámetros proceden del contrato antiguo
+  `GL_LEGACY` de Zeebx. No se aceptan llamadas fuera de memoria,
+  enumeraciones no válidas ni resultados falsamente exitosos del GPU.
+- Se mantienen intencionalmente detenidas las texturas originales,
+  las coordenadas UV y los materiales hasta completar su adaptación.
+  **Aún no es jugable ni se ha probado en una PS Vita física.**
+- La suite portátil incluye **34 pruebas sin ROM**.
+  [Ver avance técnico](docs/AVANCE_133_ZEEBX_ESTADOS_GL_VITA.md).
+
 ## Avance 132: dibujo de triangulos indexados desde Zeebo
 
 La ruta experimental Zeebx ahora acepta `glDrawElements` con indices
