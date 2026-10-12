@@ -218,8 +218,8 @@ int main(void){
   * A separate test confirms fixed-point geometry is decoded correctly. */
  api(&cpu,24u,78u,3u,0x140cu,0u,base);
  assert(invoke(&cpu)==0u&&cpu.gl_vertex_type==0x140cu);
- api(&cpu,24u,78u,3u,0x1402u,0u,base);
- trap(&cpu,24u,78u); /* SHORT is not yet supported by this bridge */
+ api(&cpu,24u,78u,3u,0x1400u,0u,base);
+ trap(&cpu,24u,78u); /* GL_BYTE remains unsupported for source XYZ arrays */
  assert(cpu.gl_vertex_type==0x140cu); /* rejection is atomic */
  api(&cpu,24u,78u,3u,0x1406u,11u,base);
  trap(&cpu,24u,78u);
