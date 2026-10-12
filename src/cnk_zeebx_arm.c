@@ -486,6 +486,33 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   }
   return cnk_zeebx_arm_return_from_api(c,c->shell_refs);
  }
+ /* Zeebx's ISHELL_GetDeviceInfo (Shell slot 4), ABI from
+  * machine/shell.rs. Unlike a guessed "success", this writes the genuine
+  * 640x480, 16-bit Zeebo device structure into GUEST memory.
+  * Only fields with proven offsets are initialized; extended members
+  * require the guest to request the full 64-byte structure at +44. */
+ if(iface==0u && slot==4u){
+  const uint32_t info=c->regs[1];
+  if(c->regs[0]!=CNK_ARM_OBJECT_BASE)return -3;
+  if(!info)return cnk_zeebx_arm_return_from_api(c,0u);
+  uint32_t requested=0;
+  if(load(c,info+44u,2u,&requested))return -3;
+  const size_t len=requested>=64u?64u:44u;
+  uint8_t *dst=map(c,info,len,1);
+  if(!dst)return -3;
+  memset(dst,0,len);
+  /* First eight uint16 entries of AEEDeviceInfo. */
+  putword(dst,640u|(480u<<16));
+  dst[8]=8u; /* cxScrollBar */
+  dst[10]=3u; /* AEE_ENC_ISOLATIN1 */
+  dst[14]=16u; /* COLOR_DEPTH */
+  putword(dst+24u,64u*1024u*1024u); /* Zeebx virtual device RAM */
+  if(requested>=64u){
+   dst[44]=64u; /* wStructSize */
+   dst[56]=64u; /* wMaxPath (AEE_MAX_FILE_NAME) */
+  }
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
  /* The original CNK applet reaches this exact diagnostic helper twice.
   * Zeebx returns AEE_SUCCESS after recording formatted debug text.
   * Preserve the bounded raw format string without interpreting guest
