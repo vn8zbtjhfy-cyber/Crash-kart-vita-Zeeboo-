@@ -206,11 +206,14 @@ int main(void){
   assert(!cnk_zeebx_arm_read_u32(&cpu,ptr,&vtbl)&&vtbl==expected_vtbl);
   assert(!cnk_zeebx_arm_read_u32(&cpu,vtbl+3u*4u,&slot));
   assert(slot==CNK_ARM_API_BASE+(crash_ifaces[i]<<12)+3u*4u);
-  /* No fake GL context, HID device or callback is returned yet. */
+  /* Unknown method 200 must still STOP, even after implementing
+   * IHID::CreateDevice at slot 3. Never fake GL, input or callbacks. */
+  const uint32_t unsupported=CNK_ARM_API_BASE+
+                                (crash_ifaces[i]<<12)+200u*4u;
   cpu.regs[0]=expected;
-  cpu.regs[15]=slot;
+  cpu.regs[15]=unsupported;
   assert(cnk_zeebx_arm_handle_bootstrap_api(&cpu)==-4);
-  assert(cpu.regs[15]==slot);
+  assert(cpu.regs[15]==unsupported);
  }
  assert(cpu.hid_objects==1u && cpu.signal_factory_objects==1u);
  assert(cpu.egl_legacy_objects==1u && cpu.gl_legacy_objects==1u);
