@@ -837,13 +837,102 @@ static float zeebx_gl_fixed(uint32_t raw){
 /* Expand the *guest* index stream into a fully checked, temporary XYZ
  * triangle list. The GPU only sees host-owned floats, never raw ARM
  * pointers. index_type==0 is the non-indexed DrawArrays path. */
+/* ZeebxTeam/zeebx-emu/src/machine/gl.rs: GL_LEGACY texture slots
+ * are called without a "this" pointer. Unlike no-op GL shims, every
+ * supported path forwards actual data to the Vita GPU callback.
+ * Only a deliberately conservative GLES 1.0 texture subset is enabled.
+ */
+#define CNK_GLTEX_RGB 0x1907u
+#define CNK_GLTEX_RGBA 0x1908u
+#define CNK_GLTEX_U8 0x1401u
+#define CNK_GLTEX_RGB565 0x8363u
+#define CNK_GLTEX_TARGET 0x0de1u
+#define CNK_GLTEX_MAX_EDGE 512u
+#define CNK_GLTEX_MAX_BYTES (512u*512u*4u)
+static int zeebx_gl_tex_parameter_valid(uint32_t pname,uint32_t value){
+ if(pname==0x2801u) /* TEXTURE_MIN_FILTER, including mipmap values */
+  return value==0x2600u||value==0x2601u||
+   (value>=0x2700u&&value<=0x2703u);
+ if(pname==0x2800u) /* TEXTURE_MAG_FILTER */
+  return value==0x2600u||value==0x2601u;
+ if(pname==0x2802u||pname==0x2803u) /* WRAP_S/WRAP_T */
+  return value==0x2901u||value==0x812fu;
+ return 0;
+}
+static int zeebx_gl_gen_textures(cnk_zeebx_arm *c,uint32_t count,
+                                 uint32_t output){
+ if(!c->gl_host.texture_gen||!count||count>32u||
+    !output||(output&3u))return -4;
+ uint8_t *dest=map(c,output,(size_t)count*4u,1);
+ if(!dest)return -4;
+ uint32_t names[32]={0};
+ if(c->gl_host.texture_gen(c->gl_host_user,count,names))return -4;
+ for(uint32_t i=0;i<count;i++){
+  if(!names[i]){
+   if(c->gl_host.texture_delete)
+    (void)c->gl_host.texture_delete(c->gl_host_user,count,names);
+   return -4;
+  }
+ }
+ for(uint32_t i=0;i<count;i++)putword(dest+4u*i,names[i]);
+ return cnk_zeebx_arm_return_from_api(c,0u);
+}
+static int zeebx_gl_delete_textures(cnk_zeebx_arm *c,uint32_t count,
+                                    uint32_t pointer){
+ if(!c->gl_host.texture_delete||count>32u)return -4;
+ if(!count)return cnk_zeebx_arm_return_from_api(c,0u);
+ if(!pointer||(pointer&3u))return -4;
+ const uint8_t *data=map(c,pointer,(size_t)count*4u,0);
+ if(!data)return -4;
+ uint32_t names[32];
+ for(uint32_t i=0;i<count;i++)names[i]=word(data+4u*i);
+ if(c->gl_host.texture_delete(c->gl_host_user,count,names))return -4;
+ for(uint32_t i=0;i<count;i++)
+  if(names[i]&&names[i]==c->gl_bound_texture)c->gl_bound_texture=0u;
+ return cnk_zeebx_arm_return_from_api(c,0u);
+}
+static int zeebx_gl_tex_image(cnk_zeebx_arm *c){
+ if(!c->gl_host.texture_upload || !c->gl_bound_texture||
+    c->gl_texture_uploads==UINT32_MAX)return -4;
+ const uint32_t target=c->regs[0],level=c->regs[1],
+                internal=c->regs[2],width=c->regs[3];
+ const uint32_t sp=c->regs[13];
+ uint32_t h=0,border=0,format=0,type=0,pixels=0;
+ /* ARM AAPCS: height,border,format,type,pxptr are stack arguments. */
+ if((sp&3u)||sp>UINT32_MAX-20u||
+    load(c,sp,4u,&h)||load(c,sp+4u,4u,&border)||
+    load(c,sp+8u,4u,&format)||load(c,sp+12u,4u,&type)||
+    load(c,sp+16u,4u,&pixels))return -4;
+ if(target!=CNK_GLTEX_TARGET||level!=0u||border!=0u||
+    width==0u||h==0u||width>CNK_GLTEX_MAX_EDGE||
+    h>CNK_GLTEX_MAX_EDGE||format!=internal||
+    !((format==CNK_GLTEX_RGBA&&type==CNK_GLTEX_U8)||
+      (format==CNK_GLTEX_RGB&&type==CNK_GLTEX_RGB565)))return -4;
+ const uint64_t bytes=(uint64_t)width*h*
+          (format==CNK_GLTEX_RGBA?4u:2u);
+ if(bytes>CNK_GLTEX_MAX_BYTES||!pixels)return -4;
+ const uint8_t *src=map(c,pixels,(size_t)bytes,0);
+ if(!src)return -4;
+ /* Copy out of the emulated address space so no GPU callback retains a
+  * guest-memory view; the host upload must consume synchronously. */
+ uint8_t *safe=(uint8_t*)malloc((size_t)bytes);
+ if(!safe)return -4;
+ memcpy(safe,src,(size_t)bytes);
+ const int error=c->gl_host.texture_upload(c->gl_host_user,width,h,
+                                           format,type,safe);
+ free(safe);
+ if(error)return -4;
+ c->gl_texture_uploads++;
+ return cnk_zeebx_arm_return_from_api(c,0u);
+}
 /* Expand supported GLES1 primitives into GPU-ready triangles, with exact
  * GLES strip winding and fan center. Read only verified ARM guest memory.
  * A malformed index/vertex prevents the WHOLE draw, not partial output. */
 static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t mode,
                                  uint32_t first,uint32_t count,
                                  uint32_t index_type,uint32_t index_pointer){
- if(!c->gl_host.draw_triangles||!c->gl_vertex_enabled||
+ if((!c->gl_host.draw_triangles&&!c->gl_host.draw_textured_triangles)||
+    !c->gl_vertex_enabled||
     !c->gl_vertex_pointer||!count||
     c->gl_draw_calls==UINT32_MAX)return -4;
  uint32_t triangles=0u;
@@ -863,6 +952,11 @@ static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t mode,
  }else if((index_type!=0x1401u&&index_type!=0x1403u)||
           !index_pointer || (index_type==0x1403u&&(index_pointer&1u)))
   return -4;
+ const int texture=c->gl_texturing_enabled!=0u;
+ if(texture && (!c->gl_host.draw_textured_triangles||
+     !c->gl_uv_enabled||!c->gl_uv_pointer||!c->gl_bound_texture||
+     c->gl_textured_draw_calls==UINT32_MAX))return -4;
+ float uv[CNK_ZEEBX_MAX_DRAW_VERTICES*2u];
  float xyz[CNK_ZEEBX_MAX_DRAW_VERTICES*3u];
  for(uint32_t i=0;i<emitted;i++){
   uint32_t source=i;
@@ -893,8 +987,25 @@ static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t mode,
    if(!isfinite(v))return -4;
    xyz[3u*i+component]=v;
   }
+  if(texture){
+   const uint64_t coord=(uint64_t)c->gl_uv_pointer+
+                            (uint64_t)vertex_index*c->gl_uv_stride;
+   for(unsigned component=0;component<2u;component++){
+    const uint64_t address=coord+4u*component;
+    uint32_t bits=0;
+    if(address>UINT32_MAX||load(c,(uint32_t)address,4u,&bits))return -4;
+    float v=0.f;
+    memcpy(&v,&bits,sizeof(v));
+    if(!isfinite(v))return -4;
+    uv[2u*i+component]=v;
+   }
+  }
  }
- if(c->gl_host.draw_triangles(c->gl_host_user,xyz,emitted))return -4;
+ if(texture){
+  if(c->gl_host.draw_textured_triangles(c->gl_host_user,xyz,uv,emitted))
+   return -4;
+  c->gl_textured_draw_calls++;
+ }else if(c->gl_host.draw_triangles(c->gl_host_user,xyz,emitted))return -4;
  c->gl_draw_calls++;
  c->gl_drawn_vertices+=emitted;
  return cnk_zeebx_arm_return_from_api(c,0u);
@@ -910,6 +1021,29 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
  /* All indices from ZeebxTeam/zeebx-emu/src/brew/aee_slots.rs
   * GL_LEGACY (AEEGL.h). This IGL does not pass a 'this' pointer.
   * Only valid GLES1 state is forwarded; unported state is rejected. */
+ case 5u: /* glBindTexture(GL_TEXTURE_2D, GLuint) */
+  if(a0!=CNK_GLTEX_TARGET||!c->gl_host.texture_bind||
+     c->gl_host.texture_bind(c->gl_host_user,a1))return -4;
+  c->gl_bound_texture=a1;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 20u: /* glDeleteTextures(n, pointer) */
+  return zeebx_gl_delete_textures(c,a0,a1);
+ case 36u: /* glGenTextures(n, pointer) */
+  return zeebx_gl_gen_textures(c,a0,a1);
+ case 74u: /* glTexImage2D with five guest stack arguments */
+  return zeebx_gl_tex_image(c);
+ case 75u: /* glTexParameterx */
+  if(a0!=CNK_GLTEX_TARGET||!c->gl_bound_texture||
+     !zeebx_gl_tex_parameter_valid(a1,a2)||
+     !c->gl_host.texture_parameter||
+     c->gl_host.texture_parameter(c->gl_host_user,a1,a2))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 71u: /* glTexCoordPointer(size,type,stride,pointer) */
+  if(a0!=2u || a1!=0x1406u || a2>256u ||
+     (a2&&(a2<8u||(a2&3u))) || !a3 || (a3&3u))return -4;
+  c->gl_uv_pointer=a3;
+  c->gl_uv_stride=a2?a2:8u;
+  return cnk_zeebx_arm_return_from_api(c,0u);
  case 6u: /* glBlendFunc(GLenum src, GLenum dst) */
   if((a0!=0u&&a0!=1u&&a0!=0x0302u&&a0!=0x0303u)||
      (a1!=0u&&a1!=1u&&a1!=0x0302u&&a1!=0x0303u)||
@@ -939,21 +1073,26 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
      !c->gl_host.cull_face||
      c->gl_host.cull_face(c->gl_host_user,a0))return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
- case 20u: /* glDepthFunc: GL_NEVER .. GL_ALWAYS */
+ case 21u: /* glDepthFunc: GL_NEVER .. GL_ALWAYS */
   if(a0<0x0200u||a0>0x0207u||
      !c->gl_host.depth_func||
      c->gl_host.depth_func(c->gl_host_user,a0))return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
- case 21u: /* glDepthMask */
+ case 22u: /* glDepthMask */
   if(a0>1u||!c->gl_host.depth_mask||
      c->gl_host.depth_mask(c->gl_host_user,(int)a0))return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
- case 23u: /* glDisable(capability) */
+ case 24u: /* glDisable(capability) */
  case 28u: /* glEnable(capability) */
-  if((a0!=0x0b71u&&a0!=0x0be2u&&a0!=0x0b44u)||
+  if((a0!=0x0b71u&&a0!=0x0be2u&&a0!=0x0b44u&&
+      a0!=CNK_GLTEX_TARGET)||
+     (a0==CNK_GLTEX_TARGET && slot==28u &&
+      (!c->gl_host.texture_bind||!c->gl_host.texture_upload||
+       !c->gl_host.draw_textured_triangles))||
      !c->gl_host.set_capability||
      c->gl_host.set_capability(c->gl_host_user,a0,
                                slot==28u?1:0))return -4;
+  if(a0==CNK_GLTEX_TARGET)c->gl_texturing_enabled=slot==28u?1u:0u;
   return cnk_zeebx_arm_return_from_api(c,0u);
  case 34u: /* glFrontFace(GL_CW/GL_CCW) */
   if((a0!=0x0900u&&a0!=0x0901u)||
@@ -980,10 +1119,11 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
   if(rc)return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
- case 25u: /* glDisableClientState(GL_VERTEX_ARRAY) */
- case 29u: /* glEnableClientState(GL_VERTEX_ARRAY) */
-  if(a0!=0x8074u)return -4; /* other client arrays not ported */
-  c->gl_vertex_enabled=slot==29u?1u:0u;
+ case 25u: /* glDisableClientState */
+ case 29u: /* glEnableClientState */
+  if(a0==0x8074u)c->gl_vertex_enabled=slot==29u?1u:0u;
+  else if(a0==0x8078u)c->gl_uv_enabled=slot==29u?1u:0u;
+  else return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
  case 26u: /* glDrawArrays: triangles, strips and fans */
   return zeebx_gl_draw_vertices(c,a0,a1,a2,0u,0u);
