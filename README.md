@@ -1,5 +1,25 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 147: lectura BREW de recursos originales con Zeebx
+
+La ejecución ARM del juego puede utilizar `IFileMgr::OpenFile/Test` e
+`IFile::Read/Seek/GetInfoEx/Release` para consultar archivos del propio
+paquete privado de Crash. Se conserva la ABI original Zeebo, con memoria
+guest validada, un máximo de 8 archivos abiertos, rutas restringidas y
+prohibición de escritura sobre los originales. El diagnóstico configura
+la raíz desde la carpeta de `cnk2.mod` y registra bytes efectivamente
+leídos; no pide al jugador preparar carpetas cuando los datos se incluyen
+en un instalador privado autorizado.
+
+**46/46 pruebas PC sin ROM aprobadas**:
+[validación](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38279908425).
+[Detalles y límites](docs/AVANCE_147_ZEEBX_BREW_LECTURA_ARCHIVOS.md).
+Faltan mapear los archivos internos de `data.vfs`, completar servicios
+BREW, ejecutar una carrera original y comprobarla físicamente en Vita.
+**El port aún NO es jugable y no hay VPK final.**
+
+
+
 ## Avance 146: programación original de temporizadores BREW
 
 Se portaron desde Zeebx los tres servicios `IShell::SetTimer`,
