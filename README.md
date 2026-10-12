@@ -1,5 +1,25 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 148: metadatos originales de archivos BREW (Zeebx)
+
+Además de leer archivos, el módulo ARM original puede llamar a
+`IFileMgr::GetInfo` y `IFile::GetInfo` para consultar el tamaño y nombre
+de un recurso dentro de su paquete privado. Se portó de Zeebx la
+estructura real de 76 bytes `AEEFileInfo`, diferenciándola del
+`GetInfoEx` de 16 bytes ya soportado. Consultar información no mueve el
+cursor, no modifica los originales y no permite leer fuera del paquete.
+
+**48/48 pruebas sin ROM verificadas**:
+[GitHub Actions](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38285313952).
+[Detalle técnico](docs/AVANCE_148_ZEEBX_GETINFO_BREW.md).
+
+**No es un juego completo ni está demostrada una carrera original en
+PS Vita física.** Todavía faltan más servicios BREW, vinculación de los
+recursos internos del VFS, audio original, ejecución continua y QA.
+El porcentaje global sigue en 45.9% como estimación histórica, no
+como una medición nueva de jugabilidad.
+
+
 ## Avance 147: lectura BREW de recursos originales con Zeebx
 
 La ejecución ARM del juego puede utilizar `IFileMgr::OpenFile/Test` e
