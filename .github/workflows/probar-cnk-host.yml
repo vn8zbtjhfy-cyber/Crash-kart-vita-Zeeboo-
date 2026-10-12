@@ -65,7 +65,7 @@ jobs:
           s=p.read_text()
           needle='impl<C: CpuBackend> Machine<C> {'
           assert s.count(needle)==1
-          s=s.replace(needle, needle+'\\n    pub fn host_probe_created_applet(&self) -> Result<u32, CpuError> {\\n        self.cpu.read_u32(self.module.out_module + 4)\\n    }\\n',1)
+          s=s.replace(needle, needle+'\n    pub fn host_probe_created_applet(&self) -> Result<u32, CpuError> {\n        self.cpu.read_u32(self.module.out_module + 4)\n    }\n',1)
           p.write_text(s)
           print('Host-only applet pointer accessor installed')
           PY
