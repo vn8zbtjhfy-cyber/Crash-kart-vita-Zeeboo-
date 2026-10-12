@@ -8,7 +8,7 @@ on:
       - '.github/workflows/compilar-vpk-vita.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   build-vpk:
     runs-on: ubuntu-24.04
@@ -26,7 +26,46 @@ jobs:
     steps:
       - name: Checkout repo privado
         uses: actions/checkout@v4
-      - name: Extraer recursos privados desde ZIP cuando exista
+      - name: Reconstruir ZIP de recursos y subirlo al repo privado
+        run: |
+          set -euo pipefail
+          cd ports/zeebx-rust-vita
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, zipfile
+          path=Path("assets-original.zip")
+          parts=sorted(Path("assets-parts").glob("part-*.bin"))
+          if not path.exists():
+              if len(parts)!=34:
+                  raise SystemExit(f"ERROR: faltan fragmentos: {len(parts)}/34")
+              with path.open("wb") as out:
+                  for part in parts: out.write(part.read_bytes())
+          original=path.read_bytes()
+          expected_sha="e47b2d5ba0940259792e5658502e6a8705fc09d7bfef13758025a6fab32852f8"
+          if hashlib.sha256(original).hexdigest()!=expected_sha:
+              raise SystemExit("ERROR: el ZIP no coincide con el original")
+          manifest=json.loads(Path("assets/manifest.json").read_text())
+          with zipfile.ZipFile(path) as z:
+              expected={"assets/"+x["path"] for x in manifest["files"]}
+              if set(z.namelist())!=expected:
+                  raise SystemExit("ERROR: rutas inesperadas en ZIP")
+              if z.testzip() is not None:
+                  raise SystemExit("ERROR: CRC ZIP invalido")
+              for item in manifest["files"]:
+                  b=z.read("assets/"+item["path"])
+                  if len(b)!=item["size"] or hashlib.sha256(b).hexdigest()!=item["sha256"]:
+                      raise SystemExit("ERROR: fallo SHA256 de "+item["path"])
+          print("ZIP restaurado y verificado: 12 recursos originales")
+          PY
+          if [ -d assets-parts ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -f assets-original.zip
+            git rm -r -f assets-parts
+            git commit -m "assets: consolidar ZIP privado original verificado"
+            git push origin HEAD:main
+          fi
+      - name: Extraer los 12 recursos originales antes de compilar
         run: |
           set -euo pipefail
           cd ports/zeebx-rust-vita
@@ -36,21 +75,20 @@ jobs:
           root=Path('assets')
           manifest=json.loads((root/'manifest.json').read_text())
           bundle=Path('assets-original.zip')
-          if bundle.is_file():
-              with zipfile.ZipFile(bundle) as z:
-                  expected={'assets/'+item['path'] for item in manifest['files']}
-                  if set(z.namelist())!=expected:
-                      raise SystemExit("ERROR: ZIP distinto a los 12 recursos originales")
-                  for item in manifest['files']:
-                      content=z.read('assets/'+item['path'])
-                      if len(content)!=item['size'] or hashlib.sha256(content).hexdigest()!=item['sha256']:
-                          raise SystemExit("ERROR: hash/size invalido: "+item['path'])
-                      dest=root/item['path']
-                      dest.parent.mkdir(parents=True,exist_ok=True)
-                      dest.write_bytes(content)
-              print("12 recursos originales extraidos y comprobados")
-          else:
-              print("No hay assets-original.zip: Cargo se puede probar; el VPK requiere subir los recursos")
+          if not bundle.is_file():
+              raise SystemExit("ERROR: falta assets-original.zip")
+          with zipfile.ZipFile(bundle) as z:
+              expected={'assets/'+item['path'] for item in manifest['files']}
+              if set(z.namelist())!=expected:
+                  raise SystemExit("ERROR: ZIP distinto a los 12 recursos originales")
+              for item in manifest['files']:
+                  content=z.read('assets/'+item['path'])
+                  if len(content)!=item['size'] or hashlib.sha256(content).hexdigest()!=item['sha256']:
+                      raise SystemExit("ERROR: hash/size invalido: "+item['path'])
+                  dest=root/item['path']
+                  dest.parent.mkdir(parents=True,exist_ok=True)
+                  dest.write_bytes(content)
+          print("12 recursos originales extraidos y comprobados")
           PY
       - name: Preparar Rust nightly dentro del contenedor VitaSDK
         shell: bash
