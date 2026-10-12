@@ -670,6 +670,11 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_vita_telemetry PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_vita_telemetry PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME vita_telemetry COMMAND cnk_test_vita_telemetry)
+  # No ROM required: guard against finite-but-overflowing scene extents.
+  add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
+  target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_collision_grid_extents PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME collision_grid_extents COMMAND cnk_test_collision_grid_extents)
 
   add_executable(cnk_test_vita_controls
     tests/test_native_vita_controls.c src/cnk_vita_controls.c)

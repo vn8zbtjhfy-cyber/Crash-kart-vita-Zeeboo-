@@ -51,6 +51,12 @@ int cnk_collision_grid_build(const cnk_geometry *geom,uint32_t cols,uint32_t row
  g.mesh=geom;g.cols=cols;g.rows=rows;g.minx=minx;g.minz=minz;
  g.dx=(maxx-minx+0.01f)/(float)cols;
  g.dz=(maxz-minz+0.01f)/(float)rows;
+ /* Finite vertices alone are insufficient: their difference can overflow
+  * float, producing INF cell widths and NaN float-to-grid-index casts.
+  * Reject malformed/corrupt scene bounds before any cell is addressed. */
+ if(!isfinite(g.dx)||!isfinite(g.dz)||g.dx<=0.0f||g.dz<=0.0f||
+    !isfinite(g.minx+g.dx*(float)g.cols)||
+    !isfinite(g.minz+g.dz*(float)g.rows))return -3;
  uint32_t cells=cols*rows;
  counts=(uint32_t*)calloc(cells,sizeof(*counts));
  if(!counts)return -4;
