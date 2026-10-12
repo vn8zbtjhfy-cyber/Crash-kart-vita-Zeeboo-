@@ -651,6 +651,103 @@ static int zeebx_device_input(cnk_zeebx_arm *c,unsigned slot){
  return -4;
 }
 
+/* From Zeebx machine/signal.rs and BREW aee_slots.rs. CreateSignal is
+ * five-argument ARM AAPCS: (factory,callback,context,ISignal**,
+ * ISignalCtl**) with the fifth argument on the guest stack.
+ * Callbacks are QUEUED and must be delivered at a safe guest boundary.
+ */
+static int zeebx_signal_api(cnk_zeebx_arm *c,unsigned iface,unsigned slot){
+ const uint32_t self=c->regs[0];
+ uint32_t vtbl=0;
+ if(load(c,self,4u,&vtbl)||
+    vtbl!=CNK_ARM_VTABLE_BASE+iface*CNK_ARM_VTABLE_STRIDE)
+  return -3;
+ if(iface==12u&&slot==3u){
+  const uint32_t out_signal=c->regs[3];
+  uint32_t out_control=0;
+  if(load(c,c->regs[13],4u,&out_control))return -3;
+  if((out_signal&&((out_signal&3u)||!map(c,out_signal,4u,1)))||
+     (out_control&&((out_control&3u)||!map(c,out_control,4u,1))))
+   return -3;
+  if(c->signal_count>=CNK_ZEEBX_MAX_SIGNALS||
+     c->object_cursor>OBJECT_BYTES-128u)return -2;
+  const uint32_t s=CNK_ARM_OBJECT_BASE+c->object_cursor,ctl=s+64u;
+  if(store(c,s,4u,CNK_ARM_VTABLE_BASE+10u*CNK_ARM_VTABLE_STRIDE)||
+     store(c,ctl,4u,CNK_ARM_VTABLE_BASE+11u*CNK_ARM_VTABLE_STRIDE))
+   return -3;
+  if(out_signal&&store(c,out_signal,4u,s))return -3;
+  if(out_control&&store(c,out_control,4u,ctl))return -3;
+  cnk_zeebx_signal *binding=&c->signals[c->signal_count++];
+  binding->signal_obj=s;binding->control_obj=ctl;
+  binding->callback=c->regs[1];binding->context=c->regs[2];
+  binding->signal_refs=1u;binding->control_refs=1u;
+  binding->attached=1u;binding->enabled=1u;
+  c->object_cursor+=128u;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(iface!=10u&&iface!=11u)return -4;
+ cnk_zeebx_signal *s=signal_for(c,self);
+ if(!s)return -3;
+ uint32_t *refs=iface==10u?&s->signal_refs:&s->control_refs;
+ if(slot==0u){ /* AddRef */
+  if(*refs==UINT32_MAX)return -2;
+  (*refs)++;
+  return cnk_zeebx_arm_return_from_api(c,*refs);
+ }
+ if(slot==1u){ /* Release */
+  if(!*refs)return -3;
+  (*refs)--;
+  if(iface==10u&&!*refs){
+   s->attached=0u;
+   if(c->hid_button_signal==self)c->hid_button_signal=0u;
+   if(c->hid_position_signal==self)c->hid_position_signal=0u;
+  }
+  return cnk_zeebx_arm_return_from_api(c,*refs);
+ }
+ if(slot==2u){ /* QueryInterface: Zeebx reuses the same object */
+  const uint32_t out=c->regs[2];
+  if(out&&((out&3u)||!map(c,out,4u,1)))return -3;
+  if(out&&store(c,out,4u,self))return -3;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(slot==3u){ /* ISignal/ISignalCtl::Set */
+  const int rc=queue_signal(c,s->signal_obj);
+  if(rc)return rc;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(iface==11u&&slot==4u){ /* ISignalCtl::Detach */
+  s->attached=0u;
+  if(c->hid_button_signal==s->signal_obj)c->hid_button_signal=0u;
+  if(c->hid_position_signal==s->signal_obj)c->hid_position_signal=0u;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(iface==11u&&slot==5u){ /* ISignalCtl::Enable */
+  s->enabled=1u;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ return -4;
+}
+static int zeebx_register_pad_signal(cnk_zeebx_arm *c,unsigned slot){
+ const uint32_t device=c->regs[0],signal=c->regs[1];
+ uint32_t vtbl=0;
+ if(load(c,device,4u,&vtbl)||
+    vtbl!=CNK_ARM_VTABLE_BASE+9u*CNK_ARM_VTABLE_STRIDE)
+  return -3;
+ if(signal){
+  cnk_zeebx_signal *s=signal_for(c,signal);
+  if(!s || s->signal_obj!=signal)return -3;
+ }
+ /* Zeebx sends an initial position callback even when the stick has not
+  * moved: games need this to calibrate the axis UID/range at startup. */
+ if(slot==14u&&signal){
+  const int rc=queue_signal(c,signal);
+  if(rc)return rc;
+ }
+ if(slot==8u)c->hid_button_signal=signal;
+ else c->hid_position_signal=signal;
+ return cnk_zeebx_arm_return_from_api(c,0u);
+}
+
 int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
  if(!c||!c->initialized)return -1;
  uint32_t pc=c->regs[15];
@@ -852,6 +949,11 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   }
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
+ if((iface==12u&&slot==3u) ||
+    ((iface==10u||iface==11u)&&slot<=5u))
+  return zeebx_signal_api(c,iface,slot);
+ if(iface==9u&&(slot==8u||slot==14u))
+  return zeebx_register_pad_signal(c,slot);
  if(iface==9u && (slot==6u||slot==7u||slot==9u||
                    (slot>=10u&&slot<=13u)))
   return zeebx_device_input(c,slot);
