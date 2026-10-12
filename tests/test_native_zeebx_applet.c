@@ -164,7 +164,7 @@ int main(void){
  memset(report,0,sizeof(report));
  file=fopen(logfile,"rb");assert(file);
  report_len=fread(report,1,sizeof(report)-1u,file);
- assert(!fclose(file));report[report_len]='\\0';
+ assert(!fclose(file));report[report_len]='\0';
  assert(strstr(report,"start_event_completed=YES"));
  assert(strstr(report,"start_event_handled=NO"));
  assert(!remove(modfile));assert(!remove(miffile));assert(!remove(logfile));
