@@ -140,8 +140,8 @@ int main(void){
  assert(!cnk_zeebx_arm_bootstrap(&c,24u,&out,&handled));
  assert(out.reason==CNK_ARM_API&&out.api_interface==10u&&out.api_slot==3u);
  assert(c.signal_pending_count==CNK_ZEEBX_PENDING_SIGNALS);
- assert(!cnk_zeebx_arm_deliver_signals(&c,100u,&out,&n));
- assert(out.reason==CNK_ARM_BUDGET&&n>0u&&n<32u);
+ assert(!cnk_zeebx_arm_deliver_signals(&c,30u,&out,&n));
+ assert(out.reason==CNK_ARM_BUDGET&&n==10u);
  assert(!cnk_zeebx_arm_deliver_signals(&c,100u,&out,&n));
  assert(out.reason==CNK_ARM_RETURNED&&c.signal_pending_count==0u);
 
