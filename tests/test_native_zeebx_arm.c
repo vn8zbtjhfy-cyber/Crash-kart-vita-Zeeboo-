@@ -73,8 +73,8 @@ int main(void){
  /* Never execute random memory, never silently accept unsupported
   * Thumb instructions or invalid/misaligned loads. */
  memset(module,0,sizeof(module));
- word(module+0,0xe5903000u);
- word(module+4,0xe12fff13u); /* BX r3 -> uninitialized guest page */
+ word(module+0,0xe3a03000u); /* MOV r3,#0 */
+ word(module+4,0xe12fff13u); /* BX r3 -> unmapped guest page */
  assert(!cnk_zeebx_arm_init(&cpu,module,sizeof(module)));
  assert(!cnk_zeebx_arm_run(&cpu,12,&out));
  assert(out.reason==CNK_ARM_FAULT&&out.executed==2u);
