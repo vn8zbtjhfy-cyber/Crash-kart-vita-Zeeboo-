@@ -21,7 +21,7 @@ const MIF:&CStr=c"brew/mif/274214.mif";
 const BUDGET:u64=20_000_000;
 struct Running{
  machine:Machine<Interpretador>,applet:Option<(u32,u32)>,pad_before:Pad,
- frame:Vec<u8>,w:u32,h:u32,_fufs:FufsView
+ frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,_fufs:FufsView
 }
 struct State{running:Option<Running>,error:Option<CString>}
 struct StateCell(UnsafeCell<State>);
@@ -73,7 +73,7 @@ fn boot(lookup:EmbeddedLookup)->Result<Running,String>{
   Err(e)=>return Err(e.to_string())
  };
  log_stage(c"R.boot.applet.create.ok");
- Ok(Running{machine,applet:Some((applet,clsid)),pad_before:Pad::default(),frame:Vec::new(),w:0,h:0,_fufs:fufs})
+ Ok(Running{machine,applet:Some((applet,clsid)),pad_before:Pad::default(),frame:Vec::new(),w:0,h:0,logged_first_tick:false,_fufs:fufs})
 }
 fn check(outcomes:&[Outcome])->Result<(),String>{
  for x in outcomes{if !matches!(x,Outcome::Returned{..}|Outcome::Budget){return Err(format!("Guest stopped: {x:?}"));}}
@@ -90,7 +90,8 @@ impl Running{
   for (&v,b) in screen.pixels().iter().zip(self.frame.chunks_exact_mut(4)){b.copy_from_slice(&pixel(v));}
  }
  fn tick(&mut self,input:ZeebxVitaPad)->Result<bool,String>{
-  let first_step=self.pad_before.buttons==0 && self.w==0 && self.h==0;
+  let first_step=!self.logged_first_tick;
+  self.logged_first_tick=true;
   if(first_step)log_stage(c"R.tick.enter");
   let next=Pad{buttons:input.buttons & ((1<<zeebx::input::BUTTONS)-1),axes:input.axes.map(|a|a.clamp(-128,127))};
   self.machine.set_port_pad(0,next);
