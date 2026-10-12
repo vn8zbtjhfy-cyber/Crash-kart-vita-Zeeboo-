@@ -28,6 +28,10 @@ typedef float GLfloat;
 #define GL_TEXTURE_COORD_ARRAY 0x8078u
 #define GL_FLOAT 0x1406u
 #define GL_TEXTURE_2D 0x0DE1u
+#define GL_TEXTURE_ENV 0x2300u
+#define GL_TEXTURE_ENV_MODE 0x2200u
+#define GL_REPLACE 0x1E01u
+#define GL_MODULATE 0x2100u
 #define GL_TRIANGLES 0x0004u
 #define GL_RGBA 0x1908u
 #define GL_UNSIGNED_BYTE 0x1401u
@@ -50,6 +54,7 @@ void glGenTextures(GLsizei n,GLuint *textures);
 void glDeleteTextures(GLsizei n,const GLuint *textures);
 void glPixelStorei(GLenum pname,GLint param);
 void glTexParameteri(GLenum target,GLenum pname,GLint param);
+void glTexEnvi(GLenum target,GLenum pname,GLint param);
 void glTexImage2D(GLenum target,GLint level,GLint internalformat,GLsizei width,
                   GLsizei height,GLint border,GLenum format,GLenum type,
                   const void *data);
@@ -97,6 +102,8 @@ typedef struct {
  uint32_t frustum_calls,ortho_calls;
  float last_projection[6];
  uint32_t texture_callbacks;
+ uint32_t texenv_calls;
+ GLenum texenv_mode;
  uint32_t images_uploaded,handles_created,handles_deleted;
  uint64_t pixels_uploaded, nonzero_texels;
  uint32_t last_upload_width,last_upload_height;
