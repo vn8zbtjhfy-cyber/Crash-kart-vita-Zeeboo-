@@ -799,6 +799,17 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_gl_projection PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_gl_projection PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_gl_projection COMMAND cnk_test_zeebx_gl_projection)
+  # Compiles/calls the exact production vitaGL callback adapter using
+  # fake GL host symbols: verifies real GL forwarding without a Vita.
+  add_executable(cnk_test_zeebx_vitagl_projection
+    tests/test_native_zeebx_vitagl_projection.c
+    tests/stub/vitaGL_stub.c src/cnk_vita_zeebx_gl.c)
+  target_include_directories(cnk_test_zeebx_vitagl_projection PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/vita_app_stub"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/stub")
+  target_link_libraries(cnk_test_zeebx_vitagl_projection PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_vitagl_projection PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_vitagl_projection COMMAND cnk_test_zeebx_vitagl_projection)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
