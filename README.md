@@ -2,6 +2,48 @@
 
 Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **Todavía no es un videojuego completo ni se ha verificado su ejecución en consola.**
 
+## Avance 121: emulador Zeebx completo disponible y ejecución ARM real
+
+**El port nativo de PS Vita sigue intacto.** Se añadió como parte del
+mismo repositorio el código fuente completo de
+[ZeebxTeam/zeebx-emu](https://github.com/ZeebxTeam/zeebx-emu)
+(submódulo Git `third_party/zeebx_emulator`, revisión fija
+`f6d3e7bd6b27ca7f02d0e6f76a40a3c3f45d1cd9`).
+Para traer los archivos del submódulo al clonar:
+```bash
+git submodule update --init --recursive
+```
+
+Además, adaptamos un **subconjunto ejecutable** del intérprete ARM1176,
+el mapa de memoria y los trampolines BREW de Zeebx a C99
+(`cnk_zeebx_arm.[ch]` y `cnk_zeebx_probe.[ch]`).
+El código ARM invitado se interpreta dentro de memoria virtual, sin
+ejecutarlo como instrucciones nativas de Vita. Los servicios
+`malloc` y `IShell::AddRef` tienen respuestas de arranque comprobadas;
+las APIs desconocidas detienen el intérprete y generan diagnóstico.
+
+Un análisis **local de referencia**, usando el `cnk2.mod` original privado
+del usuario (no incluido), verificó **21185 instrucciones ARM** hasta
+el retorno de `AEEMod_Load`, con puntero real a `IModule*`.
+No es todavía ejecución de carrera, gráficos BREW o eventos de applet,
+ni una prueba del nuevo ejecutable C contra el archivo original en
+GitHub Actions. El intérprete original completo de Zeebx no se ha
+compilado sin cambios para VitaSDK.
+
+- **24/24 tests portátiles sin ROM aprobados**:
+  [GitHub Actions](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38194631197).
+- **Compilación ARM de diagnóstico (no instalable)**:
+  [VitaSDK](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38194631198).
+- [Informe del avance y límites](docs/AVANCE_121_EJECUCION_ZEEBX_ARM_MOD.md).
+
+El modo diagnóstico en Vita se activa únicamente creando el
+archivo vacío `ux0:data/cnk3d/zeebx_probe.flag`; lee
+`ux0:data/cnk3d/cnk2.mod` localmente y escribe
+`ux0:data/cnk3d/zeebx_probe.txt`, **después sigue el mismo motor
+nativo**. Por defecto permanece desactivado. No se ha generado
+SELF ni VPK, ni se han publicado archivos comerciales del juego.
+La parte adaptada de Zeebx está sujeta a su licencia GPL-2.0-or-later.
+
 ## Avance 120: lectura del ejecutable BREW gracias a Zeebx
 
 - **Todo el port nativo C existente se conserva.** No se reemplazan
