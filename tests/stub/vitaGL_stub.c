@@ -116,16 +116,21 @@ void glTexParameteri(GLenum k,GLenum p,GLint v){
 }
 void glTexImage2D(GLenum target,GLint level,GLint internalfmt,GLsizei w,
  GLsizei h,GLint border,GLenum format,GLenum type,const void *data){
- if(target!=GL_TEXTURE_2D||level!=0||internalfmt!=GL_RGBA||w<=0||h<=0||border||
-    format!=GL_RGBA||type!=GL_UNSIGNED_BYTE||!data){cnk_test_gl.invalid++;return;}
+ if(target!=GL_TEXTURE_2D||level!=0||w<=0||h<=0||border||!data||
+    !((internalfmt==GL_RGBA&&format==GL_RGBA&&type==GL_UNSIGNED_BYTE)||
+      (internalfmt==0x1907u&&format==0x1907u&&type==0x8363u))){
+    cnk_test_gl.invalid++;return;}
  cnk_test_gl.images_uploaded++;
  cnk_test_gl.last_upload_width=(uint32_t)w;
  cnk_test_gl.last_upload_height=(uint32_t)h;
  cnk_test_gl.pixels_uploaded+=(uint64_t)w*(uint64_t)h;
  const unsigned char *px=(const unsigned char*)data;
  /* Inspect every decoded RGBA pixel, not only PNG metadata. */
- for(size_t i=0;i<(size_t)w*(size_t)h*4u;i+=4u){
-  if(px[i]||px[i+1]||px[i+2]||px[i+3])cnk_test_gl.nonzero_texels++;
+ size_t stride=type==GL_UNSIGNED_BYTE?4u:2u;
+ for(size_t i=0;i<(size_t)w*(size_t)h*stride;i+=stride){
+  int nonzero=0;
+  for(size_t j=0;j<stride;j++)if(px[i+j])nonzero=1;
+  if(nonzero)cnk_test_gl.nonzero_texels++;
  }
  if(cnk_test_gl.fail_next_upload || (cnk_test_gl.fail_upload_on_number && cnk_test_gl.images_uploaded==cnk_test_gl.fail_upload_on_number)){
    cnk_test_gl.queued_error=GL_OUT_OF_MEMORY;
