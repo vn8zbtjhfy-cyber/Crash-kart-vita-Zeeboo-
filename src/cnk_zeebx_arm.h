@@ -33,7 +33,7 @@
 #define CNK_ZEEBX_MAX_GL_BUFFER_BYTES (512u*1024u)
 #define CNK_ZEEBX_MAX_GL_BUFFER_TOTAL (2u*1024u*1024u)
 typedef struct {
- uint32_t name,size;
+ uint32_t name,size,ever_bound;
  uint8_t *data; /* source guest bytes, never executable host memory */
 } cnk_zeebx_gl_buffer;
 
