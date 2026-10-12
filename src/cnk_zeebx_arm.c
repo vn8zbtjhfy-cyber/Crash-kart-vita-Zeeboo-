@@ -500,6 +500,23 @@ static const unsigned zeebx_axis_slots[CNK_ZEEBX_PAD_AXES]={1,2,3,6};
 int cnk_zeebx_arm_set_pad(cnk_zeebx_arm *c,const cnk_zeebx_pad *pad){
  if(!c||!c->initialized||!pad||
     (pad->buttons & ~((1u<<CNK_ZEEBX_PAD_BUTTONS)-1u)))return -1;
+ /* Preserve the source's per-button press AND release events in ascending
+  * HID index order. A still-held button does not repeat each frame.
+  * Overflow evicts the oldest event and marks the next read as dropped. */
+ uint32_t changed=c->pad.buttons^pad->buttons;
+ for(unsigned i=0;i<CNK_ZEEBX_PAD_BUTTONS;i++)if(changed&(1u<<i)){
+  if(c->hid_queue_count==CNK_ZEEBX_HID_QUEUE){
+   c->hid_queue_head=(c->hid_queue_head+1u)%CNK_ZEEBX_HID_QUEUE;
+   c->hid_queue_count--;
+   c->hid_events_dropped=1u;
+  }
+  uint32_t tail=(c->hid_queue_head+c->hid_queue_count)%
+                 CNK_ZEEBX_HID_QUEUE;
+  c->hid_queue[tail].index=i;
+  c->hid_queue[tail].pressed=(pad->buttons>>i)&1u;
+  c->hid_queue[tail].at_ms=c->virtual_time_ms;
+  c->hid_queue_count++;
+ }
  c->pad=*pad;
  return 0;
 }
@@ -512,6 +529,35 @@ static int zeebx_device_input(cnk_zeebx_arm *c,unsigned slot){
  if(load(c,c->regs[0],4u,&vtbl)||
     vtbl!=CNK_ARM_VTABLE_BASE+9u*CNK_ARM_VTABLE_STRIDE)return -3;
  const uint32_t output=c->regs[1];
+ if(slot==9u){ /* GetNextButtonEvent(info*, timestamp*, dropped*) */
+  const uint32_t info=c->regs[1],timestamp=c->regs[2],dropped=c->regs[3];
+  /* A rejected call must not consume the event, partially write data or
+   * clear the overflow report. Validate all output spans up front. */
+  if((info&&((info&3u)||!map(c,info,20u,1)))||
+     (timestamp&&((timestamp&3u)||!map(c,timestamp,4u,1)))||
+     (dropped&&((dropped&3u)||!map(c,dropped,4u,1))))return -3;
+  const int has=c->hid_queue_count!=0u;
+  cnk_zeebx_hid_event ev={0};
+  if(has)ev=c->hid_queue[c->hid_queue_head];
+  if(info){
+   uint8_t *out=map(c,info,20u,1);
+   putword(out+0u,has?ev.index:0u);
+   putword(out+4u,has?ev.pressed:0u);
+   putword(out+8u,has?zeebx_button_uids[ev.index]:0u);
+   putword(out+12u,0u);
+   putword(out+16u,has?1u:0u);
+  }
+  if(timestamp && store(c,timestamp,4u,has?ev.at_ms:c->virtual_time_ms))
+   return -3;
+  if(dropped && store(c,dropped,4u,c->hid_events_dropped))
+   return -3;
+  if(has){
+   c->hid_queue_head=(c->hid_queue_head+1u)%CNK_ZEEBX_HID_QUEUE;
+   c->hid_queue_count--;
+  }
+  c->hid_events_dropped=0u;
+  return cnk_zeebx_arm_return_from_api(c,has?0u:1u);
+ }
  if(slot==7u){ /* GetNumberOfButtons(uint32*) */
   if(output && store(c,output,4u,CNK_ZEEBX_PAD_BUTTONS))return -3;
   return cnk_zeebx_arm_return_from_api(c,0u);
@@ -763,7 +809,7 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   }
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
- if(iface==9u && (slot==6u||slot==7u||
+ if(iface==9u && (slot==6u||slot==7u||slot==9u||
                    (slot>=10u&&slot<=13u)))
   return zeebx_device_input(c,slot);
  if(iface==9u && slot==4u){ /* IHIDDevice::GetDeviceStatus */
