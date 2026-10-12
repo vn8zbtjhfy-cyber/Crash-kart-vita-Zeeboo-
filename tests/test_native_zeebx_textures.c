@@ -120,6 +120,9 @@ int main(void){
   .draw_triangles=untextured,.draw_textured_triangles=textured
  };
  assert(!cnk_zeebx_arm_init(&c,mod,sizeof(mod)));
+ /* Nine-argument TexImage2D needs five words at SP; the boot entry SP
+  * reserves only sixteen bytes. Place this synthetic call's frame safely. */
+ c.regs[13]=CNK_ARM_STACK_BASE+CNK_ARM_STACK_BYTES-64u;
  assert(!cnk_zeebx_arm_set_gl_host(&c,&host,&recorder));
  api(&c,23u,5u,1u,0u,0u,0u);assert(success(&c)==1u);
  api(&c,23u,12u,1u,1u,0u,0u);const uint32_t surf=success(&c);
