@@ -126,9 +126,10 @@ typedef struct {
  uint32_t egl_error,egl_initialized,egl_queries;
  uint32_t egl_surface,egl_context,egl_current_surface,egl_current_context;
  uint32_t gl_clear_calls,gl_presents,gl_viewport_calls;
- uint32_t gl_vertex_pointer,gl_vertex_stride,gl_draw_calls,gl_drawn_vertices;
+ uint32_t gl_vertex_pointer,gl_vertex_stride,gl_vertex_type;
+ uint32_t gl_draw_calls,gl_drawn_vertices;
  uint8_t gl_vertex_enabled;
- uint32_t gl_uv_pointer,gl_uv_stride,gl_bound_texture;
+ uint32_t gl_uv_pointer,gl_uv_stride,gl_uv_type,gl_bound_texture;
  uint32_t gl_texture_uploads,gl_textured_draw_calls;
  uint8_t gl_uv_enabled,gl_texturing_enabled;
  cnk_zeebx_gl_host gl_host;

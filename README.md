@@ -1,5 +1,15 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 137: coordenadas GL_FIXED Zeebo para modelos y texturas
+
+- Se extiende el puente original de Zeebx a vitaGL para interpretar `GL_FIXED` 16.16 **con signo** en posiciones 3D y coordenadas UV, además de `GL_FLOAT`; los dos formatos pueden combinarse por separado.
+- Se conservan listas indexadas, tiras y abanicos de triángulos, buffers con paso intercalado, y comprobaciones de memoria invitada. Fallos de GPU, tipo no soportado o índice fuera de rango detienen la API original sin fingir que dibujó.
+- El bloque incluye una nueva prueba de geometría fija con datos sintéticos, subiendo la selección de CI de 39 a **40 tests sin ROM**. La ejecución final y el enlace VitaSDK se revisan en GitHub Actions.
+- [Documentación técnica](docs/AVANCE_137_ZEEBX_GL_FIXED_GEOMETRIA.md).
+
+**Importante:** la ejecución completa del juego original y una carrera física en PS Vita todavía NO se han verificado. No es un VPK final ni cambia la estimación histórica del porcentaje.
+
+
 ## Avance 136: texturas RGB565/RGBA y UV originales hacia vitaGL
 
 - El invitado ARM Zeebo invoca las operaciones originales de creación,

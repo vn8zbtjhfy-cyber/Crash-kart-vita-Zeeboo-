@@ -213,9 +213,14 @@ int main(void){
  assert(invoke(&cpu)==0u&&g.draws==1u&&g.draw_vertices==3u);
  assert(memcmp(g.triangle,triangle,sizeof(triangle))==0);
  assert(cpu.gl_draw_calls==1u&&cpu.gl_drawn_vertices==3u);
- /* Proper GL_FIXED vertex pointer remains unsupported, not misdecoded. */
+ /* The source Zeebx interpreter supports GL_FIXED (signed 16.16).
+  * Registering it does not draw anything until the guest submits vertices.
+  * A separate test confirms fixed-point geometry is decoded correctly. */
  api(&cpu,24u,78u,3u,0x140cu,0u,base);
- trap(&cpu,24u,78u);
+ assert(invoke(&cpu)==0u&&cpu.gl_vertex_type==0x140cu);
+ api(&cpu,24u,78u,3u,0x1402u,0u,base);
+ trap(&cpu,24u,78u); /* SHORT is not yet supported by this bridge */
+ assert(cpu.gl_vertex_type==0x140cu); /* rejection is atomic */
  api(&cpu,24u,78u,3u,0x1406u,11u,base);
  trap(&cpu,24u,78u);
  api(&cpu,24u,78u,3u,0x1406u,0u,0xffffffffu);
