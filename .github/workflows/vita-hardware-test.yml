@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feature/zeebx-vita-hardware-test-125
+      - feature/zeebx-hid-rebased-126
     paths:
       - 'src/**'
       - 'CMakeLists.txt'
