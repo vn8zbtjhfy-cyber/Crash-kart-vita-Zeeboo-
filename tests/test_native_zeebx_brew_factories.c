@@ -283,12 +283,13 @@ int main(void){
  cpu.regs[15]=CNK_ARM_API_BASE+(9u<<12)+4u*4u;
  assert(!cnk_zeebx_arm_handle_bootstrap_api(&cpu));
  assert(!cnk_zeebx_arm_read_u32(&cpu,CNK_ARM_OBJECT_BASE+0x360u,&slot)&&slot==1u);
- /* Button polling remains explicitly unimplemented, not fake input. */
+ /* Unimplemented event queue stays an explicit trap. Slot 7 is now
+  * GetNumberOfButtons and is tested by zeebx_hid_state. */
  cpu.regs[0]=ptr;
- cpu.regs[15]=CNK_ARM_API_BASE+(9u<<12)+7u*4u;
+ cpu.regs[15]=CNK_ARM_API_BASE+(9u<<12)+9u*4u;
  assert(cnk_zeebx_arm_handle_bootstrap_api(&cpu)==-4);
  cnk_zeebx_arm_destroy(&cpu);
- puts("PASS: Crash-specific Zeebx IHID discovery, device object, joystick UID, status and safe button trap");
+ puts("PASS: Crash-specific Zeebx IHID discovery, device object, joystick UID, status and safe event trap");
  puts("PASS: Zeebx guest Crash HID/signals/legacy EGL/GL factories and safe unimplemented method traps");
  puts("PASS: Zeebx guest Display/FileMgr/ISound, real DeviceInfo layout, memset, dbgprintf and unknown API stops");
  return 0;
