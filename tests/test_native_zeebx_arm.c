@@ -88,6 +88,17 @@ int main(void){
  assert(out.reason==CNK_ARM_FAULT || out.reason==CNK_ARM_UNSUPPORTED);
  cnk_zeebx_arm_destroy(&cpu);
 
+ /* The heap and stack are valid DATA but never EXECUTABLE.
+  * Zeebx's guest-memory permissions must survive the C adaptation. */
+ assert(!cnk_zeebx_arm_init(&cpu,module,sizeof(module)));
+ cpu.regs[15]=CNK_ARM_HEAP_BASE;
+ assert(!cnk_zeebx_arm_run(&cpu,4u,&out));
+ assert(out.reason==CNK_ARM_FAULT&&out.address==CNK_ARM_HEAP_BASE);
+ cpu.regs[15]=CNK_ARM_STACK_BASE;
+ assert(!cnk_zeebx_arm_run(&cpu,4u,&out));
+ assert(out.reason==CNK_ARM_FAULT&&out.address==CNK_ARM_STACK_BASE);
+ cnk_zeebx_arm_destroy(&cpu);
+
  puts("PASS: original Zeebx ARM instruction execution, virtual BREW API traps, stack, flags, isolated failures");
  return 0;
 }
