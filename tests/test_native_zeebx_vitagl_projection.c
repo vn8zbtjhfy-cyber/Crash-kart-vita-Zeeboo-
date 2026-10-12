@@ -21,6 +21,30 @@ int main(void){
  cnk_test_gl_reset(2048u);
  cnk_zeebx_gl_host gpu=cnk_vita_zeebx_gl_callbacks();
  assert(gpu.load_matrix&&gpu.mult_matrix&&gpu.frustum&&gpu.ortho);
+ /* The exact original Zeebo 640x480 rectangle maps into the Vita
+  * 725x544 centered pillarbox. No stretching to 960x544. */
+ assert(gpu.scissor&&gpu.set_capability);
+ assert(!gpu.set_capability(NULL,GL_SCISSOR_TEST,1));
+ assert(cnk_test_gl.scissor_enabled==1);
+ assert(!gpu.scissor(NULL,0,0,640u,480u));
+ assert(cnk_test_gl.scissor_calls==1u);
+ assert(cnk_test_gl.scissor_rect[0]==117 &&
+        cnk_test_gl.scissor_rect[1]==0 &&
+        cnk_test_gl.scissor_rect[2]==725 &&
+        cnk_test_gl.scissor_rect[3]==544);
+ assert(!gpu.scissor(NULL,160,120,320u,240u));
+ assert(cnk_test_gl.scissor_calls==2u);
+ assert(cnk_test_gl.scissor_rect[0]==298 &&
+        cnk_test_gl.scissor_rect[1]==136 &&
+        cnk_test_gl.scissor_rect[2]==362 &&
+        cnk_test_gl.scissor_rect[3]==272);
+ assert(gpu.scissor(NULL,0,0,5000u,240u)!=0);
+ assert(cnk_test_gl.scissor_calls==2u);
+ cnk_test_gl.queued_error=GL_OUT_OF_MEMORY;
+ assert(gpu.scissor(NULL,0,0,640u,480u)!=0);
+ assert(cnk_test_gl.scissor_calls==3u);
+ assert(!gpu.set_capability(NULL,GL_SCISSOR_TEST,0));
+ assert(cnk_test_gl.scissor_enabled==0);
  assert(gpu.matrix_mode);
  assert(!gpu.matrix_mode(NULL,GL_PROJECTION));
  const float source[16]={
