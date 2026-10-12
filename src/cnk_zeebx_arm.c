@@ -22,7 +22,7 @@
 #define MOD_MAX (16u*1024u*1024u)
 #define OBJECT_BYTES 0x1000u
 #define HELPER_BYTES 0x1000u
-#define VTABLE_BYTES 0x1000u
+#define VTABLE_BYTES 0x10000u
 static uint32_t word(const uint8_t *p){
  return (uint32_t)p[0]|((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|
         ((uint32_t)p[3]<<24);
@@ -61,6 +61,13 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
  putword(cpu->objects,CNK_ARM_VTABLE_BASE);
  for(unsigned i=0;i<256;i++){
   putword(cpu->vtables+4u*i,CNK_ARM_API_BASE+i*4u); /* IShell */
+  /* Zeebx's vtables are 256 slots each. The next applet classes
+   * observed in genuine cnk2.mod are IDisplay (5) and IFileMgr (3).
+   * Vtable slots lead to diagnostic API traps, not fake methods. */
+  putword(cpu->vtables+3u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(3u<<12)+i*4u);
+  putword(cpu->vtables+5u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(5u<<12)+i*4u);
   putword(cpu->helpers+4u*i,CNK_ARM_API_BASE+(6u<<12)+i*4u);
  }
  cpu->regs[0]=CNK_ARM_OBJECT_BASE;
@@ -72,6 +79,7 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
  cpu->cpsr=0x10u; /* user mode ARM */
  cpu->heap_cursor=0u;
  cpu->shell_refs=1u;
+ cpu->object_cursor=16u; /* Shell, Module**, IApplet** reserved */
  cpu->initialized=1;
  return 0;
 }
