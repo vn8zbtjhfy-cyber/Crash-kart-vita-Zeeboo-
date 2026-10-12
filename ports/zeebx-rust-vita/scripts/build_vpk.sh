@@ -18,6 +18,7 @@ python3 tools/patch_zeebx_create_budget_vita.py zeebx-emu
 python3 tests/validate_assets.py
 python3 tests/fufs_index_smoke.py
 cargo +nightly build -Z build-std=std,panic_abort --release --target armv7-sony-vita-newlibeabihf --manifest-path rust/zeebx_vita/Cargo.toml
+bash scripts/build_vitagl_sin_splash.sh
 cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$VITASDK/share/vita.toolchain.cmake" -DCMAKE_BUILD_TYPE=Release -DNITRO_EXPERIMENTAL_VPK=ON
 cmake --build build --parallel 2
 test -s build/Crash_Nitro_Kart_3D.vpk

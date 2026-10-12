@@ -141,6 +141,12 @@ jobs:
           cd ports/zeebx-rust-vita
           python3 tests/validate_assets.py
           python3 tests/fufs_index_smoke.py
+      - name: Recompilar biblioteca vitaGL sin splash original
+        run: |
+          set -euo pipefail
+          export PATH="$VITASDK/bin:$PATH"
+          cd ports/zeebx-rust-vita
+          bash scripts/build_vitagl_sin_splash.sh
       - name: CMake VitaSDK y VPK experimental
         run: |
           set -euo pipefail
