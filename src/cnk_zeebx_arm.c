@@ -68,6 +68,8 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
           CNK_ARM_API_BASE+(3u<<12)+i*4u);
   putword(cpu->vtables+5u*CNK_ARM_VTABLE_STRIDE+4u*i,
           CNK_ARM_API_BASE+(5u<<12)+i*4u);
+  putword(cpu->vtables+14u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(14u<<12)+i*4u);
   putword(cpu->helpers+4u*i,CNK_ARM_API_BASE+(6u<<12)+i*4u);
  }
  cpu->regs[0]=CNK_ARM_OBJECT_BASE;
@@ -465,6 +467,17 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   return -1;
  unsigned iface=(pc-CNK_ARM_API_BASE)>>12u;
  unsigned slot=((pc-CNK_ARM_API_BASE)&0xfffu)/4u;
+ /* Zeebx AEEStdLib::memset at helper index 1, as used by the
+  * original cnk2.mod while constructing its applet state. Validate
+  * writable guest bounds before modifying ANY bytes. */
+ if(iface==6u && slot==1u){
+  const uint32_t addr=c->regs[0],value=c->regs[1],length=c->regs[2];
+  if(length){
+   if(length>CNK_ARM_HEAP_BYTES || !map(c,addr,length,1))return -3;
+   memset(map(c,addr,length,1),(int)(uint8_t)value,length);
+  }
+  return cnk_zeebx_arm_return_from_api(c,addr);
+ }
  if(iface==6u && slot==26u){ /* AEEStdLib malloc */
   uint32_t request=c->regs[0];
   if(request>CNK_ARM_HEAP_BYTES-8u)return -2;
@@ -539,6 +552,7 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   uint32_t target_iface=0;
   if(clsid==0x01001001u)target_iface=5u; /* IDisplay */
   else if(clsid==0x01001003u)target_iface=3u; /* IFileMgr */
+  else if(clsid==0x01001056u)target_iface=14u; /* ISound */
   else return -4;
   if(c->regs[0]!=CNK_ARM_OBJECT_BASE||!out_ptr||
      !map(c,out_ptr,4u,1))return -3;
@@ -549,7 +563,8 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   if(store(c,obj,4u,vtable)||store(c,out_ptr,4u,obj))return -3;
   c->object_cursor+=64u;
   if(target_iface==5u)c->display_objects++;
-  else c->filemgr_objects++;
+  else if(target_iface==3u)c->filemgr_objects++;
+  else c->sound_objects++;
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
  return -4; /* Unsupported API MUST NOT silently return success. */
