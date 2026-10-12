@@ -66,6 +66,8 @@ typedef struct {
  int (*clear_color)(void *user,float r,float g,float b,float a);
  int (*clear)(void *user,uint32_t mask);
  int (*viewport)(void *user,int32_t x,int32_t y,uint32_t w,uint32_t h);
+ /* GLES1 scissor rect in original 640x480 framebuffer coordinates. */
+ int (*scissor)(void *user,int32_t x,int32_t y,uint32_t w,uint32_t h);
  int (*present)(void *user);
  /* Zeebx GL_LEGACY matrix entries. Optional until implemented by host:
   * unsupported calls must TRAP, never silently return success. */
