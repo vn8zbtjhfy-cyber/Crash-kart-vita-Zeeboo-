@@ -83,3 +83,17 @@ implementaron únicamente los métodos expresamente documentados y
 necesarios en el arranque real: todos los demás siguen siendo paradas
 explícitas, no funciones inventadas. La fuente completa del emulador
 permanece accesible en el submódulo fijado.
+
+## Avance 124: IBitmap, GetDeviceBitmap e IDIB RGB565
+
+La adaptación C99 `src/cnk_zeebx_arm.c` amplía el trabajo
+GPL-2.0-or-later de ZeebxTeam a partir de
+`src/machine/display.rs` y `src/machine/bitmap.rs`.
+Transfiere las firmas y semántica de
+`IDisplay::GetDeviceBitmap`,
+`IBitmap::QueryInterface`,
+`IBitmap::AddRef/Release`, y el layout de `AEEIDIB.h`:
+RGB565, superficie virtual y metadatos de píxel reales.
+No se incluye código propietario ni imágenes originales del juego.
+El resultado todavía no reemplaza la salida de OpenGL ES ni dibuja
+automáticamente en la pantalla física de Vita.
