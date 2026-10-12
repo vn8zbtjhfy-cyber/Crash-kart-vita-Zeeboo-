@@ -164,6 +164,28 @@ int main(void){
  assert(!cpu.applet_pending);
  cnk_zeebx_arm_destroy(&cpu);
 
- puts("PASS: Zeebx guest module/applications created by true ARM IModule::CreateInstance, safe invalid vtables");
+ /* A forged guest HandleEvent vtable MUST NOT start a fake game nor
+  * consume heap bytes, change registers or create IDisplay. */
+ wr32(code+0x40,CNK_ARM_MOD_BASE+0xc0u); /* restore valid module */
+ wr32(code+0xd8,0xdeadbeefu); /* invalid guest applet method */
+ assert(!cnk_zeebx_arm_init(&cpu,code,sizeof(code)));
+ assert(!cnk_zeebx_arm_bootstrap(&cpu,1000u,&out,&calls));
+ assert(out.reason==CNK_ARM_RETURNED);
+ assert(!cnk_zeebx_arm_prepare_applet(&cpu,0x01081984u,&entry));
+ assert(!cnk_zeebx_arm_bootstrap(&cpu,1000u,&out,&calls));
+ assert(!cnk_zeebx_arm_applet_result(&cpu,&out,&applet));
+ const uint32_t saved_pc=cpu.regs[15],saved_heap=cpu.heap_cursor;
+ const uint32_t saved_objs=cpu.object_cursor;
+ uint32_t invalid_entry=0,invalid_start=0;
+ assert(cnk_zeebx_arm_prepare_start_event(&cpu,applet,0x01081984u,
+                                          &invalid_entry,&invalid_start)<0);
+ assert(!invalid_entry && !invalid_start && !cpu.applet_start_dispatched);
+ assert(cpu.regs[15]==saved_pc && cpu.heap_cursor==saved_heap);
+ assert(cpu.object_cursor==saved_objs && !cpu.display_objects);
+ /* The applet itself may be valid yet have no executable method; this
+  * cannot be interpreted as a completed stage 3 or as playable. */
+ cnk_zeebx_arm_destroy(&cpu);
+
+ puts("PASS: Zeebx original module/create/start event, valid 24-byte AEEAppStart and invalid guest method preflight");
  return 0;
 }
