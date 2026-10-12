@@ -170,6 +170,54 @@ int main(void){
  assert(outcome.reason==CNK_ARM_API&&outcome.api_interface==6u&&outcome.api_slot==1u);
  cnk_zeebx_arm_destroy(&cpu);
 
+ /* Crash's verified Zeebx class scan requests BREW HID and signals as
+  * well as the OLD AEEGL.h interfaces, not the newer QEGL/GLES versions.
+  * Exercise each real guest CreateInstance BLX, then check the exact
+  * Zeebx vtable index and prove that unported methods still STOP. */
+ memset(guest,0,sizeof(guest));
+ wr32(guest+0,0xe1a0400eu);  /* MOV r4,lr */
+ wr32(guest+4,0xe5903000u); /* LDR r3,[r0] */
+ wr32(guest+8,0xe5933008u); /* LDR r3,[r3,#8] Shell CreateInstance */
+ wr32(guest+12,0xe12fff33u);/* BLX r3 */
+ wr32(guest+16,0xe1a0e004u);/* MOV lr,r4 */
+ wr32(guest+20,0xe12fff1eu);/* BX lr */
+ assert(!cnk_zeebx_arm_init(&cpu,guest,sizeof(guest)));
+ const uint32_t crash_classes[4]={
+   0x0106c411u, /* HID from Zeebx machine/mod.rs */
+   0x01041207u, /* ISignalCBFactory */
+   0x01014bc4u, /* legacy EGL */
+   0x01014bc3u  /* legacy GL */
+ };
+ const unsigned crash_ifaces[4]={8u,12u,23u,24u};
+ for(unsigned i=0;i<4u;i++){
+  const uint32_t output=CNK_ARM_OBJECT_BASE+0x300u+4u*i;
+  const uint32_t expected=CNK_ARM_OBJECT_BASE+16u+64u*i;
+  const uint32_t expected_vtbl=CNK_ARM_VTABLE_BASE+
+                                  crash_ifaces[i]*CNK_ARM_VTABLE_STRIDE;
+  cpu.regs[0]=CNK_ARM_OBJECT_BASE;
+  cpu.regs[1]=crash_classes[i];
+  cpu.regs[2]=output;
+  cpu.regs[14]=CNK_ARM_RETURN_MAGIC;
+  cpu.regs[15]=CNK_ARM_MOD_BASE;
+  assert(!cnk_zeebx_arm_bootstrap(&cpu,80u,&outcome,&handled));
+  assert(outcome.reason==CNK_ARM_RETURNED&&handled==1u);
+  assert(cpu.regs[0]==0u);
+  assert(!cnk_zeebx_arm_read_u32(&cpu,output,&ptr)&&ptr==expected);
+  assert(!cnk_zeebx_arm_read_u32(&cpu,ptr,&vtbl)&&vtbl==expected_vtbl);
+  assert(!cnk_zeebx_arm_read_u32(&cpu,vtbl+3u*4u,&slot));
+  assert(slot==CNK_ARM_API_BASE+(crash_ifaces[i]<<12)+3u*4u);
+  /* No fake GL context, HID device or callback is returned yet. */
+  cpu.regs[0]=expected;
+  cpu.regs[15]=slot;
+  assert(cnk_zeebx_arm_handle_bootstrap_api(&cpu)==-4);
+  assert(cpu.regs[15]==slot);
+ }
+ assert(cpu.hid_objects==1u && cpu.signal_factory_objects==1u);
+ assert(cpu.egl_legacy_objects==1u && cpu.gl_legacy_objects==1u);
+ assert(cpu.object_cursor==16u+4u*64u);
+ cnk_zeebx_arm_destroy(&cpu);
+
+ puts("PASS: Zeebx guest Crash HID/signals/legacy EGL/GL factories and safe unimplemented method traps");
  puts("PASS: Zeebx guest Display/FileMgr/ISound, real DeviceInfo layout, memset, dbgprintf and unknown API stops");
  return 0;
 }
