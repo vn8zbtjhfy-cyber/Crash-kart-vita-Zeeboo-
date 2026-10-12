@@ -1740,6 +1740,61 @@ static int zeebx_egl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
  }
 }
 
+/* Zeebx machine/shell.rs::shell_timer_call: BREW IShell slots
+ * 11 SetTimer(int32 delay, PFNNOTIFY, void *user),
+ * 12 CancelTimer(PFNNOTIFY,void *user),
+ * 13 GetTimerExpiration(PFNNOTIFY,void *user).
+ * No host platform timer is used; the original guest sees virtual ms.
+ */
+static int zeebx_shell_timer_api(cnk_zeebx_arm *c,unsigned slot){
+ if(c->regs[0]!=CNK_ARM_OBJECT_BASE)return -3;
+ const uint32_t now=c->virtual_time_ms;
+ if(slot==11u){
+  const uint32_t fn=c->regs[2],context=c->regs[3];
+  if(!fn)return -4; /* EBADPARM, never schedule NULL */
+  const int32_t signed_delay=(int32_t)c->regs[1];
+  uint32_t delay=signed_delay>0?(uint32_t)signed_delay:0u;
+  uint32_t deadline=UINT32_MAX-now<delay?UINT32_MAX:now+delay;
+  unsigned found=c->timer_count;
+  for(unsigned i=0;i<c->timer_count;i++)
+   if(c->timers[i].function==fn && c->timers[i].context==context){
+    found=i;break;
+   }
+  if(found==CNK_ZEEBX_MAX_TIMERS)return -2;
+  if(found==c->timer_count){
+   if(c->timer_count>=CNK_ZEEBX_MAX_TIMERS)return -2;
+   c->timer_count++;
+  }
+  c->timers[found]=(cnk_zeebx_timer){fn,context,deadline};
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(slot==12u){
+  const uint32_t fn=c->regs[1],ctx=c->regs[2];
+  unsigned i=0u;
+  while(i<c->timer_count){
+   const cnk_zeebx_timer timer=c->timers[i];
+   if(timer.context==ctx && (!fn || timer.function==fn)){
+    for(unsigned j=i+1u;j<c->timer_count;j++)
+     c->timers[j-1u]=c->timers[j];
+    c->timer_count--;
+   }else i++;
+  }
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(slot==13u){
+  const uint32_t fn=c->regs[1],ctx=c->regs[2];
+  uint32_t remaining=0u;
+  for(unsigned i=0;i<c->timer_count;i++)
+   if(c->timers[i].function==fn && c->timers[i].context==ctx){
+    remaining=c->timers[i].deadline_ms>now?
+              c->timers[i].deadline_ms-now:0u;
+    break;
+   }
+  return cnk_zeebx_arm_return_from_api(c,remaining);
+ }
+ return -4;
+}
+
 int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
  if(!c||!c->initialized)return -1;
  uint32_t pc=c->regs[15];
@@ -1776,6 +1831,8 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   c->heap_cursor+=aligned;
   return cnk_zeebx_arm_return_from_api(c,result);
  }
+ if(iface==0u && slot>=11u && slot<=13u)
+  return zeebx_shell_timer_api(c,slot);
  if(iface==0u && (slot==0u||slot==1u)){ /* IShell AddRef/Release */
   if(c->regs[0]!=CNK_ARM_OBJECT_BASE)return -3;
   if(slot==0u){
@@ -2247,5 +2304,77 @@ int cnk_zeebx_arm_prepare_start_event(cnk_zeebx_arm *c,
  c->applet_start_addr=start;
  c->applet_start_dispatched=1u;
  *entry=func;*start_ptr=start;
+ return 0;
+}
+
+/* Zeebx Machine timers fire outside BREW dispatch, at guest return
+ * boundaries. The host drives virtual time independently; no background
+ * threads nor host callback execution. A zero/negative delay means due
+ * NOW. Bound total callbacks to prevent self-rearming 0-ms starvation. */
+int cnk_zeebx_arm_deliver_timers(cnk_zeebx_arm *c,uint32_t budget,
+                                 cnk_arm_outcome *out,uint32_t *delivered){
+ if(!c||!out||!delivered||!c->initialized||!budget||
+    budget>10000000u||c->regs[15]!=CNK_ARM_RETURN_MAGIC)
+  return -1;
+ *delivered=0u;
+ memset(out,0,sizeof(*out));
+ const uint64_t initial=c->executed;
+ unsigned fired=0u;
+ while(c->executed-initial<budget && fired<64u){
+  unsigned due=c->timer_count;
+  for(unsigned i=0;i<c->timer_count;i++)
+   if(c->timers[i].deadline_ms<=c->virtual_time_ms &&
+      (due==c->timer_count||
+       c->timers[i].deadline_ms<c->timers[due].deadline_ms))
+    due=i;
+  if(due==c->timer_count)break;
+  const cnk_zeebx_timer cb=c->timers[due];
+  const uint32_t code=cb.function&~1u;
+  const uint64_t last=(uint64_t)CNK_ARM_MOD_BASE+
+                        c->module_size-CNK_ARM_MOD_PREFIX;
+  if((cb.function&1u)||(code&3u)||code<CNK_ARM_MOD_BASE||
+     (uint64_t)code+4u>last){
+   out->reason=CNK_ARM_UNSUPPORTED;
+   out->pc=cb.function;
+   out->executed=c->executed;
+   return -2; /* Invalid callback remains queued for debugging. */
+  }
+  /* Consume before execution because a timer can rearm itself inside
+   * the callback. The new deadline must not get canceled afterwards. */
+  for(unsigned i=due+1u;i<c->timer_count;i++)
+   c->timers[i-1u]=c->timers[i];
+  c->timer_count--;
+  uint32_t saved_regs[16];
+  memcpy(saved_regs,c->regs,sizeof(saved_regs));
+  const uint32_t saved_cpsr=c->cpsr;
+  c->regs[0]=cb.context;
+  c->regs[1]=0u;c->regs[2]=0u;c->regs[3]=0u;
+  c->regs[14]=CNK_ARM_RETURN_MAGIC;
+  c->regs[15]=code;
+  c->cpsr&=~T;
+  cnk_arm_outcome event={0};
+  uint32_t calls=0u;
+  int rc=cnk_zeebx_arm_bootstrap(
+   c,(uint32_t)(budget-(c->executed-initial)),&event,&calls);
+  if(!rc&&event.reason==CNK_ARM_BUDGET &&
+     c->regs[15]==CNK_ARM_RETURN_MAGIC)
+   event.reason=CNK_ARM_RETURNED;
+  memcpy(c->regs,saved_regs,sizeof(saved_regs));
+  c->cpsr=saved_cpsr;
+  if(rc||event.reason!=CNK_ARM_RETURNED){
+   /* Execution failed: report the exact stop instead of simulating a
+    * completed timer. Guest memory effects cannot be rolled back. */
+   *out=event;
+   return rc?-3:-2;
+  }
+  fired++;
+  (*delivered)++;
+ }
+ int due_remaining=0;
+ for(unsigned i=0;i<c->timer_count;i++)
+  if(c->timers[i].deadline_ms<=c->virtual_time_ms)
+   due_remaining=1;
+ out->reason=due_remaining?CNK_ARM_BUDGET:CNK_ARM_RETURNED;
+ out->pc=c->regs[15];out->executed=c->executed;
  return 0;
 }
