@@ -888,6 +888,59 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
                 a2=c->regs[2],a3=c->regs[3];
  int rc=-1;
  switch(slot){
+ /* All indices from ZeebxTeam/zeebx-emu/src/brew/aee_slots.rs
+  * GL_LEGACY (AEEGL.h). This IGL does not pass a 'this' pointer.
+  * Only valid GLES1 state is forwarded; unported state is rejected. */
+ case 6u: /* glBlendFunc(GLenum src, GLenum dst) */
+  if((a0!=0u&&a0!=1u&&a0!=0x0302u&&a0!=0x0303u)||
+     (a1!=0u&&a1!=1u&&a1!=0x0302u&&a1!=0x0303u)||
+     !c->gl_host.blend_func||
+     c->gl_host.blend_func(c->gl_host_user,a0,a1))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 12u:{ /* glColor4x, signed 16.16 converted to normalized RGBA */
+  float color[4];
+  const uint32_t raw[4]={a0,a1,a2,a3};
+  for(unsigned i=0;i<4u;i++){
+   float v=zeebx_gl_fixed(raw[i]);
+   color[i]=v<0.f?0.f:v>1.f?1.f:v;
+  }
+  if(!c->gl_host.color4||
+     c->gl_host.color4(c->gl_host_user,color[0],color[1],
+                       color[2],color[3]))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ case 13u: /* glColorMask(GLboolean r,g,b,a) */
+  if(a0>1u||a1>1u||a2>1u||a3>1u||
+     !c->gl_host.color_mask||
+     c->gl_host.color_mask(c->gl_host_user,(int)a0,(int)a1,
+                           (int)a2,(int)a3))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 19u: /* glCullFace */
+  if((a0!=0x0404u&&a0!=0x0405u&&a0!=0x0408u)||
+     !c->gl_host.cull_face||
+     c->gl_host.cull_face(c->gl_host_user,a0))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 20u: /* glDepthFunc: GL_NEVER .. GL_ALWAYS */
+  if(a0<0x0200u||a0>0x0207u||
+     !c->gl_host.depth_func||
+     c->gl_host.depth_func(c->gl_host_user,a0))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 21u: /* glDepthMask */
+  if(a0>1u||!c->gl_host.depth_mask||
+     c->gl_host.depth_mask(c->gl_host_user,(int)a0))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 23u: /* glDisable(capability) */
+ case 28u: /* glEnable(capability) */
+  if((a0!=0x0b71u&&a0!=0x0be2u&&a0!=0x0b44u)||
+     !c->gl_host.set_capability||
+     c->gl_host.set_capability(c->gl_host_user,a0,
+                               slot==28u?1:0))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 34u: /* glFrontFace(GL_CW/GL_CCW) */
+  if((a0!=0x0900u&&a0!=0x0901u)||
+     !c->gl_host.front_face||
+     c->gl_host.front_face(c->gl_host_user,a0))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
  case 7u:{ /* glClear(GLbitfield) */
   const uint32_t allowed=0x4000u|0x0100u|0x0400u;
   if(a0&~allowed)return -4;
