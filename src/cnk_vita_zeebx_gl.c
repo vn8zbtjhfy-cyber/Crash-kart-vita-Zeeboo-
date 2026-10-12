@@ -8,6 +8,9 @@
 #include <vitaGL.h>
 #include <stdint.h>
 #include <limits.h>
+#ifndef GL_STENCIL_BUFFER_BIT
+#define GL_STENCIL_BUFFER_BIT 0x0400u
+#endif
 
 #define CNK_NATIVE_DISPLAY_W 960
 #define CNK_NATIVE_DISPLAY_H 544
@@ -31,7 +34,7 @@ static int vita_clear(void *user,uint32_t mask){
  (void)user;
  if(mask&~(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT))
   return -1;
- glClear((GLbitfield)mask);
+ glClear((GLenum)mask);
  return 0;
 }
 static int vita_viewport(void *user,int32_t x,int32_t y,
