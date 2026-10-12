@@ -3,7 +3,8 @@
 #include "cnk_zeebx_arm.h"
 /* Installs a real vitaGL renderer, ONLY after vglInit() on PS Vita.
  * Used by the opt-in private-original-game probe, not by standard races.
- * DrawArrays/Elements and textures remain unsupported and trap.
+ * Bounded DrawArrays/DrawElements XYZ triangles are forwarded to vitaGL.
+ * Textures, UVs, material setup and unsupported draw modes still trap.
  */
 /* Provides callbacks to the isolated original .mod probe after GPU init. */
 cnk_zeebx_gl_host cnk_vita_zeebx_gl_callbacks(void);
