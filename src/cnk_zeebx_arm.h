@@ -98,6 +98,10 @@ typedef struct {
  /* Real 3D guest vertex stream in XYZ float triplets, owned by caller
   * through return of this synchronous callback. No fake draw success. */
  int (*draw_triangles)(void *user,const float *xyz,uint32_t count);
+ /* Source Zeebx GL_COLOR_ARRAY, normalized per-vertex RGBA8. The
+  * host consumes these floats synchronously, without retaining guest RAM. */
+ int (*draw_colored_triangles)(void *user,const float *xyz,
+                                const float *rgba,uint32_t count);
  /* Guest texture commands are copied from bounded guest RAM BEFORE
   * invoking the host; no guest pointer escapes or is retained. */
  int (*texture_gen)(void *user,uint32_t count,uint32_t *names);
@@ -108,6 +112,9 @@ typedef struct {
                        uint32_t format,uint32_t type,const uint8_t *pixels);
  int (*draw_textured_triangles)(void *user,const float *xyz,
                                 const float *uv,uint32_t count);
+ int (*draw_colored_textured_triangles)(void *user,const float *xyz,
+                                        const float *uv,const float *rgba,
+                                        uint32_t count);
 } cnk_zeebx_gl_host;
 
 typedef enum {
@@ -138,11 +145,12 @@ typedef struct {
  uint32_t gl_draw_calls,gl_drawn_vertices;
  uint8_t gl_vertex_enabled;
  uint32_t gl_uv_pointer,gl_uv_stride,gl_uv_type,gl_bound_texture;
+ uint32_t gl_color_pointer,gl_color_stride,gl_color_type,gl_color_buffer;
  uint32_t gl_array_buffer,gl_element_buffer,gl_vertex_buffer,gl_uv_buffer;
  uint32_t gl_next_buffer_name,gl_total_buffer_bytes;
  cnk_zeebx_gl_buffer gl_buffers[CNK_ZEEBX_MAX_GL_BUFFERS];
  uint32_t gl_texture_uploads,gl_textured_draw_calls;
- uint8_t gl_uv_enabled,gl_texturing_enabled;
+ uint8_t gl_uv_enabled,gl_texturing_enabled,gl_color_enabled;
  cnk_zeebx_gl_host gl_host;
  void *gl_host_user;
  uint32_t egl_string_vendor,egl_string_version,egl_string_extensions;
