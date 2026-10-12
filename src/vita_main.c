@@ -17,6 +17,7 @@ int main(void){
      *
      * User-owned files on their PS Vita only:
      *  ux0:data/cnk3d/cnk2.mod
+     *  ux0:data/cnk3d/274214.mif
      *  ux0:data/cnk3d/zeebx_probe.flag   (empty marker enables probe)
      * Report: ux0:data/cnk3d/zeebx_probe.txt
      */
@@ -24,8 +25,9 @@ int main(void){
     if(zeebx_flag){
         fclose(zeebx_flag);
         cnk_arm_outcome probe={0};
-        int probe_rc=cnk_zeebx_probe_original(
+        int probe_rc=cnk_zeebx_probe_original_applet(
             "ux0:data/cnk3d/cnk2.mod",
+            "ux0:data/cnk3d/274214.mif",
             "ux0:data/cnk3d/zeebx_probe.txt",200000u,&probe);
         fprintf(stderr,"CNK: Zeebx guest ARM probe status %d, "
                        "steps=%llu stop=%u\\n",
