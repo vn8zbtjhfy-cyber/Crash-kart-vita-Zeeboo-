@@ -68,6 +68,8 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
           CNK_ARM_API_BASE+(3u<<12)+i*4u);
   putword(cpu->vtables+5u*CNK_ARM_VTABLE_STRIDE+4u*i,
           CNK_ARM_API_BASE+(5u<<12)+i*4u);
+  putword(cpu->vtables+7u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(7u<<12)+i*4u);
   putword(cpu->vtables+14u*CNK_ARM_VTABLE_STRIDE+4u*i,
           CNK_ARM_API_BASE+(14u<<12)+i*4u);
   putword(cpu->helpers+4u*i,CNK_ARM_API_BASE+(6u<<12)+i*4u);
@@ -534,6 +536,30 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
    dst[44]=64u; /* wStructSize */
    dst[56]=64u; /* wMaxPath (AEE_MAX_FILE_NAME) */
   }
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ /* Zeebx machine/display.rs: IDISPLAY_GetDeviceBitmap returns an
+  * AEE error code (0 for success) and writes IBitmap** to R1.
+  * The device bitmap is persistent, not a newly allocated surface on
+  * every request. Its drawing methods remain separate API traps.
+  * No graphics are fabricated here: the guest interface exists, while
+  * GPU output still requires a later Vita display bridge. */
+ if(iface==5u && slot==16u){
+  uint32_t disp=c->regs[0],out_ptr=c->regs[1],vtbl=0;
+  if(!out_ptr || load(c,disp,4u,&vtbl) ||
+     vtbl!=CNK_ARM_VTABLE_BASE+5u*CNK_ARM_VTABLE_STRIDE ||
+     !map(c,out_ptr,4u,1))return -3;
+  if(!c->screen_bitmap_addr){
+   if(c->object_cursor>OBJECT_BYTES-64u)return -2;
+   c->screen_bitmap_addr=CNK_ARM_OBJECT_BASE+c->object_cursor;
+   if(store(c,c->screen_bitmap_addr,4u,
+            CNK_ARM_VTABLE_BASE+7u*CNK_ARM_VTABLE_STRIDE))return -3;
+   c->object_cursor+=64u;
+   c->screen_bitmap_references=1u; /* Zeebx display retains ownership */
+  }
+  if(c->screen_bitmap_references==UINT32_MAX)return -2;
+  if(store(c,out_ptr,4u,c->screen_bitmap_addr))return -3;
+  c->screen_bitmap_references++;
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
  /* The original CNK applet reaches this exact diagnostic helper twice.
