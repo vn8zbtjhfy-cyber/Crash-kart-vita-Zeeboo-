@@ -2,14 +2,14 @@
 
 Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **Todavía no es un videojuego completo ni se ha verificado su ejecución en consola.**
 
-## Avance 110 (11 de octubre de 2026)
+## Avance 112 (11 de octubre de 2026)
 
-- **130/130 pruebas de PC Release** con los recursos privados y **2/2 pruebas seleccionadas ASan/UBSan** para el control del mando y el bucle de Vita.
-- **11/11 pruebas de PC sin ROM aprobadas en GitHub Actions**, incluyendo telemetría y diagnóstico: [ejecución 38186433951](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38186433951).
-- **VitaSDK aprobó la compilación y enlace ARM ELF** para la versión del avance 110: [ejecución 38186433962](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38186433962), commit `bdc6825`.
-- Avance 109: recopilación mínima de rendimiento en `ux0:data/cnk3d_perf.txt` para que, **cuando pueda ejecutarse en Vita**, podamos medir cuadros, tirones y suspensiones sin confundirlos con fallos de renderizado.
-- Avance 110: la lectura del mando tolera hasta siete muestras vacías seguidas con **entrada neutral**, recupera tras la siguiente lectura válida y rechaza fallos persistentes o errores reales.
-- Ver `docs/AVANCE_108_ENLACE_ARM_ELF.md`, `docs/AVANCE_109_TELEMETRIA_RENDIMIENTO.md` y `docs/AVANCE_110_CONTROLES_MUESTRAS_VITA.md`.
+- **132/132 pruebas de PC Release aprobadas** con los materiales originales del usuario conservados fuera del repositorio; test del selector externo de FUFS aprobado también con ASan/UBSan.
+- **13 pruebas de PC sin ROM aprobadas en GitHub Actions**: [ejecución 38186987038](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38186987038).
+- **VitaSDK compiló y enlazó el ELF ARM** con la nueva detección de archivo `data.vfs`: [ejecución 38186987085](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38186987085), commit `b2c2065`.
+- El punto de entrada `src/vita_main.c` ya busca el `data.vfs` original del usuario **fuera del futuro VPK**. Ubicación preferida en la consola: `ux0:data/cnk3d/data.vfs`, seguida de `ux0:data/data.vfs` y la ruta heredada `app0:/data.vfs`. Se descartan archivos sin cabecera `FUFS`; después, el motor verifica el archivo completamente al abrirlo.
+- Se conservan los avances de telemetría, control y protección de geometría. Ver `docs/AVANCE_111_RUTA_EXTERNA_FUFS.md` y `docs/AVANCE_111_GRILLA_GEOMETRIA_FINITA.md`.
+- **Un ELF compilado no es un VPK funcional ni demuestra que una PS Vita real pueda jugarlo.**
 
 ## Qué todavía falta
 
