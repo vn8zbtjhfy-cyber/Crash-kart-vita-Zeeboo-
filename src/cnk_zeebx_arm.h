@@ -88,6 +88,16 @@ typedef struct {
  /* Real 3D guest vertex stream in XYZ float triplets, owned by caller
   * through return of this synchronous callback. No fake draw success. */
  int (*draw_triangles)(void *user,const float *xyz,uint32_t count);
+ /* Guest texture commands are copied from bounded guest RAM BEFORE
+  * invoking the host; no guest pointer escapes or is retained. */
+ int (*texture_gen)(void *user,uint32_t count,uint32_t *names);
+ int (*texture_delete)(void *user,uint32_t count,const uint32_t *names);
+ int (*texture_bind)(void *user,uint32_t name);
+ int (*texture_parameter)(void *user,uint32_t pname,uint32_t value);
+ int (*texture_upload)(void *user,uint32_t width,uint32_t height,
+                       uint32_t format,uint32_t type,const uint8_t *pixels);
+ int (*draw_textured_triangles)(void *user,const float *xyz,
+                                const float *uv,uint32_t count);
 } cnk_zeebx_gl_host;
 
 typedef enum {
@@ -116,6 +126,9 @@ typedef struct {
  uint32_t gl_clear_calls,gl_presents,gl_viewport_calls;
  uint32_t gl_vertex_pointer,gl_vertex_stride,gl_draw_calls,gl_drawn_vertices;
  uint8_t gl_vertex_enabled;
+ uint32_t gl_uv_pointer,gl_uv_stride,gl_bound_texture;
+ uint32_t gl_texture_uploads,gl_textured_draw_calls;
+ uint8_t gl_uv_enabled,gl_texturing_enabled;
  cnk_zeebx_gl_host gl_host;
  void *gl_host_user;
  uint32_t egl_string_vendor,egl_string_version,egl_string_extensions;
