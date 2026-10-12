@@ -810,6 +810,21 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_vitagl_projection PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_vitagl_projection PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_vitagl_projection COMMAND cnk_test_zeebx_vitagl_projection)
+  # Genuine Zeebo/BREW GL_LEGACY textures: validate generated names,
+  # stack-based RGBA/RGB565 uploads, UV pointers and bounded geometry.
+  # Neither test needs (or redistributes) data.vfs or cnk2.mod.
+  add_executable(cnk_test_zeebx_textures tests/test_native_zeebx_textures.c)
+  target_link_libraries(cnk_test_zeebx_textures PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_textures PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_textures COMMAND cnk_test_zeebx_textures)
+  add_executable(cnk_test_zeebx_vitagl_textures
+    tests/test_native_zeebx_vitagl_textures.c
+    tests/stub/vitaGL_stub.c src/cnk_vita_zeebx_gl.c)
+  target_include_directories(cnk_test_zeebx_vitagl_textures PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/stub")
+  target_link_libraries(cnk_test_zeebx_vitagl_textures PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_vitagl_textures PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_vitagl_textures COMMAND cnk_test_zeebx_vitagl_textures)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
