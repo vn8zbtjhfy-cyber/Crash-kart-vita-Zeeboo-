@@ -18,6 +18,13 @@ static int start(void *u,uint32_t w,uint32_t h){
  (void)u;return w==640u&&h==480u?0:-1;
 }
 static int present(void *u){(void)u;return 0;}
+static int clear(void *u,uint32_t mask){(void)u;(void)mask;return 0;}
+static int color(void *u,float a,float b,float d,float e){
+ (void)u;(void)a;(void)b;(void)d;(void)e;return 0;
+}
+static int viewport(void *u,int32_t x,int32_t y,uint32_t w,uint32_t h){
+ (void)u;(void)x;(void)y;(void)w;(void)h;return 0;
+}
 static int bind(void *u,uint32_t name){
  record *r=(record*)u;
  if(r->fail)return -1;
@@ -80,6 +87,7 @@ int main(void){
  record r={0};
  cnk_zeebx_gl_host host={0};
  host.make_current=start;host.present=present;
+ host.clear=clear;host.clear_color=color;host.viewport=viewport;
  host.texture_bind=bind;host.texture_upload=upload;
  host.texture_sub_upload=patch;
  assert(!cnk_zeebx_arm_init(&c,mod,sizeof(mod)));
