@@ -158,6 +158,15 @@ jobs:
           cmake -S . -B build "${generator[@]}" -DCMAKE_TOOLCHAIN_FILE="$VITASDK/share/vita.toolchain.cmake" -DCMAKE_BUILD_TYPE=Release -DNITRO_EXPERIMENTAL_VPK=ON -DZEEBX_CORE_LIBRARY="$rust_staticlib"
           cmake --build build --parallel 2
           test -s build/Crash_Nitro_Kart_3D.vpk
+      - name: Guardar ELF y mapa de símbolos para diagnosticar psp2dmp
+        uses: actions/upload-artifact@v4
+        with:
+          name: CNK_Vita_ELF_Symbols_Debug
+          path: |
+            ports/zeebx-rust-vita/build/CrashNitroKartVita
+            ports/zeebx-rust-vita/build/CrashNitroKartVita.map
+          if-no-files-found: error
+          retention-days: 7
       - name: Publicar solo si existe VPK real compilado
         uses: actions/upload-artifact@v4
         with:

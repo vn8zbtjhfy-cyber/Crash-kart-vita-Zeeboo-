@@ -58,10 +58,11 @@ if(NOT BLOB_RESULT EQUAL 0)
  message(FATAL_ERROR "Missing or mismatched embedded ROM assets")
 endif()
 add_executable(${PROJECT_NAME}
- src/main.c src/vita_input.c src/vita_video.c
+ src/main.c src/vita_input.c src/vita_video.c src/vita_debug.c
  "${GENERATED}/embedded.c" "${GENERATED}/embedded.S")
 target_include_directories(${PROJECT_NAME} PRIVATE src "${GENERATED}")
-target_compile_options(${PROJECT_NAME} PRIVATE -O2 -Wall -Wextra -Werror=implicit-function-declaration)
+target_compile_options(${PROJECT_NAME} PRIVATE -O2 -g1 -Wall -Wextra -Werror=implicit-function-declaration)
+target_link_options(${PROJECT_NAME} PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/CrashNitroKartVita.map")
 # Static link order matters: Rust / vitaGL first, then their dependent archives,
 # then Vita SDK imports. These archives resolve mathneon and ShaRK C symbols.
 target_link_libraries(${PROJECT_NAME} PRIVATE
