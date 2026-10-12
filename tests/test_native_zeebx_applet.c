@@ -62,6 +62,10 @@ int main(void){
  assert(cpu.regs[14]==CNK_ARM_RETURN_MAGIC);
  assert(cnk_zeebx_arm_prepare_applet(&cpu,0x01081984u,&entry)<0);
  assert(!cnk_zeebx_arm_bootstrap(&cpu,1000u,&out,&calls));
+ if(out.reason!=CNK_ARM_RETURNED || calls!=1u)
+  fprintf(stderr,"stage2 status=%d pc=%08x opcode=%08x api=%u:%u calls=%u executed=%llu r0=%08x r3=%08x r5=%08x heap=%u\\n",
+   (int)out.reason,out.pc,out.opcode,out.api_interface,out.api_slot,calls,
+   (unsigned long long)out.executed,cpu.regs[0],cpu.regs[3],cpu.regs[5],cpu.heap_cursor);
  assert(out.reason==CNK_ARM_RETURNED && calls==1u);
  assert(cpu.heap_cursor==64u);
  assert(!cnk_zeebx_arm_applet_result(&cpu,&out,&applet));
