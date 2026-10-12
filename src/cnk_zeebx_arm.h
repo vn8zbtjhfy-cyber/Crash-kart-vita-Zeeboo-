@@ -38,6 +38,7 @@ typedef struct {
  uint8_t *module,*stack,*heap,*objects,*helpers,*vtables;
  uint32_t heap_cursor,shell_refs;
  uint32_t object_cursor,display_objects,filemgr_objects,sound_objects,debug_calls;
+ uint32_t virtual_time_ms;
  char last_debug_template[128];
  size_t module_size;
  int initialized,applet_pending;
@@ -48,6 +49,10 @@ typedef struct {
  * this optional module uses only ~3 MB, not Zeebx's 64MB heap. */
 int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes);
 void cnk_zeebx_arm_destroy(cnk_zeebx_arm *cpu);
+/* Host-supplied virtual elapsed milliseconds, as in Zeebx Machine::elapsed_ms.
+ * Defaults to 0 at boot; never derived from guest instruction throughput.
+ * The native app can advance this clock independently once integrated. */
+int cnk_zeebx_arm_set_virtual_time(cnk_zeebx_arm *cpu,uint32_t elapsed_ms);
 /* Returns >=0 for an execution outcome, never runs indefinitely.
  * Caller must handle API outcome; no invented successful BREW replies.
  * Every iteration reuses saved registers, flags and memory state. */
