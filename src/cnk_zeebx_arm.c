@@ -1063,7 +1063,7 @@ static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t mode,
                                  uint32_t index_type,uint32_t index_pointer){
  if((!c->gl_host.draw_triangles&&!c->gl_host.draw_textured_triangles)||
     !c->gl_vertex_enabled||
-    !c->gl_vertex_pointer||!count||
+    (!c->gl_vertex_pointer&&!c->gl_vertex_buffer)||!count||
     c->gl_draw_calls==UINT32_MAX)return -4;
  uint32_t triangles=0u;
  if(mode==4u){ /* GL_TRIANGLES */
@@ -1080,11 +1080,13 @@ static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t mode,
  if(index_type==0u){
   if(first>65536u||count>65536u-first)return -4;
  }else if((index_type!=0x1401u&&index_type!=0x1403u)||
-          !index_pointer || (index_type==0x1403u&&(index_pointer&1u)))
+          (!index_pointer&&!c->gl_element_buffer) ||
+          (index_type==0x1403u&&(index_pointer&1u)))
   return -4;
  const int texture=c->gl_texturing_enabled!=0u;
  if(texture && (!c->gl_host.draw_textured_triangles||
-     !c->gl_uv_enabled||!c->gl_uv_pointer||!c->gl_bound_texture||
+     !c->gl_uv_enabled||
+     (!c->gl_uv_pointer&&!c->gl_uv_buffer)||!c->gl_bound_texture||
      c->gl_textured_draw_calls==UINT32_MAX))return -4;
  float uv[CNK_ZEEBX_MAX_DRAW_VERTICES*2u];
  float xyz[CNK_ZEEBX_MAX_DRAW_VERTICES*3u];
@@ -1101,17 +1103,19 @@ static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t mode,
   if(index_type){
    const uint32_t width=index_type==0x1403u?2u:1u;
    const uint64_t addr=(uint64_t)index_pointer+(uint64_t)source*width;
-   if(addr>UINT32_MAX||
-      load(c,(uint32_t)addr,width,&vertex_index))return -4;
+   uint8_t raw[4]={0};
+   if(zeebx_gpu_read(c,c->gl_element_buffer,addr,width,raw))return -4;
+   vertex_index=width==2u?(uint32_t)raw[0]|((uint32_t)raw[1]<<8):
+                 (uint32_t)raw[0];
   }
   if(vertex_index>=65536u)return -4;
   const uint64_t vertex=(uint64_t)c->gl_vertex_pointer+
                         (uint64_t)vertex_index*c->gl_vertex_stride;
   for(unsigned component=0;component<3u;component++){
    const uint64_t address=vertex+4u*component;
-   uint32_t bits=0;
-   if(address>UINT32_MAX || load(c,(uint32_t)address,4u,&bits))
-    return -4;
+   uint8_t raw[4]={0};
+   if(zeebx_gpu_read(c,c->gl_vertex_buffer,address,4u,raw))return -4;
+   uint32_t bits=word(raw);
    float v=0.f;
    if(c->gl_vertex_type==0x140cu) v=zeebx_gl_fixed(bits);
    else if(c->gl_vertex_type==0x1406u) memcpy(&v,&bits,sizeof(v));
@@ -1124,8 +1128,9 @@ static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t mode,
                             (uint64_t)vertex_index*c->gl_uv_stride;
    for(unsigned component=0;component<2u;component++){
     const uint64_t address=coord+4u*component;
-    uint32_t bits=0;
-    if(address>UINT32_MAX||load(c,(uint32_t)address,4u,&bits))return -4;
+    uint8_t raw[4]={0};
+    if(zeebx_gpu_read(c,c->gl_uv_buffer,address,4u,raw))return -4;
+    uint32_t bits=word(raw);
     float v=0.f;
     if(c->gl_uv_type==0x140cu) v=zeebx_gl_fixed(bits);
     else if(c->gl_uv_type==0x1406u) memcpy(&v,&bits,sizeof(v));
@@ -1155,6 +1160,18 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
  /* All indices from ZeebxTeam/zeebx-emu/src/brew/aee_slots.rs
   * GL_LEGACY (AEEGL.h). This IGL does not pass a 'this' pointer.
   * Only valid GLES1 state is forwarded; unported state is rejected. */
+ case 119u: /* glBindBuffer(GL_ARRAY_BUFFER/ELEMENT_ARRAY_BUFFER,name) */
+  return zeebx_vbo_bind(c,a0,a1);
+ case 120u: /* glBufferData(target,size,data,usage) */
+  return zeebx_vbo_data(c,a0,a1,a2,a3);
+ case 121u: /* glBufferSubData(target,offset,size,data) */
+  return zeebx_vbo_sub_data(c,a0,a1,a2,a3);
+ case 124u: /* glDeleteBuffers(count,guest GLuint*) */
+  return zeebx_vbo_delete(c,a0,a1);
+ case 128u: /* glGenBuffers(count,guest GLuint*) */
+  return zeebx_vbo_gen(c,a0,a1);
+ case 137u: /* glIsBuffer(name) */
+  return cnk_zeebx_arm_return_from_api(c,zeebx_vbo(c,a0)?1u:0u);
  case 5u: /* glBindTexture(GL_TEXTURE_2D, GLuint) */
   if(a0!=CNK_GLTEX_TARGET||!c->gl_host.texture_bind||
      c->gl_host.texture_bind(c->gl_host_user,a1))return -4;
@@ -1174,8 +1191,10 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
   return cnk_zeebx_arm_return_from_api(c,0u);
  case 71u: /* glTexCoordPointer: GL_FLOAT or GL_FIXED (16.16) */
   if(a0!=2u || (a1!=0x1406u&&a1!=0x140cu) || a2>256u ||
-     (a2&&(a2<8u||(a2&3u))) || !a3 || (a3&3u))return -4;
+     (a2&&(a2<8u||(a2&3u))) ||
+     (!a3&&!c->gl_array_buffer) || (a3&3u))return -4;
   c->gl_uv_pointer=a3;
+  c->gl_uv_buffer=c->gl_array_buffer;
   c->gl_uv_stride=a2?a2:8u;
   c->gl_uv_type=a1;
   return cnk_zeebx_arm_return_from_api(c,0u);
@@ -1342,8 +1361,9 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
  case 78u: /* glVertexPointer: GL_FLOAT or GL_FIXED (16.16) */
   if(a0!=3u || (a1!=0x1406u&&a1!=0x140cu) || a2>256u ||
      (a2 && (a2<12u || (a2&3u))) ||
-     !a3 || (a3&3u))return -4;
+     (!a3&&!c->gl_array_buffer) || (a3&3u))return -4;
   c->gl_vertex_pointer=a3;
+  c->gl_vertex_buffer=c->gl_array_buffer;
   c->gl_vertex_stride=a2?a2:12u;
   c->gl_vertex_type=a1;
   return cnk_zeebx_arm_return_from_api(c,0u);
