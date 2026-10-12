@@ -37,7 +37,7 @@ static const char *reason_name(cnk_arm_reason r){
 }
 static int probe_internal(const char *mod_path,const char *mif_path,
                           const char *report_path,uint32_t budget,
-                          cnk_arm_outcome *result){
+                          const cnk_zeebx_pad *pad,cnk_arm_outcome *result){
  uint8_t *mod=NULL,*mif=NULL;
  size_t mod_bytes=0,mif_bytes=0;
  cnk_brew_mif_info manifest={0};
@@ -64,6 +64,9 @@ static int probe_internal(const char *mod_path,const char *mif_path,
  rc=cnk_zeebx_arm_init(&cpu,mod,mod_bytes);
  free(mod);
  if(rc)return -5;
+ if(pad && cnk_zeebx_arm_set_pad(&cpu,pad)){
+  cnk_zeebx_arm_destroy(&cpu);return -5;
+ }
  rc=cnk_zeebx_arm_bootstrap(&cpu,budget,&load_out,&module_calls);
  if(rc){cnk_zeebx_arm_destroy(&cpu);return -6;}
  module_ok=load_out.reason==CNK_ARM_RETURNED && cpu.regs[0]==0u;
@@ -114,11 +117,21 @@ static int probe_internal(const char *mod_path,const char *mif_path,
 }
 int cnk_zeebx_probe_original(const char *mod_path,const char *report_path,
                              uint32_t budget,cnk_arm_outcome *result){
- return probe_internal(mod_path,NULL,report_path,budget,result);
+ return probe_internal(mod_path,NULL,report_path,budget,NULL,result);
 }
 int cnk_zeebx_probe_original_applet(const char *mod_path,const char *mif_path,
                                     const char *report_path,uint32_t budget,
                                     cnk_arm_outcome *result){
  if(!mif_path)return -1;
- return probe_internal(mod_path,mif_path,report_path,budget,result);
+ return probe_internal(mod_path,mif_path,report_path,budget,NULL,result);
+}
+
+int cnk_zeebx_probe_original_applet_with_pad(const char *mod_path,
+                                              const char *mif_path,
+                                              const char *report_path,
+                                              uint32_t budget,
+                                              const cnk_zeebx_pad *pad,
+                                              cnk_arm_outcome *result){
+ if(!mif_path || !pad)return -1;
+ return probe_internal(mod_path,mif_path,report_path,budget,pad,result);
 }
