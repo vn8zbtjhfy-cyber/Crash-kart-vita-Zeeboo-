@@ -2,6 +2,34 @@
 
 Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **Todavía no es un videojuego completo ni se ha verificado su ejecución en consola.**
 
+## Avances 117-118: reutilización real de Zeebx y preparación de texturas
+
+- **Avance 117 (código integrado):** port a C99 del decodificador IMA ADPCM de
+  [ZeebxTeam/zeebx-emu](https://github.com/ZeebxTeam/zeebx-emu) (GPL-2.0-or-later).
+  `cnk_wav_asset_load` admite ahora WAV PCM y WAV IMA ADPCM a través del motor
+  de audio nativo. Se conservan la licencia y el aviso del código adaptado.
+  **Los 29 WAV encontrados en el archivo original examinado eran PCM:** el
+  códec es soporte adicional, no una recuperación demostrada de audio CNK.
+- **Avance 118 (herramienta integrada):**
+  `scripts/generar_texturas_desde_cache_zeebx.py` crea filas
+  `verified_textures.tsv` compatibles con el renderizador Vita a partir
+  de una copia **local, propiedad del usuario** de `data.vfs` y archivos PNG
+  originales extraídos por Zeebx. Solo acepta coincidencias de bytes exactas
+  y únicas. Sin el caché original externo, ninguna asociación de textura
+  nueva se considera verificada.
+- **19/19 tests sin ROM en GitHub**:
+  [ejecución 38191556688](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38191556688).
+- **Compilación y enlace ARM VitaSDK aprobados**:
+  [ejecución 38191556755](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38191556755).
+- Detalles técnicos:
+  [117](docs/AVANCE_117_ZEEBX_DECODIFICADOR_ADPCM.md) y
+  [118](docs/AVANCE_118_ZEEBX_COINCIDENCIA_TEXTURAS.md).
+
+**Alcance:** port nativo en desarrollo, NO juego completo ni probado en
+PS Vita física. No se ha generado SELF ni VPK, y ningún recurso original
+ha sido subido al repositorio. La última cifra de 45.9 % sigue siendo
+una **estimación histórica**, no jugabilidad verificada.
+
 ## Avance 113 (11 de octubre de 2026)
 
 - Selección de `data.vfs` externo con **verificación ligera de la tabla FUFS**: comprueba encabezado, límites, recuento y referencias antes de elegir una ruta. Evita que un archivo corrupto de mayor prioridad bloquee otra copia válida.
