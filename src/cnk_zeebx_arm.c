@@ -94,6 +94,7 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
  cpu->regs[14]=CNK_ARM_RETURN_MAGIC;
  cpu->regs[15]=CNK_ARM_MOD_BASE+info.entry_offset;
  cpu->cpsr=0x10u; /* user mode ARM */
+ for(unsigned i=0;i<CNK_ZEEBX_PAD_AXES;i++)cpu->pad.axes[i]=128u;
  cpu->heap_cursor=0u;
  cpu->shell_refs=1u;
  cpu->object_cursor=16u; /* Shell, Module**, IApplet** reserved */
@@ -480,6 +481,87 @@ int cnk_zeebx_arm_set_virtual_time(cnk_zeebx_arm *c,uint32_t ms){
  c->virtual_time_ms=ms;
  return 0;
 }
+/* Source-backed Zeebx input/mod.rs identifiers, original Zeebo HID SDK.
+ * Preserve the exact 18 entries/order including duplicated unused UID.
+ * Values are not guessed runtime events: only host-provided pad snapshots.
+ */
+static const uint32_t zeebx_button_uids[CNK_ZEEBX_PAD_BUTTONS]={
+ 0x0106c40bu,0x0106c40au,0x0106c40cu,0x0106c40du,
+ 0x0106c408u,0x0106c407u,0x0106c406u,0x0106c409u,
+ 0x0106c405u,0x0106c403u,0x0106c404u,0x0106c402u,
+ 0x0106c3feu,0x0106c3ffu,0x0106c400u,0x0106c401u,
+ 0x0106c4d0u,0x0106c408u
+};
+static const uint32_t zeebx_axis_uids[CNK_ZEEBX_PAD_AXES]={
+ 0x0106c4d0u,0x0106c4d1u,0x0106c4ceu,0x0106c4cfu
+};
+static const unsigned zeebx_axis_slots[CNK_ZEEBX_PAD_AXES]={1,2,3,6};
+
+int cnk_zeebx_arm_set_pad(cnk_zeebx_arm *c,const cnk_zeebx_pad *pad){
+ if(!c||!c->initialized||!pad||
+    (pad->buttons & ~((1u<<CNK_ZEEBX_PAD_BUTTONS)-1u)))return -1;
+ c->pad=*pad;
+ return 0;
+}
+/* IHIDDevice slots from Zeebx brew/aee_slots.rs, not a guessed ABI.
+ * The method's object must be a real guest IHIDDevice. All guest output
+ * spans are checked BEFORE writing. Bad pointers remain explicit stops.
+ */
+static int zeebx_device_input(cnk_zeebx_arm *c,unsigned slot){
+ uint32_t vtbl=0;
+ if(load(c,c->regs[0],4u,&vtbl)||
+    vtbl!=CNK_ARM_VTABLE_BASE+9u*CNK_ARM_VTABLE_STRIDE)return -3;
+ const uint32_t output=c->regs[1];
+ if(slot==7u){ /* GetNumberOfButtons(uint32*) */
+  if(output && store(c,output,4u,CNK_ZEEBX_PAD_BUTTONS))return -3;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(slot==6u){ /* GetButtonInfo(id/UID, AEEHIDButtonInfo*) */
+  const uint32_t requested=c->regs[1],out=c->regs[2];
+  unsigned idx=CNK_ZEEBX_PAD_BUTTONS;
+  /* The Zeebo SDK accepts both index and the actual UID. */
+  for(unsigned i=0;i<CNK_ZEEBX_PAD_BUTTONS;i++)
+   if(requested==zeebx_button_uids[i]){idx=i;break;}
+  if(idx==CNK_ZEEBX_PAD_BUTTONS&&requested<CNK_ZEEBX_PAD_BUTTONS)
+   idx=(unsigned)requested;
+  if(idx==CNK_ZEEBX_PAD_BUTTONS)return -4;
+  if(out){
+   uint8_t *p=map(c,out,20u,1);
+   if(!p || (out&3u))return -3;
+   putword(p+0u,idx);
+   putword(p+4u,(c->pad.buttons>>idx)&1u);
+   putword(p+8u,zeebx_button_uids[idx]);
+   putword(p+12u,0u);
+   putword(p+16u,1u);
+  }
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(slot>=10u&&slot<=13u){
+  /* 25 words: boolean bRelativeAxes and 24 axis slots. */
+  if(output){
+   uint8_t *dst=map(c,output,25u*4u,1);
+   if(!dst || (output&3u))return -3;
+   /* GetPositionState: unused axes must be centered at 128, not 0.
+    * GetAxesInfo: unused axes have UID=0, meaning "no axis".
+    * Min/Max: all 24 possible axes need a proper range.
+    */
+   for(unsigned i=0;i<25u;i++){
+    uint32_t value=0;
+    if(i && (slot==10u||slot==12u))value=slot==10u?128u:255u;
+    putword(dst+4u*i,value);
+   }
+   for(unsigned i=0;i<CNK_ZEEBX_PAD_AXES;i++){
+    uint32_t value=slot==10u?(uint32_t)c->pad.axes[i]:
+                   slot==13u?zeebx_axis_uids[i]:
+                   slot==12u?255u:0u;
+    putword(dst+4u*zeebx_axis_slots[i],value);
+   }
+  }
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ return -4;
+}
+
 int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
  if(!c||!c->initialized)return -1;
  uint32_t pc=c->regs[15];
@@ -681,6 +763,9 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   }
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
+ if(iface==9u && (slot==6u||slot==7u||
+                   (slot>=10u&&slot<=13u)))
+  return zeebx_device_input(c,slot);
  if(iface==9u && slot==4u){ /* IHIDDevice::GetDeviceStatus */
   uint32_t vtbl=0;
   const uint32_t out=c->regs[1];
