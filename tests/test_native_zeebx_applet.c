@@ -2,6 +2,7 @@
  * This is not a commercial game binary or a fabricated applet in native C.
  * Real guest ARM writes its IModule and IApplet vtable/pointers itself. */
 #include "cnk_zeebx_arm.h"
+#include "cnk_zeebx_probe.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -74,6 +75,40 @@ int main(void){
  assert(old==CNK_ARM_MOD_BASE+0xd0u);
  assert(cnk_zeebx_arm_applet_result(&cpu,&out,&applet)<0);
  cnk_zeebx_arm_destroy(&cpu);
+
+ /* End-to-end input path: parse a synthetic user-owned MIF, then
+  * run BOTH guest functions and write an honest lifecycle report. */
+ const char *modfile="test_zeebx_applet_guest.bin";
+ const char *miffile="test_zeebx_applet_mif.bin";
+ const char *logfile="test_zeebx_applet_report.txt";
+ uint8_t manifest[128]={0};
+ manifest[0]=0x11u;
+ wr32(manifest+0x10,0x20u); /* offset of section table */
+ wr32(manifest+0x14,1u);    /* one 20-byte applet record */
+ wr32(manifest+0x20,0x40u); /* first section start */
+ wr32(manifest+0x24,0x54u); /* end of 20-byte record */
+ wr32(manifest+0x40,0x01081984u); /* genuine documented applet CLSID */
+ FILE *file=fopen(modfile,"wb");
+ assert(file);
+ assert(fwrite(code,1,sizeof(code),file)==sizeof(code));
+ assert(!fclose(file));
+ file=fopen(miffile,"wb");
+ assert(file);
+ assert(fwrite(manifest,1,sizeof(manifest),file)==sizeof(manifest));
+ assert(!fclose(file));
+ assert(!cnk_zeebx_probe_original_applet(modfile,miffile,logfile,1000u,&out));
+ assert(out.reason==CNK_ARM_RETURNED);
+ char report[1600]={0};
+ file=fopen(logfile,"rb");assert(file);
+ size_t report_len=fread(report,1,sizeof(report)-1u,file);
+ assert(!fclose(file));report[report_len]='\\0';
+ assert(strstr(report,"module_load_completed=YES"));
+ assert(strstr(report,"applet_clsid=0x01081984"));
+ assert(strstr(report,"applet_attempted=YES"));
+ assert(strstr(report,"applet_created=YES"));
+ assert(strstr(report,"applet_ptr=0x10000028"));
+ assert(strstr(report,"genuine_game_playable=NO"));
+ assert(!remove(modfile));assert(!remove(miffile));assert(!remove(logfile));
 
  /* Corrupt guest module vtable pointer: it must NOT be called as ARM. */
  wr32(code+0x40,0xffffffffu);
