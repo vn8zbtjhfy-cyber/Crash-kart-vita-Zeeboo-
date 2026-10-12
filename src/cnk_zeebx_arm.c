@@ -827,8 +827,12 @@ static int zeebx_egl_intern(cnk_zeebx_arm *c,uint32_t *cache,
 /* Zeebx AEEGL.h IGL: OLD Common-Lite slots with NO "this" pointer.
  * Unlike synthetic GL success flags, each supported GPU operation calls a
  * bound Vita renderer; no sink or inactive EGL context = explicit API stop.
- * DrawArrays/Elements, textures and matrix functions are NOT yet supported.
+ * DrawArrays/Elements and textures remain unsupported, and all matrix
+ * commands require a real GPU callback before the guest can advance.
  */
+static float zeebx_gl_fixed(uint32_t raw){
+ return (float)(int32_t)raw/65536.0f;
+}
 static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
  if(!c||!c->initialized||!c->gl_host.present||
     !c->egl_initialized||!c->egl_current_context||
@@ -858,6 +862,39 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
  case 37u: /* glGetError: only after supported host calls */
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 46u: /* glLoadIdentity */
+  if(!c->gl_host.load_identity ||
+     c->gl_host.load_identity(c->gl_host_user))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 51u: /* glMatrixMode, only GLES 1.0 matrix modes */
+  if(a0!=0x1700u && a0!=0x1701u && a0!=0x1702u)return -4;
+  if(!c->gl_host.matrix_mode ||
+     c->gl_host.matrix_mode(c->gl_host_user,a0))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 60u: /* glPopMatrix: GPU checks underflow */
+  if(!c->gl_host.pop_matrix ||
+     c->gl_host.pop_matrix(c->gl_host_user))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 61u: /* glPushMatrix */
+  if(!c->gl_host.push_matrix ||
+     c->gl_host.push_matrix(c->gl_host_user))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 63u: /* glRotatex(degrees,x,y,z) as signed 16.16 */
+  if(!c->gl_host.rotate ||
+     c->gl_host.rotate(c->gl_host_user,zeebx_gl_fixed(a0),
+       zeebx_gl_fixed(a1),zeebx_gl_fixed(a2),zeebx_gl_fixed(a3)))
+   return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 65u: /* glScalex(x,y,z) */
+  if(!c->gl_host.scale ||
+     c->gl_host.scale(c->gl_host_user,zeebx_gl_fixed(a0),
+                      zeebx_gl_fixed(a1),zeebx_gl_fixed(a2)))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 77u: /* glTranslatex(x,y,z) */
+  if(!c->gl_host.translate ||
+     c->gl_host.translate(c->gl_host_user,zeebx_gl_fixed(a0),
+                          zeebx_gl_fixed(a1),zeebx_gl_fixed(a2)))return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
  case 79u:{ /* glViewport(x,y,w,h), guest screen 640x480 */
   if((int32_t)a2<0||(int32_t)a3<0||a2>4096u||a3>4096u)
