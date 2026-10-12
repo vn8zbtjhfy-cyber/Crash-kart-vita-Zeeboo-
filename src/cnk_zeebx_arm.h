@@ -49,6 +49,12 @@ typedef struct {
 } cnk_zeebx_hid_event;
 #define CNK_ZEEBX_MAX_SIGNALS 16u
 #define CNK_ZEEBX_PENDING_SIGNALS 32u
+/* Source Zeebx IShell::SetTimer, CancelTimer, GetTimerExpiration.
+ * Callbacks are guest ARM pointers executed ONLY at a safe host boundary. */
+#define CNK_ZEEBX_MAX_TIMERS 32u
+typedef struct {
+ uint32_t function,context,deadline_ms;
+} cnk_zeebx_timer;
 typedef struct {
  uint32_t signal_obj,control_obj,callback,context;
  uint32_t signal_refs,control_refs;
@@ -177,6 +183,8 @@ typedef struct {
  cnk_zeebx_signal signals[CNK_ZEEBX_MAX_SIGNALS];
  cnk_zeebx_signal_callback signal_pending[CNK_ZEEBX_PENDING_SIGNALS];
  uint32_t signal_count,signal_pending_head,signal_pending_count;
+ cnk_zeebx_timer timers[CNK_ZEEBX_MAX_TIMERS];
+ uint32_t timer_count;
  uint32_t hid_button_signal,hid_position_signal;
  char last_debug_template[128];
  size_t module_size;
@@ -206,6 +214,12 @@ int cnk_zeebx_arm_set_gl_host(cnk_zeebx_arm *cpu,
  * context. Unresolved calls stop explicitly; this is still experimental. */
 int cnk_zeebx_arm_deliver_signals(cnk_zeebx_arm *cpu,uint32_t budget,
                                   cnk_arm_outcome *out,uint32_t *delivered);
+/* Guest Shell timers fire only when virtual time was advanced by host,
+ * and only when the original applet is at a safe return boundary.
+ * A failed callback is always reported as a fault / unresolved BREW API;
+ * this is NOT yet a continuously running game event loop. */
+int cnk_zeebx_arm_deliver_timers(cnk_zeebx_arm *cpu,uint32_t budget,
+                                 cnk_arm_outcome *out,uint32_t *delivered);
 /* Returns >=0 for an execution outcome, never runs indefinitely.
  * Caller must handle API outcome; no invented successful BREW replies.
  * Every iteration reuses saved registers, flags and memory state. */

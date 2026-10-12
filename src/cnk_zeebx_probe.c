@@ -43,9 +43,11 @@ static int probe_internal(const char *mod_path,const char *mif_path,
  size_t mod_bytes=0,mif_bytes=0;
  cnk_brew_mif_info manifest={0};
  cnk_zeebx_arm cpu={0};
- cnk_arm_outcome load_out={0},applet_out={0},signal_out={0},start_out={0};
+ cnk_arm_outcome load_out={0},applet_out={0},signal_out={0},start_out={0},timer_out={0};
  uint32_t module_calls=0,applet_calls=0,start_calls=0,callbacks_delivered=0u;
+ uint32_t timer_callbacks=0u;
  int callback_probe_rc=0,callback_probe_attempted=0;
+ int timer_probe_attempted=0,timer_probe_rc=0;
  uint32_t modptr=0,apptr=0,guest_entry=0,clsid=0;
  uint32_t start_entry=0,start_ptr=0;
  int started=0,module_ok=0,applet_ok=0,prep=-1;
@@ -120,6 +122,20 @@ static int probe_internal(const char *mod_path,const char *mif_path,
   callback_probe_rc=cnk_zeebx_arm_deliver_signals(
    &cpu,budget,&signal_out,&callbacks_delivered);
  }
+ /* Immediate timers scheduled by EVT_APP_START must be dispatched at
+  * the return boundary, not during an ARM BREW trampoline.
+  * Future frame timers require an actual clock-driven Vita guest loop. */
+ if(start_completed &&
+    (!callback_probe_attempted ||
+     (!callback_probe_rc && signal_out.reason==CNK_ARM_RETURNED)) &&
+    cpu.timer_count){
+  timer_probe_attempted=1;
+  timer_probe_rc=cnk_zeebx_arm_deliver_timers(
+   &cpu,budget,&timer_out,&timer_callbacks);
+  if(timer_probe_rc || (timer_out.reason!=CNK_ARM_RETURNED &&
+                        timer_out.reason!=CNK_ARM_BUDGET))
+   *result=timer_out;
+ }
  FILE *report=fopen(report_path,"wb");
  if(!report){cnk_zeebx_arm_destroy(&cpu);return -8;}
  int length=fprintf(report,
@@ -142,6 +158,11 @@ static int probe_internal(const char *mod_path,const char *mif_path,
   "signal_callbacks_attempted=%s\nsignal_callbacks_delivered=%u\n"
   "signal_callbacks_remaining=%u\nsignal_dispatch_code=%d\n"
   "signal_dispatch_reason=%s\n"
+  "guest_timer_callbacks_attempted=%s\n"
+  "guest_timer_callbacks_delivered=%u\n"
+  "guest_timers_remaining=%u\n"
+  "guest_timer_dispatch_code=%d\n"
+  "guest_timer_dispatch_reason=%s\n"
   "gpu_host_bound=%s\nguest_gl_clear_calls=%u\n"
   "guest_gl_viewports=%u\nguest_gl_presented_frames=%u\n"
   "genuine_game_playable=NO\n",
@@ -161,6 +182,9 @@ static int probe_internal(const char *mod_path,const char *mif_path,
   callback_probe_attempted?"YES":"NO",callbacks_delivered,
   cpu.signal_pending_count,callback_probe_rc,
   callback_probe_attempted?reason_name(signal_out.reason):"NOT_RUN",
+  timer_probe_attempted?"YES":"NO",timer_callbacks,cpu.timer_count,
+  timer_probe_rc,
+  timer_probe_attempted?reason_name(timer_out.reason):"NOT_RUN",
   host?"YES":"NO",cpu.gl_clear_calls,cpu.gl_viewport_calls,
   cpu.gl_presents);
  int closed=fclose(report);

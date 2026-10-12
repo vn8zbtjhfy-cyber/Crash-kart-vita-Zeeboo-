@@ -1,5 +1,20 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 146: programación original de temporizadores BREW
+
+Se portaron desde Zeebx los tres servicios `IShell::SetTimer`,
+`CancelTimer` y `GetTimerExpiration`, junto con la ejecución segura
+y limitada de callbacks ARM del juego cuando vence su reloj virtual.
+El diagnóstico ya puede despachar timers inmediatos después del
+`EVT_APP_START`; no avanza artificialmente el tiempo ni simula
+un bucle de carrera. Nueva prueba sintética sin archivos comerciales.
+[Detalles](docs/AVANCE_146_ZEEBX_BREW_TIMERS.md).
+
+**No es todavía un Crash jugable verificado en PS Vita**: falta
+ejecución continua por cuadro, completar llamadas gráficas/archivos/audio,
+integrar íntegramente datos originales y superar pruebas físicas.
+
+
 ## Avance 145: el juego original recibe su evento de inicio BREW
 
 Se incorporó al intérprete Zeebx el tercer paso del arranque de Crash:
