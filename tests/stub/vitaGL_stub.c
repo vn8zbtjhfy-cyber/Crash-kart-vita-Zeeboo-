@@ -133,4 +133,8 @@ void glTexImage2D(GLenum target,GLint level,GLint internalfmt,GLsizei w,
    cnk_test_gl.fail_upload_on_number=0;
  }
 }
+void glTexCoord2f(GLfloat u,GLfloat v){
+ if(!isfinite(u)||!isfinite(v))cnk_test_gl.invalid++;
+ cnk_test_gl.texcoords_emitted++;
+}
 GLenum glGetError(void){GLenum e=cnk_test_gl.queued_error;cnk_test_gl.queued_error=0;return e;}
