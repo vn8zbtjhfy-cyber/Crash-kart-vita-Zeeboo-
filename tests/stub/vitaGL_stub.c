@@ -11,6 +11,17 @@ void glDisable(GLenum v){if(v==GL_TEXTURE_2D)cnk_test_gl.texture_enabled=0;}
 void glDepthMask(GLboolean v){if(v!=GL_TRUE&&v!=GL_FALSE)cnk_test_gl.invalid++;}
 void glBlendFunc(GLenum src,GLenum dst){if(src!=GL_SRC_ALPHA||dst!=GL_ONE_MINUS_SRC_ALPHA)cnk_test_gl.invalid++;}
 void glDepthFunc(GLenum v){if(v!=GL_LEQUAL)cnk_test_gl.invalid++;}
+void glCullFace(GLenum v){
+ if(v!=0x0404u&&v!=0x0405u&&v!=0x0408u)cnk_test_gl.invalid++;
+}
+void glFrontFace(GLenum v){
+ if(v!=0x0900u&&v!=0x0901u)cnk_test_gl.invalid++;
+}
+void glColorMask(GLboolean r,GLboolean g,GLboolean b,GLboolean a){
+ if((r!=GL_TRUE&&r!=GL_FALSE)||(g!=GL_TRUE&&g!=GL_FALSE)||
+    (b!=GL_TRUE&&b!=GL_FALSE)||(a!=GL_TRUE&&a!=GL_FALSE))
+  cnk_test_gl.invalid++;
+}
 void glMatrixMode(GLenum v){if(v!=GL_PROJECTION&&v!=GL_MODELVIEW)cnk_test_gl.invalid++;cnk_test_gl.matrix_mode=v;}
 void glLoadMatrixf(const GLfloat *m){
  if(!m){cnk_test_gl.invalid++;return;}
