@@ -753,6 +753,11 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_applet PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_applet PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_applet COMMAND cnk_test_zeebx_applet)
+  add_executable(cnk_test_zeebx_brew_factories
+    tests/test_native_zeebx_brew_factories.c)
+  target_link_libraries(cnk_test_zeebx_brew_factories PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_brew_factories PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_brew_factories COMMAND cnk_test_zeebx_brew_factories)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
