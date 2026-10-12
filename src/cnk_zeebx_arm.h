@@ -2,6 +2,7 @@
 #define CNK_ZEEBX_ARM_H
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include "cnk_zeebx_brew.h"
 
 /* Independently C99-adapted subset of ZeebxTeam ARM1176 interpreter and
@@ -29,6 +30,17 @@
 #define CNK_ZEEBX_PAD_AXES 4u
 /* Maximum verified, bounded guest vertices submitted by one draw call. */
 #define CNK_ZEEBX_MAX_DRAW_VERTICES 384u
+/* Source Zeebx IFileMgr (3) -> IFile (4) guest bridge:
+ * eight read-only private game files, never arbitrary filesystem access.
+ * No ROM bytes, saves or host paths are packaged by this module. */
+#define CNK_ZEEBX_OPEN_FILES 8u
+#define CNK_ZEEBX_MAX_FILE_READ (1024u*1024u)
+#define CNK_ZEEBX_FILE_ROOT_CHARS 256u
+typedef struct {
+ uint32_t object,refs;
+ FILE *stream;
+} cnk_zeebx_guest_file;
+
 #define CNK_ZEEBX_MAX_GL_BUFFERS 32u
 #define CNK_ZEEBX_MAX_GL_BUFFER_BYTES (512u*1024u)
 #define CNK_ZEEBX_MAX_GL_BUFFER_TOTAL (2u*1024u*1024u)
@@ -148,6 +160,9 @@ typedef struct {
  uint8_t *module,*stack,*heap,*objects,*helpers,*vtables;
  uint32_t heap_cursor,shell_refs;
  uint32_t object_cursor,display_objects,filemgr_objects,sound_objects,debug_calls;
+ char file_root[CNK_ZEEBX_FILE_ROOT_CHARS]; /* supplied only by host */
+ cnk_zeebx_guest_file files[CNK_ZEEBX_OPEN_FILES];
+ uint32_t file_open_count,file_read_calls,file_bytes_read,file_path_denials;
  uint32_t hid_objects,signal_factory_objects,egl_legacy_objects,gl_legacy_objects;
  uint32_t screen_bitmap_addr,screen_bitmap_references;
  uint32_t screen_bitmap_pixels; /* RGB565 guest buffer, allocated on first IDIB */
@@ -197,6 +212,11 @@ int cnk_zeebx_arm_set_virtual_time(cnk_zeebx_arm *cpu,uint32_t elapsed_ms);
 /* A snapshot of the actual Vita controller is passed from the host;
  * virtual BREW input never assumes a pressed button on its own. */
 int cnk_zeebx_arm_set_pad(cnk_zeebx_arm *cpu,const cnk_zeebx_pad *pad);
+/* Enable source-compatible BREW IFileMgr read methods ONLY under a
+ * trusted private game assets directory (e.g. app0:/ on Vita).
+ * Before binding the root, any FileMgr access is an explicit API trap.
+ * Invalid guest relative names, writes and directory traversal stop. */
+int cnk_zeebx_arm_set_file_root(cnk_zeebx_arm *cpu,const char *root);
 /* Bind from Vita ONLY after vitaGL has initialized. Unbound guest GL
  * calls explicitly stop, not silently emulate a finished renderer. */
 int cnk_zeebx_arm_set_gl_host(cnk_zeebx_arm *cpu,
