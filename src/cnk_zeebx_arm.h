@@ -22,6 +22,13 @@
 #define CNK_ARM_STACK_BYTES 0x100000u
 #define CNK_ARM_BSS_BYTES 0x100000u
 #define CNK_ARM_VTABLE_STRIDE 0x400u
+/* Zeebo original controller: 18 enumerated buttons, 4 absolute axes. */
+#define CNK_ZEEBX_PAD_BUTTONS 18u
+#define CNK_ZEEBX_PAD_AXES 4u
+typedef struct {
+ uint32_t buttons; /* bit per Zeebx input/mod.rs BUTTON_UIDS entry */
+ uint8_t axes[CNK_ZEEBX_PAD_AXES]; /* absolute [0..255], neutral=128 */
+} cnk_zeebx_pad;
 
 typedef enum {
  CNK_ARM_BUDGET=0, CNK_ARM_API=1, CNK_ARM_RETURNED=2,
@@ -42,6 +49,7 @@ typedef struct {
  uint32_t screen_bitmap_addr,screen_bitmap_references;
  uint32_t screen_bitmap_pixels; /* RGB565 guest buffer, allocated on first IDIB */
  uint32_t virtual_time_ms;
+ cnk_zeebx_pad pad; /* separate from the native driving physics */
  char last_debug_template[128];
  size_t module_size;
  int initialized,applet_pending;
@@ -56,6 +64,9 @@ void cnk_zeebx_arm_destroy(cnk_zeebx_arm *cpu);
  * Defaults to 0 at boot; never derived from guest instruction throughput.
  * The native app can advance this clock independently once integrated. */
 int cnk_zeebx_arm_set_virtual_time(cnk_zeebx_arm *cpu,uint32_t elapsed_ms);
+/* A snapshot of the actual Vita controller is passed from the host;
+ * virtual BREW input never assumes a pressed button on its own. */
+int cnk_zeebx_arm_set_pad(cnk_zeebx_arm *cpu,const cnk_zeebx_pad *pad);
 /* Returns >=0 for an execution outcome, never runs indefinitely.
  * Caller must handle API outcome; no invented successful BREW replies.
  * Every iteration reuses saved registers, flags and memory state. */
