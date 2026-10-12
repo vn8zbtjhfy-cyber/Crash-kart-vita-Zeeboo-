@@ -810,6 +810,12 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_vitagl_projection PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_vitagl_projection PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_vitagl_projection COMMAND cnk_test_zeebx_vitagl_projection)
+  # Zeebx GL_LEGACY original triangle primitives, indexed & sequential.
+  # No ROM assets: synthetic ARM guest bytes and strict GPU recorder.
+  add_executable(cnk_test_zeebx_gl_primitives tests/test_native_zeebx_gl_primitives.c)
+  target_link_libraries(cnk_test_zeebx_gl_primitives PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_gl_primitives PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_gl_primitives COMMAND cnk_test_zeebx_gl_primitives)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
