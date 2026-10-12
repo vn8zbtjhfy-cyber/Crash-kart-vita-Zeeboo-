@@ -544,6 +544,63 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   * every request. Its drawing methods remain separate API traps.
   * No graphics are fabricated here: the guest interface exists, while
   * GPU output still requires a later Vita display bridge. */
+ /* IBitmap::AddRef / Release: the display owns one reference to
+  * the persistent screen, even if the game releases its temporary refs.
+  * Zeebx machine/bitmap.rs explicitly retains the device bitmap. */
+ if(iface==7u && (slot==0u||slot==1u)){
+  if(!c->screen_bitmap_addr ||
+     c->regs[0]!=c->screen_bitmap_addr)return -3;
+  uint32_t count=c->screen_bitmap_references;
+  if(slot==0u){
+   if(count==UINT32_MAX)return -2;
+   count++;
+  }else if(count>1u)count--;
+  c->screen_bitmap_references=count;
+  return cnk_zeebx_arm_return_from_api(c,count);
+ }
+ /* From Zeebx bitmap.rs QueryInterface. A software IBitmap is also
+  * an IDIB if it publishes a real RGB565 framebuffer in guest memory.
+  * This is NOT yet linked to Vita's physical scanout. */
+ if(iface==7u && slot==2u){
+  const uint32_t this_obj=c->regs[0],iid=c->regs[1],out_ptr=c->regs[2];
+  uint32_t vtable=0;
+  if(!c->screen_bitmap_addr || this_obj!=c->screen_bitmap_addr ||
+     load(c,this_obj,4u,&vtable) ||
+     vtable!=CNK_ARM_VTABLE_BASE+7u*CNK_ARM_VTABLE_STRIDE ||
+     (out_ptr&&!map(c,out_ptr,4u,1)))return -3;
+  const int dib=(iid==0x01001045u||iid==0x0100102cu);
+  if(!dib&&iid!=0x01001021u)return -4;
+  if(dib){
+   if(!c->screen_bitmap_pixels){
+    const uint32_t bytes=640u*480u*2u; /* native Zeebo RGB565 */
+    uint32_t start=(c->heap_cursor+7u)&~7u;
+    if(start<c->heap_cursor || bytes>CNK_ARM_HEAP_BYTES-start)return -2;
+    uint32_t pixels=CNK_ARM_HEAP_BASE+start;
+    if(!map(c,pixels,bytes,1))return -3;
+    c->screen_bitmap_pixels=pixels;
+    c->heap_cursor=start+bytes;
+   }
+   /* Layout AEEIDIB: vtable, palette map, pixel pointer, pRGB,
+    * transparent key, width, height, row pitch, color count,
+    * depth, color scheme, reserved bytes. These offsets are taken
+    * from Zeebx bitmap.rs::write_dib_header and AEEIDIB.h. */
+   uint8_t *dib_struct=map(c,this_obj,36u,1);
+   if(!dib_struct)return -3;
+   putword(dib_struct+4u,0u);
+   putword(dib_struct+8u,c->screen_bitmap_pixels);
+   putword(dib_struct+12u,0u);
+   putword(dib_struct+16u,0xf81fu); /* magenta RGB565 color-key */
+   putword(dib_struct+20u,640u|(480u<<16));
+   putword(dib_struct+24u,1280u); /* pitch + zero RGB count */
+   dib_struct[28]=16u;          /* bit depth */
+   dib_struct[29]=16u;          /* IDIB_COLORSCHEME_565 */
+   memset(dib_struct+30u,0,6u);
+  }
+  if(c->screen_bitmap_references==UINT32_MAX)return -2;
+  if(out_ptr && store(c,out_ptr,4u,this_obj))return -3;
+  c->screen_bitmap_references++;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
  if(iface==5u && slot==16u){
   uint32_t disp=c->regs[0],out_ptr=c->regs[1],vtbl=0;
   if(!out_ptr || load(c,disp,4u,&vtbl) ||
