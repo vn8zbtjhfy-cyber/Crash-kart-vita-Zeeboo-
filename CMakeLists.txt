@@ -753,6 +753,12 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_applet PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_applet PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_applet COMMAND cnk_test_zeebx_applet)
+  # Original source Zeebx file API, ROM-free synthetic fixture.
+  add_executable(cnk_test_zeebx_file_read tests/test_native_zeebx_file_read.c)
+  target_link_libraries(cnk_test_zeebx_file_read PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_file_read PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_file_read COMMAND cnk_test_zeebx_file_read
+           "${CMAKE_CURRENT_BINARY_DIR}")
   add_executable(cnk_test_zeebx_brew_factories tests/test_native_zeebx_brew_factories.c)
   target_link_libraries(cnk_test_zeebx_brew_factories PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_brew_factories PRIVATE -UNDEBUG -Wall -Wextra -Werror)

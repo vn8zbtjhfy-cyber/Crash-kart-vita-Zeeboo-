@@ -37,6 +37,8 @@ void cnk_zeebx_arm_destroy(cnk_zeebx_arm *cpu){
  free(cpu->helpers);free(cpu->vtables);
  for(unsigned i=0;i<CNK_ZEEBX_MAX_GL_BUFFERS;i++)
   free(cpu->gl_buffers[i].data);
+ for(unsigned i=0;i<CNK_ZEEBX_OPEN_FILES;i++)
+  if(cpu->files[i].stream)fclose(cpu->files[i].stream);
  memset(cpu,0,sizeof(*cpu));
 }
 int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
@@ -69,6 +71,8 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
    * Vtable slots lead to diagnostic API traps, not fake methods. */
   putword(cpu->vtables+3u*CNK_ARM_VTABLE_STRIDE+4u*i,
           CNK_ARM_API_BASE+(3u<<12)+i*4u);
+  putword(cpu->vtables+4u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(4u<<12)+i*4u);
   putword(cpu->vtables+5u*CNK_ARM_VTABLE_STRIDE+4u*i,
           CNK_ARM_API_BASE+(5u<<12)+i*4u);
   putword(cpu->vtables+7u*CNK_ARM_VTABLE_STRIDE+4u*i,
@@ -1795,6 +1799,209 @@ static int zeebx_shell_timer_api(cnk_zeebx_arm *c,unsigned slot){
  return -4;
 }
 
+/* Ported from ZeebxTeam/zeebx-emu/src/machine/file.rs,
+ * src/brew/aee_slots.rs and src/brew/vfs.rs, GPL-2.0-or-later.
+ * This is the game's original BREW IFileMgr/IFile ABI, NOT host stdio
+ * exported to an untrusted ARM module. Reads are confined to a trusted,
+ * explicit game data root and the real guest memory map.
+ */
+int cnk_zeebx_arm_set_file_root(cnk_zeebx_arm *c,const char *root){
+ if(!c||!c->initialized||!root||c->file_open_count)return -1;
+ size_t n=0;
+ while(root[n]&&n<CNK_ZEEBX_FILE_ROOT_CHARS)n++;
+ if(!n||n>=CNK_ZEEBX_FILE_ROOT_CHARS)return -2;
+ memcpy(c->file_root,root,n+1u);
+ return 0;
+}
+
+/* Strip only known Zeebo module prefixes. Reject device-wide fs:/,
+ * absolute host paths, traversal, empty components and untrusted ":"
+ * rather than inventing file paths that can escape the private package.
+ * Limited to module-local data: other modules/overlay need real porting.
+ */
+static int zeebx_guest_relative(cnk_zeebx_arm *c,uint32_t addr,
+                                char *name,size_t cap){
+ if(!addr||!cap)return -1;
+ char raw[192]={0};
+ size_t n=0;
+ for(;n+1u<sizeof(raw);n++){
+  uint32_t ch=0;
+  if(load(c,addr+(uint32_t)n,1u,&ch))return -1;
+  if(!ch)break;
+  if(ch<32u||ch>126u)return -1;
+  raw[n]=(char)ch;
+ }
+ if(!n||n+1u==sizeof(raw))return -1;
+ const char *p=raw;
+ if(!strncmp(p,"fs:/~/",6u))p+=6;
+ else if(!strncmp(p,"~/",2u))p+=2;
+ else if(!strncmp(p,"fs:/~0x",7u)){
+  /* Accept class-ID address only, as in Zeebx's sem_classe().
+   * The entire class-id segment is ignored for our ONE owned module. */
+  const char *slash=strchr(p+5,'/');
+  if(!slash||slash==p+5)return -1;
+  p=slash+1;
+ }else if(!strncmp(p,"fs:/",4u)||p[0]=='/'||p[0]=='\\')
+  return -1;
+ size_t out=0,segment=0;
+ for(;*p;p++){
+  const unsigned char ch=(unsigned char)*p;
+  if(ch==':'||ch=='\\'||ch=='%'||ch>=127u)return -1;
+  if(ch=='/'){
+   if(!segment||out+1u>=cap)return -1;
+   /* Every segment forbids traversal. "." and ".." both rejected. */
+   if((segment==1u&&name[out-1u]=='.')||
+      (segment==2u&&name[out-1u]=='.'&&name[out-2u]=='.'))
+    return -1;
+   name[out++]='/';segment=0;
+   continue;
+  }
+  if(!((ch>='0'&&ch<='9')||(ch>='A'&&ch<='Z')||
+       (ch>='a'&&ch<='z')||ch=='_'||ch=='-'||ch=='.'||ch==' '))
+   return -1;
+  if(out+1u>=cap)return -1;
+  name[out++]=(char)ch;
+  segment++;
+ }
+ if(!segment||!out)return -1;
+ if((segment==1u&&name[out-1u]=='.')||
+    (segment==2u&&name[out-1u]=='.'&&name[out-2u]=='.'))
+  return -1;
+ name[out]='\0';
+ return 0;
+}
+static int zeebx_join_root(const char *root,const char *name,
+                           char *out,size_t cap){
+ size_t a=strlen(root),b=strlen(name);
+ if(!a||!b||a+b+2u>cap)return -1;
+ memcpy(out,root,a);
+ if(root[a-1u]!='/'&&root[a-1u]!='\\')out[a++]='/';
+ memcpy(out+a,name,b+1u);
+ return 0;
+}
+static cnk_zeebx_guest_file *zeebx_opened_file(cnk_zeebx_arm *c,
+                                               uint32_t object){
+ for(unsigned i=0;i<CNK_ZEEBX_OPEN_FILES;i++)
+  if(c->files[i].object==object&&c->files[i].stream)
+   return &c->files[i];
+ return NULL;
+}
+static int zeebx_file_call(cnk_zeebx_arm *c,unsigned iface,unsigned slot){
+ /* No root means no simulated filesystem: break on exact BREW call. */
+ if(!c->file_root[0])return -4;
+ const uint32_t obj=c->regs[0];
+ uint32_t vt=0;
+ if(load(c,obj,4u,&vt)||
+    vt!=CNK_ARM_VTABLE_BASE+iface*CNK_ARM_VTABLE_STRIDE)
+  return -3;
+ if(iface==3u){
+  if(slot==2u||slot==7u){ /* IFileMgr::OpenFile / Test */
+   char relative[192],full[CNK_ZEEBX_FILE_ROOT_CHARS+192u];
+   if(zeebx_guest_relative(c,c->regs[1],relative,sizeof(relative))||
+      zeebx_join_root(c->file_root,relative,full,sizeof(full))){
+    c->file_path_denials++;
+    return -4;
+   }
+   if(slot==7u){ /* BREW Test returns SUCCESS=0 when the file exists. */
+    FILE *probe=fopen(full,"rb");
+    if(!probe)return cnk_zeebx_arm_return_from_api(c,1u);
+    fclose(probe);
+    return cnk_zeebx_arm_return_from_api(c,0u);
+   }
+   /* Upstream OFM_CREATE=4, OFM_READWRITE=2, OFM_APPEND=8.
+    * Source game package is immutable. Unsupported writes STOP.
+    */
+   if(c->regs[2]&~1u)return -4;
+   if(c->file_open_count>=CNK_ZEEBX_OPEN_FILES)return -4;
+   unsigned index=CNK_ZEEBX_OPEN_FILES;
+   for(unsigned i=0;i<CNK_ZEEBX_OPEN_FILES;i++)
+    if(!c->files[i].stream){index=i;break;}
+   if(index==CNK_ZEEBX_OPEN_FILES)return -4;
+   if(c->object_cursor>OBJECT_BYTES-64u)return -2;
+   FILE *stream=fopen(full,"rb");
+   if(!stream)return cnk_zeebx_arm_return_from_api(c,0u);
+   const uint32_t handle=CNK_ARM_OBJECT_BASE+c->object_cursor;
+   if(store(c,handle,4u,CNK_ARM_VTABLE_BASE+4u*CNK_ARM_VTABLE_STRIDE)){
+    fclose(stream);return -3;
+   }
+   c->object_cursor+=64u;
+   c->files[index].object=handle;
+   c->files[index].stream=stream;
+   c->files[index].refs=1u;
+   c->file_open_count++;
+   return cnk_zeebx_arm_return_from_api(c,handle);
+  }
+  return -4;
+ }
+ if(iface!=4u)return -4;
+ cnk_zeebx_guest_file *entry=zeebx_opened_file(c,obj);
+ if(!entry)return -4;
+ if(slot==0u){ /* IFile::AddRef */
+  if(entry->refs==UINT32_MAX)return -2;
+  entry->refs++;
+  return cnk_zeebx_arm_return_from_api(c,entry->refs);
+ }
+ if(slot==1u){ /* IFile::Release: close at zero */
+  if(!entry->refs)return -4;
+  entry->refs--;
+  uint32_t refs=entry->refs;
+  if(!refs){
+   fclose(entry->stream);
+   entry->stream=NULL;
+   entry->object=0u;
+   c->file_open_count--;
+  }
+  return cnk_zeebx_arm_return_from_api(c,refs);
+ }
+ if(slot==3u){ /* IFile::Read(buffer, count), returns number read */
+  uint32_t guest=c->regs[1],n=c->regs[2];
+  if(n>CNK_ZEEBX_MAX_FILE_READ)return -4;
+  if(!n)return cnk_zeebx_arm_return_from_api(c,0u);
+  uint8_t *target=map(c,guest,n,1);
+  if(!target)return -3;
+  uint32_t done=0;
+  while(done<n){
+   size_t got=fread(target+done,1u,n-done,entry->stream);
+   if(!got)break;
+   done+=(uint32_t)got;
+  }
+  if(c->file_read_calls<UINT32_MAX)c->file_read_calls++;
+  if(done<=UINT32_MAX-c->file_bytes_read)c->file_bytes_read+=done;
+  return cnk_zeebx_arm_return_from_api(c,done);
+ }
+ if(slot==7u){ /* IFile::Seek(type, signed offset) */
+  uint32_t kind=c->regs[1];
+  const long offset=(long)(int32_t)c->regs[2];
+  if(kind>2u)return -4;
+  int whence=kind==1u?SEEK_END:kind==2u?SEEK_CUR:SEEK_SET;
+  const long safe=kind==0u&&offset<0?0:offset;
+  if(fseek(entry->stream,safe,whence))
+   return cnk_zeebx_arm_return_from_api(c,1u);
+  if(kind==2u&&offset==0){
+   long position=ftell(entry->stream);
+   if(position<0||((unsigned long)position)>UINT32_MAX)return -4;
+   return cnk_zeebx_arm_return_from_api(c,(uint32_t)position);
+  }
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(slot==9u){ /* IFile::GetInfoEx 16 bytes, size at +0xc */
+  const uint32_t dest=c->regs[1];
+  uint8_t *buf=dest?map(c,dest,16u,1):NULL;
+  if(dest&&!buf)return -3;
+  long old=ftell(entry->stream);
+  if(old<0||fseek(entry->stream,0,SEEK_END))return -4;
+  long sz=ftell(entry->stream);
+  if(fseek(entry->stream,old,SEEK_SET)||sz<0||
+     (unsigned long)sz>UINT32_MAX)return -4;
+  if(buf){memset(buf,0,16u);putword(buf+12u,(uint32_t)sz);}
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(slot==4u){ /* IFile::Cancel */
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ return -4; /* Writes and unknown calls explicitly trap. */
+}
+
 int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
  if(!c||!c->initialized)return -1;
  uint32_t pc=c->regs[15];
@@ -1803,6 +2010,7 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
  unsigned iface=(pc-CNK_ARM_API_BASE)>>12u;
  unsigned slot=((pc-CNK_ARM_API_BASE)&0xfffu)/4u;
  /* Old BREW AEEGL.h passes function args directly, not this pointer. */
+ if(iface==3u||iface==4u)return zeebx_file_call(c,iface,slot);
  if(iface==23u)return zeebx_egl_legacy_call(c,slot);
  if(iface==24u)return zeebx_gl_legacy_call(c,slot);
  /* Zeebx AEEStdLib::memset at helper index 1, as used by the
