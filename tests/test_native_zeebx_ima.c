@@ -47,7 +47,7 @@ static size_t wave(uint8_t *out,unsigned channels,unsigned fact_frames){
  return at;
 }
 int main(void){
- uint8_t wav[128];cnk_wav_asset a={0};
+ uint8_t wav[128]={0};cnk_wav_asset a={0};
  assert(cnk_wav_asset_open_memory(NULL,wav,8)<0);
  size_t len=wave(wav,1,0);
  assert(!cnk_wav_asset_open_memory(&a,wav,len));
