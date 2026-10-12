@@ -69,6 +69,7 @@ add_library(cnk_native_core STATIC
     src/cnk_game.c
     src/cnk_frontend.c
     src/cnk_frontend_actions.c
+    src/cnk_race_hud_text.c
     src/cnk_app_runtime.c
     src/cnk_vita_diagnostics.c
     src/cnk_vita_telemetry.c
@@ -682,6 +683,12 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_ai_reacquire PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_ai_reacquire PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME ai_reacquire COMMAND cnk_test_ai_reacquire)
+  # Gameplay screenshot reference: placement-independent, ROM-free race HUD
+  # formatting with correct current lap, Zeebo-style clock and fruit counter.
+  add_executable(cnk_test_race_hud_text tests/test_native_race_hud_text.c)
+  target_link_libraries(cnk_test_race_hud_text PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_race_hud_text PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME race_hud_text COMMAND cnk_test_race_hud_text)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
