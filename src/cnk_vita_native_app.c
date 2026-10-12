@@ -18,6 +18,7 @@
 #include "cnk_music_cues.h"
 #include "cnk_driver_bindings.h"
 #include "cnk_results_text.h"
+#include "cnk_race_hud_text.h"
 #include "cnk_lang.h"
 #include "cnk_verified_characters.h"
 #include "cnk_character_gallery.h"
@@ -138,6 +139,65 @@ static void debug_minimap(const cnk_minimap_frame *map){
   glBegin(GL_QUADS);rect(x+size*v.x-3.0f,y+size*v.z-3.0f,6,6);glEnd();
  }
 }
+/* Original-style screen regions, but still a DEVELOPMENT 5x7 font.
+ * Never claim to have recovered original Zeebo HUD sprites or layout. */
+static void race_hud_compact(const cnk_app_snapshot *snap){
+ cnk_race_hud_text text={0};
+ if(cnk_race_hud_text_build(&snap->hud,snap->player_items.wumpa,&text))
+  return;
+ glEnable(GL_BLEND);
+ glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+ glColor4f(0.02f,0.04f,0.08f,0.78f);
+ glBegin(GL_QUADS);
+ rect(743,6,206,75);     /* timing and fruit, top-right */
+ rect(12,386,175,100);   /* position and lap, bottom-left */
+ rect(300,471,325,52);  /* provisional boost meter */
+ glEnd();
+ glDisable(GL_BLEND);
+ glColor4f(1.f,0.95f,0.75f,1.f);
+ text5(758,17,2.4f,text.clock);
+ text5(758,53,1.5f,text.wumpa);
+ glColor4f(1.f,0.83f,0.30f,1.f);
+ text5(23,394,1.35f,"POSITION");
+ text5(23,417,3.2f,text.position);
+ glColor4f(0.85f,0.96f,1.f,1.f);
+ text5(23,466,1.65f,"LAP");
+ text5(79,466,1.8f,text.lap);
+ float boost=snap->boost_active?1.f:snap->boost_charge_fraction;
+ if(!isfinite(boost)||boost<0.f)boost=0.f;
+ if(boost>1.f)boost=1.f;
+ glColor4f(0.20f,0.26f,0.36f,1.f);
+ glBegin(GL_QUADS);rect(311,483,301,12);glEnd();
+ if(snap->boost_active)glColor4f(0.23f,1.f,0.45f,1.f);
+ else glColor4f(1.f,0.69f,0.20f,1.f);
+ glBegin(GL_QUADS);rect(313,485,297.f*boost,8);glEnd();
+ glColor4f(1,1,1,1);
+ text5(311,504,1.3f,snap->boost_active?"TURBO ACTIVE":
+      snap->player_boost.drifting?"DRIFT CHARGING":"R DRIFT  L ITEM");
+ if(snap->incoming_projectile){
+  glColor4f(1.f,0.42f,0.15f,1.f);
+  text5(345,136,1.75f,"INCOMING ITEM");
+ }
+ if(snap->hud.wrong_way){
+  glColor4f(0.95f,0.16f,0.12f,1.f);
+  text5(334,159,3.1f,"WRONG WAY");
+ }
+ if(snap->start_phase==CNK_START_THREE||
+    snap->start_phase==CNK_START_TWO||
+    snap->start_phase==CNK_START_ONE||
+    snap->start_phase==CNK_START_GO){
+  const char *message=snap->start_phase==CNK_START_THREE?"3":
+     snap->start_phase==CNK_START_TWO?"2":
+     snap->start_phase==CNK_START_ONE?"1":"GO";
+  float scale=snap->start_phase==CNK_START_GO?10.f:12.f;
+  glColor4f(0.02f,0.04f,0.09f,1.f);
+  glBegin(GL_QUADS);rect(362,188,232,154);glEnd();
+  if(snap->start_phase==CNK_START_GO)glColor4f(0.3f,1.f,0.35f,1.f);
+  else glColor4f(1.f,0.83f,0.15f,1.f);
+  text5((960.f-6.f*scale*(float)strlen(message))*.5f,218.f,scale,message);
+ }
+ if(snap->minimap.path_count)debug_minimap(&snap->minimap);
+}
 static void debug_overlay(const cnk_app_snapshot *snap,int draw_rc,int gallery_on,
                           int kart_gallery_on,unsigned kart_lod,const cnk_lang_pack *lang,
                           int dev_visual_preview){
@@ -203,6 +263,13 @@ static void debug_overlay(const cnk_app_snapshot *snap,int draw_rc,int gallery_o
   glColor4f(0.0f,0.0f,0.0f,0.82f);
   glBegin(GL_QUADS);rect(0,0,960,544);glEnd();
   glDisable(GL_BLEND);
+ }
+ if(snap->state==CNK_FRONTEND_RACE && snap->has_hud){
+  race_hud_compact(snap);
+  glMatrixMode(GL_MODELVIEW);glPopMatrix();
+  glMatrixMode(GL_PROJECTION);glPopMatrix();
+  glMatrixMode(GL_MODELVIEW);
+  return;
  }
  glColor4f(0.01f,0.04f,0.08f,1.0f);
  glBegin(GL_QUADS);rect(0,0,960,102);rect(0,498,960,46);glEnd();
