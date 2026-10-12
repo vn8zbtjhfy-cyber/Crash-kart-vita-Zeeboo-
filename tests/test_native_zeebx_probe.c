@@ -25,7 +25,7 @@ int main(void){
  assert(outcome.reason==CNK_ARM_API&&outcome.api_slot==2u);
  assert(outcome.executed==4u);
  f=fopen(report,"rb");assert(f);
- char buffer[500]={0};
+ char buffer[2048]={0};
  size_t n=fread(buffer,1,sizeof(buffer)-1u,f);
  assert(!fclose(f));
  buffer[n]='\0';
