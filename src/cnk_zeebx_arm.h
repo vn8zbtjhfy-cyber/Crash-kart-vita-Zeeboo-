@@ -65,6 +65,10 @@ typedef struct {
  uint32_t screen_bitmap_addr,screen_bitmap_references;
  uint32_t screen_bitmap_pixels; /* RGB565 guest buffer, allocated on first IDIB */
  uint32_t virtual_time_ms;
+ /* Zeebx legacy IEGL (AEEGL.h): guest-owned configuration only.
+  * GL contexts/swap are not functional until the Vita GPU bridge exists. */
+ uint32_t egl_error,egl_initialized,egl_queries;
+ uint32_t egl_string_vendor,egl_string_version,egl_string_extensions;
  cnk_zeebx_pad pad; /* separate from the native driving physics */
  cnk_zeebx_hid_event hid_queue[CNK_ZEEBX_HID_QUEUE];
  uint32_t hid_queue_head,hid_queue_count,hid_events_dropped;
