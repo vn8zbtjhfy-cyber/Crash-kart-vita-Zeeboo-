@@ -245,7 +245,7 @@ int main(void){
  trap(&cpu,24u,26u);
  api(&cpu,24u,26u,4u,0xffffffffu,3u,0u);
  trap(&cpu,24u,26u);
- api(&cpu,24u,26u,5u,0u,3u,0u);
+ api(&cpu,24u,26u,1u,0u,3u,0u); /* GL_LINES still unsupported */
  trap(&cpu,24u,26u);
  api(&cpu,24u,25u,0x8074u,0u,0u,0u);
  assert(invoke(&cpu)==0u);
