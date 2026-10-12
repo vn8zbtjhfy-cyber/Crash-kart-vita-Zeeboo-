@@ -183,6 +183,13 @@ static int vita_texture_parameter(void *u,uint32_t pname,uint32_t value){
  glTexParameteri(GL_TEXTURE_2D,(GLenum)pname,(GLint)value);
  return glGetError()==GL_NO_ERROR?0:-1;
 }
+/* The original Crash BREW GL path requests GL_REPLACE using
+ * glTexEnvxv. Forward real GL state to vitaGL, never a no-op. */
+static int vita_texture_env_mode(void *u,uint32_t mode){
+ (void)u;
+ glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,(GLint)mode);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
 static int vita_texture_upload(void *u,uint32_t w,uint32_t h,
                                uint32_t format,uint32_t type,
                                const uint8_t *pixels){
@@ -304,6 +311,7 @@ cnk_zeebx_gl_host cnk_vita_zeebx_gl_callbacks(void){
   .color4=vita_color4,.color_mask=vita_color_mask,
   .texture_gen=vita_texture_gen,.texture_delete=vita_texture_delete,
   .texture_bind=vita_texture_bind,.texture_parameter=vita_texture_parameter,
+  .texture_env_mode=vita_texture_env_mode,
   .texture_upload=vita_texture_upload,
   .draw_textured_triangles=vita_draw_textured_triangles,
   .draw_colored_textured_triangles=vita_draw_colored_textured_triangles
