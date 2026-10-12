@@ -5,6 +5,7 @@
 #include "cnk_vita_native_app.h"
 #include "cnk_app_runtime.h"
 #include "cnk_vita_controls.h"
+#include "cnk_vita_motion.h"
 #include "cnk_vitagl_game_frame.h"
 #include "cnk_vitagl_scene_assets.h"
 #include "cnk_item_sprite_map.h"
@@ -141,7 +142,7 @@ static void debug_minimap(const cnk_minimap_frame *map){
 }
 /* Original-style screen regions, but still a DEVELOPMENT 5x7 font.
  * Never claim to have recovered original Zeebo HUD sprites or layout. */
-static void race_hud_compact(const cnk_app_snapshot *snap){
+static void race_hud_compact(const cnk_app_snapshot *snap,int tilt_enabled){
  cnk_race_hud_text text={0};
  if(cnk_race_hud_text_build(&snap->hud,snap->player_items.wumpa,&text))
   return;
@@ -174,6 +175,8 @@ static void race_hud_compact(const cnk_app_snapshot *snap){
  glColor4f(1,1,1,1);
  text5(311,504,1.3f,snap->boost_active?"TURBO ACTIVE":
       snap->player_boost.drifting?"DRIFT CHARGING":"R DRIFT  L ITEM");
+ glColor4f(0.86f,0.95f,0.75f,1.f);
+ text5(610,243,1.35f,tilt_enabled?"SELECT TILT ON":"SELECT TILT OFF");
  if(snap->incoming_projectile){
   glColor4f(1.f,0.42f,0.15f,1.f);
   text5(345,136,1.75f,"INCOMING ITEM");
@@ -200,7 +203,7 @@ static void race_hud_compact(const cnk_app_snapshot *snap){
 }
 static void debug_overlay(const cnk_app_snapshot *snap,int draw_rc,int gallery_on,
                           int kart_gallery_on,unsigned kart_lod,const cnk_lang_pack *lang,
-                          int dev_visual_preview){
+                          int dev_visual_preview,int tilt_enabled){
  char a[120],b[120],c[120];
  if(snap->state==CNK_FRONTEND_SELECT){
   const char *track=cnk_lang_text(lang,29); /* Zeebo LANG ordinal: SELECT TRACK */
@@ -265,7 +268,7 @@ static void debug_overlay(const cnk_app_snapshot *snap,int draw_rc,int gallery_o
   glDisable(GL_BLEND);
  }
  if(snap->state==CNK_FRONTEND_RACE && snap->has_hud){
-  race_hud_compact(snap);
+  race_hud_compact(snap,tilt_enabled);
   glMatrixMode(GL_MODELVIEW);glPopMatrix();
   glMatrixMode(GL_PROJECTION);glPopMatrix();
   glMatrixMode(GL_MODELVIEW);
@@ -535,6 +538,7 @@ int cnk_vita_native_run_with_kart_skins(const char *vfs_path,
  int have_gallery=0,have_kart_gallery=0;
  unsigned gallery_lod=1u;
  int gallery_r_pressed=0, gallery_l_pressed=0, lang_pressed=0;
+ cnk_vita_motion motion={0};
  unsigned gallery_angle_step=0;
  cnk_vitagl_textures track_textures={0};
  cnk_vitagl_textures item_textures={0};
@@ -809,9 +813,28 @@ int cnk_vita_native_run_with_kart_skins(const char *vfs_path,
      fprintf(stderr,"CNK: source language active, but could not save preference\n");
    }else fprintf(stderr,"CNK: source language switch failed; previous language retained\n");
   }
+  /* SELECT is reserved for LANG in track selection. During a race it
+   * toggles Vita motion instead; START+SELECT still exits immediately. */
+  if(select_pressed && !lang_pressed && !wants_exit &&
+     app.frontend.state==CNK_FRONTEND_RACE){
+   if(motion.sampling)cnk_vita_motion_stop(&motion);
+   else if(cnk_vita_motion_start(&motion))
+    fprintf(stderr,"CNK: motion unavailable; using analog stick\n");
+  }
   lang_pressed=select_pressed;
   actions &= ~((uint32_t)CNK_UI_LANGUAGE);
   if(wants_exit){result=0;break;}
+  /* Never keep the motion sensor active after returning to selection.
+   * During a race, the stick and D-pad always override tilt input. An
+   * invalid motion reading cannot abort gameplay or change race state. */
+  if(motion.sampling && app.frontend.state==CNK_FRONTEND_SELECT)
+   cnk_vita_motion_stop(&motion);
+  if(motion.sampling && app.frontend.state==CNK_FRONTEND_RACE &&
+     fabsf(input.steer)<0.10f){
+   float motion_steer=0.0f;
+   if(!cnk_vita_motion_read(&motion,&motion_steer))
+    input.steer=motion_steer;
+  }
   uint64_t clock_us=sceKernelGetProcessTimeWide();
   if(cnk_app_runtime_tick(&app,clock_us,actions,input,&snapshot)){
    result=-5;break;
@@ -906,7 +929,7 @@ int cnk_vita_native_run_with_kart_skins(const char *vfs_path,
    * particular, do not submit an incomplete display list to the GPU. */
   if(draw_rc){result=-47;break;}
   debug_overlay(&snapshot,draw_rc,have_gallery,have_kart_gallery,
-                gallery_lod,&native_lang,preview_active);
+                gallery_lod,&native_lang,preview_active,motion.sampling);
   /* GL errors (for example, exhausted video memory) do not necessarily
    * change a draw function's return value. Diagnose them before swapping;
    * cleanup below still owns and releases the scene and texture handles. */
@@ -921,6 +944,7 @@ int cnk_vita_native_run_with_kart_skins(const char *vfs_path,
   cnk_vita_telemetry_present(&perf,sceKernelGetProcessTimeWide());
  }
 cleanup:
+ cnk_vita_motion_stop(&motion);
  /* Join playback first. Only THEN may cue PCM backing be freed. */
  if(audio_initialized){
   cnk_vita_audio_worker_close(&audio); /* joins before sample release */
