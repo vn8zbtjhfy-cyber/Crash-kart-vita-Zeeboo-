@@ -9,6 +9,7 @@
 /* Required by unrelated existing draw/present callbacks: no hardware GPU. */
 void glBegin(GLenum mode){assert(mode==GL_TRIANGLES);}
 void glEnd(void){}
+void glLoadIdentity(void){}
 void glVertex3f(float x,float y,float z){(void)x;(void)y;(void)z;}
 void glClearColor(float r,float g,float b,float a){
  (void)r;(void)g;(void)b;(void)a;
