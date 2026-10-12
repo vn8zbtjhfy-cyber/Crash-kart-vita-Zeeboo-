@@ -4,7 +4,7 @@
 name: VitaSDK diagnostic ELF
 on:
   push:
-    branches: [main, feature/zeebx-textures-136-integrated]
+    branches: [main, feature/zeebx-gl-fixed-arrays-137]
     paths:
       - 'src/**'
       - 'CMakeLists.txt'
