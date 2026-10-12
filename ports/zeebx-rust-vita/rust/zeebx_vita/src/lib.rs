@@ -18,10 +18,14 @@ type EmbeddedLookup=unsafe extern "C" fn(*const c_char)->EmbeddedAsset;
 const MOD:&CStr=c"brew/mod/274214/cnk2.mod";
 const VFS:&CStr=c"brew/mod/274214/data.vfs";
 const MIF:&CStr=c"brew/mif/274214.mif";
-const BUDGET:u64=20_000_000;
+const BOOT_BUDGET:u64=20_000_000;
+// Short bounded slices yield control to the Vita UI rather than executing
+// hundreds of millions of interpreted guest instructions in a single frame.
+const FRAME_BUDGET:u64=1_000_000;
+const FRAME_PASSES:usize=4;
 struct Running{
  machine:Machine<Interpretador>,applet:Option<(u32,u32)>,pad_before:Pad,
- frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,_fufs:FufsView
+ frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,_fufs:FufsView
 }
 struct State{running:Option<Running>,error:Option<CString>}
 struct StateCell(UnsafeCell<State>);
@@ -63,17 +67,17 @@ fn boot(lookup:EmbeddedLookup)->Result<Running,String>{
  machine.set_installed_applets([(clsid,"274214".to_string())]);
  machine.usa_placa(false,None);
  log_stage(c"R.boot.run.enter");
- let result=machine.run(BUDGET).map_err(|e|e.to_string())?;
+ let result=machine.run(BOOT_BUDGET).map_err(|e|e.to_string())?;
  log_stage(c"R.boot.run.returned");
  if !matches!(result,Outcome::Returned{code:0}){return Err(format!("AEEMod_Load: {result:?}"));}
  log_stage(c"R.boot.applet.create.enter");
- let applet=match machine.create_applet(clsid,BUDGET){
+ let applet=match machine.create_applet(clsid,BOOT_BUDGET){
   Ok(AppletResult::Called{code:0,applet}) if applet!=0=>applet,
   Ok(x)=>return Err(format!("CreateInstance: {x:?}")),
   Err(e)=>return Err(e.to_string())
  };
  log_stage(c"R.boot.applet.create.ok");
- Ok(Running{machine,applet:Some((applet,clsid)),pad_before:Pad::default(),frame:Vec::new(),w:0,h:0,logged_first_tick:false,_fufs:fufs})
+ Ok(Running{machine,applet:Some((applet,clsid)),pad_before:Pad::default(),frame:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,_fufs:fufs})
 }
 fn check(outcomes:&[Outcome])->Result<(),String>{
  for x in outcomes{if !matches!(x,Outcome::Returned{..}|Outcome::Budget){return Err(format!("Guest stopped: {x:?}"));}}
@@ -90,6 +94,7 @@ impl Running{
   for (&v,b) in screen.pixels().iter().zip(self.frame.chunks_exact_mut(4)){b.copy_from_slice(&pixel(v));}
  }
  fn tick(&mut self,input:ZeebxVitaPad)->Result<bool,String>{
+  self.ticks=self.ticks.saturating_add(1);
   let first_step=!self.logged_first_tick;
   self.logged_first_tick=true;
   if first_step { log_stage(c"R.tick.enter"); }
@@ -99,28 +104,59 @@ impl Running{
   self.pad_before=next;
   if let Some((a,c))=self.applet.take(){
    log_stage(c"R.tick.applet.start.enter");
-   let start=self.machine.start_applet(a,c,BUDGET).map_err(|e|e.to_string())?;check(&[start])?;
+   let start=self.machine.start_applet(a,c,FRAME_BUDGET).map_err(|e|e.to_string())?;
+   if matches!(start,Outcome::Budget) { log_stage(c"R.tick.applet.start.budget"); }
+   check(&[start])?;
    log_stage(c"R.tick.applet.start.ok");
   }
+  // EVT_APP_START can itself enqueue a frame: consume it before the next
+  // comeca_volta()/fecha_volta(), which would discard a single update.
+  if let Some(f)=self.machine.toma_quadro_do_update(){
+   self.w=f.width();self.h=f.height();self.frame.resize(f.pixels().len()*4,0);
+   for (&v,b) in f.pixels().iter().zip(self.frame.chunks_exact_mut(4)){b.copy_from_slice(&pixel(v));}
+   if !self.logged_video {log_stage(c"R.video.present.start_update");self.logged_video=true;}
+   return Ok(true);
+  }
   let before=self.machine.gl_swaps();
-  for _ in 0..16{
-   if self.machine.tem_quadros_do_update(){
-    if let Some(f)=self.machine.toma_quadro_do_update(){
-     self.w=f.width();self.h=f.height();self.frame.resize(f.pixels().len()*4,0);
-     for (&v,b) in f.pixels().iter().zip(self.frame.chunks_exact_mut(4)){b.copy_from_slice(&pixel(v));}
-     return Ok(true);
-    }
-   }
+  for _ in 0..FRAME_PASSES{
    if first_step { log_stage(c"R.tick.advance.enter"); }
    self.machine.comeca_volta();
-   let outcomes=self.machine.advance(BUDGET).map_err(|e|e.to_string())?;
-   let signals=self.machine.deliver_signals(BUDGET).map_err(|e|e.to_string())?;
-   let cb=self.machine.deliver_callbacks(BUDGET).map_err(|e|e.to_string())?;
+   let outcomes=self.machine.advance(FRAME_BUDGET).map_err(|e|e.to_string())?;
+   let signals=self.machine.deliver_signals(FRAME_BUDGET).map_err(|e|e.to_string())?;
+   let cb=self.machine.deliver_callbacks(FRAME_BUDGET).map_err(|e|e.to_string())?;
+   // IMPORTANT: Zeebx clears the queued framebuffer on fecha_volta()
+   // when there was only one IDisplay_Update in the current turn.
+   // Take the latest update BEFORE closing this turn, never afterward.
+   let mut latest_update=None;
+   while let Some(f)=self.machine.toma_quadro_do_update(){ latest_update=Some(f); }
    self.machine.fecha_volta();
    if first_step { log_stage(c"R.tick.advance.ok"); }
    check(&outcomes)?;check(&signals)?;check(&cb)?;
-   if self.machine.pediu_para_fechar(){let _=self.machine.encerra_applet();return Err("Applet cerrado".into());}
-   if self.machine.gl_swaps()!=before{self.publish_frame();return Ok(true);}
+   if self.machine.pediu_para_fechar(){
+    let _=self.machine.encerra_applet();return Err("Applet cerrado".into());
+   }
+   if let Some(f)=latest_update{
+    self.w=f.width();self.h=f.height();self.frame.resize(f.pixels().len()*4,0);
+    for (&v,b) in f.pixels().iter().zip(self.frame.chunks_exact_mut(4)){b.copy_from_slice(&pixel(v));}
+    if !self.logged_video {log_stage(c"R.video.present.display_update");self.logged_video=true;}
+    return Ok(true);
+   }
+   if self.machine.gl_swaps()!=before{
+    self.publish_frame();
+    if !self.logged_video {log_stage(c"R.video.present.egl_swap");self.logged_video=true;}
+    return Ok(true);
+   }
+  }
+  // Sparse diagnostics. A framebuffer may change even when no present event
+  // is emitted; show it occasionally while preserving a bounded CPU workload.
+  if self.ticks==1 || self.ticks==20 || self.ticks==100 {
+   if self.machine.screen().pixels().iter().any(|&px|px!=0){
+    log_stage(c"R.video.fallback.nonzero");
+   }else{
+    log_stage(c"R.video.fallback.blank");
+   }
+   self.publish_frame();
+   return Ok(true);
   }
   Ok(false)
  }

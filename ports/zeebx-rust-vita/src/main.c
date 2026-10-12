@@ -37,7 +37,7 @@ int main(void) {
  }
  vita_debug_log("C.zeebx.boot.ok");
  const uint8_t*rgba=0;
- uint32_t w=0,h=0,frames=0;
+ uint32_t w=0,h=0,frames=0,drawn=0;
  for(;;){
    ZeebxVitaPad pad=vita_input_read();
    if(vita_input_should_exit())break;
@@ -49,9 +49,9 @@ int main(void) {
      break;
    }
    if(result==1){
-     if(frames==0)vita_debug_log("C.video.draw.first.enter");
+     if(drawn==0)vita_debug_log("C.video.draw.first.enter");
      vita_video_draw(rgba,w,h);
-     if(frames==0)vita_debug_log("C.video.draw.first.ok");
+     if(drawn++==0)vita_debug_log("C.video.draw.first.ok");
    }else{
      sceKernelDelayThread(1000);
    }

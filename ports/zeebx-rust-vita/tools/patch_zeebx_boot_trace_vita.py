@@ -16,6 +16,8 @@ def main(root: Path):
         print("Vita trace already present")
         return
     trace = """// CNK_VITA_BOOT_TRACE_V1
+static CNK_FIRST_CPU_RUN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static CNK_FIRST_API_CALL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 #[cfg(target_os = "vita")]
 fn cnk_vita_trace(stage: &'static std::ffi::CStr) {
     unsafe extern "C" {
@@ -55,8 +57,8 @@ fn cnk_vita_trace(_: &'static std::ffi::CStr) {}
         loop {
             let gasto = self.cpu.instructions().saturating_sub(comeco);""",
         """        self.orcamento = budget;
-        let mut first_cpu_run = true;
-        let mut first_api_call = true;
+        let mut first_cpu_run = !CNK_FIRST_CPU_RUN.swap(true, std::sync::atomic::Ordering::Relaxed);
+        let mut first_api_call = !CNK_FIRST_API_CALL.swap(true, std::sync::atomic::Ordering::Relaxed);
         loop {
             let gasto = self.cpu.instructions().saturating_sub(comeco);""",
         'first-use flags')
