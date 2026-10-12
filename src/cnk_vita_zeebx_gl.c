@@ -95,6 +95,34 @@ static int vita_rotate(void *user,float degrees,float x,float y,float z){
  glRotatef(degrees,x,y,z);
  return glGetError()==GL_NO_ERROR?0:-1;
 }
+/* Original Common-Lite fixed point 16.16 inputs are converted by the
+ * guarded ARM bridge. vitaGL receives column-major OpenGL matrices. */
+static int vita_load_matrix(void *user,const float matrix[16]){
+ (void)user;
+ if(!matrix)return -1;
+ glLoadMatrixf(matrix);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_mult_matrix(void *user,const float matrix[16]){
+ (void)user;
+ if(!matrix)return -1;
+ glMultMatrixf(matrix);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_frustum(void *user,float l,float r,float b,float t,
+                        float n,float f){
+ (void)user;
+ if(l==r||b==t||n<=0.f||f<=0.f||n==f)return -1;
+ glFrustumf(l,r,b,t,n,f);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_ortho(void *user,float l,float r,float b,float t,
+                      float n,float f){
+ (void)user;
+ if(l==r||b==t||n==f)return -1;
+ glOrthof(l,r,b,t,n,f);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
 /* Each vertex is immediately submitted as part of a real vitaGL triangle
  * stream. No transient guest pointer can outlive this call; GPU errors
  * stop original guest execution rather than claim a successful frame. */
@@ -161,6 +189,8 @@ cnk_zeebx_gl_host cnk_vita_zeebx_gl_callbacks(void){
   .matrix_mode=vita_matrix_mode,.load_identity=vita_load_identity,
   .push_matrix=vita_push_matrix,.pop_matrix=vita_pop_matrix,
   .translate=vita_translate,.scale=vita_scale,.rotate=vita_rotate,
+  .load_matrix=vita_load_matrix,.mult_matrix=vita_mult_matrix,
+  .frustum=vita_frustum,.ortho=vita_ortho,
   .draw_triangles=vita_draw_triangles,
   .set_capability=vita_set_capability,.blend_func=vita_blend_func,
   .depth_func=vita_depth_func,.depth_mask=vita_depth_mask,
