@@ -96,6 +96,9 @@ void glBegin(GLenum mode){assert(mode==GL_QUADS);overlay_quads++;}
 void glEnd(void){}
 void glVertex2f(float x,float y){assert(isfinite(x)&&isfinite(y));}
 void glLoadIdentity(void){}
+void glVertex3f(float x,float y,float z){
+ assert(isfinite(x)&&isfinite(y)&&isfinite(z));
+}
 void glOrtho(double left,double right,double bottom,double top,double near_v,double far_v){
  assert(left==0&&right==960&&bottom==544&&top==0&&near_v==-1&&far_v==1);
 }
