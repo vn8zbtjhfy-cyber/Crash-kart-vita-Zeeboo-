@@ -1,5 +1,21 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avances 129-130: GPU real y matrices del Zeebo
+
+- Se enlazo la primera salida GL original a vitaGL con EGL, glClear,
+  glClearColorx, glViewport y presentacion de imagen (avance 129).
+- Se anadieron glMatrixMode, glLoadIdentity, glPushMatrix, glPopMatrix,
+  glTranslatex, glScalex y glRotatex mediante llamadas a GPU reales
+  (avance 130, sometido a pruebas); argumentos firmados 16.16.
+- No se inventa exito: las llamadas sin contexto o backend funcional se
+  detienen. Los recursos privados del juego no se suben a GitHub.
+- Siguen pendientes modelos, triangulos, texturas, estados GL, ciclo de
+  eventos, audio y una carrera real probada en consola. Esto NO es aun
+  el juego completo ni un VPK final.
+
+[Puente vitaGL](docs/AVANCE_129_ZEEBX_GL_VITA_REAL.md) |
+[Matrices 3D](docs/AVANCE_130_ZEEBX_MATRICES_VITA.md).
+
 ## Avance 128: negociación EGL original de Zeebo
 
 - Se conserva la rama de señales BREW del avance 127. Se añadió desde
