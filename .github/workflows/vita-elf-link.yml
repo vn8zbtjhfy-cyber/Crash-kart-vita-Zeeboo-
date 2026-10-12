@@ -4,7 +4,7 @@
 name: VitaSDK diagnostic ELF
 on:
   push:
-    branches: [main, feature/zeebx-gl-scissor-vita-141]
+    branches: [main]
     paths:
       - 'src/**'
       - 'CMakeLists.txt'
