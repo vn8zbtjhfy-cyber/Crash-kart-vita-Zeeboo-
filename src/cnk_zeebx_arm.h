@@ -37,7 +37,7 @@ typedef struct {
  uint64_t executed;
  uint8_t *module,*stack,*heap,*objects,*helpers,*vtables;
  uint32_t heap_cursor,shell_refs;
- uint32_t object_cursor,display_objects,filemgr_objects,debug_calls;
+ uint32_t object_cursor,display_objects,filemgr_objects,sound_objects,debug_calls;
  char last_debug_template[128];
  size_t module_size;
  int initialized,applet_pending;
