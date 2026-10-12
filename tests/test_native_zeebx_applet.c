@@ -150,9 +150,23 @@ int main(void){
  assert(strstr(report,"applet_ptr=0x10000028"));
  assert(strstr(report,"start_event_attempted=YES"));
  assert(strstr(report,"start_event_completed=YES"));
+ assert(strstr(report,"start_event_handled=YES"));
  assert(strstr(report,"start_event_reason=RETURNED"));
  assert(strstr(report,"start_event_entry=0x000100a0"));
  assert(strstr(report,"genuine_game_playable=NO"));
+ /* A guest handler can RETURN but deliberately decline this event.
+  * Diagnostics must not confuse a function return with a handled event. */
+ wr32(code+0xbc,0xe3a00000u); /* MOV r0,#0; guest returns FALSE */
+ file=fopen(modfile,"wb");assert(file);
+ assert(fwrite(code,1,sizeof(code),file)==sizeof(code));
+ assert(!fclose(file));
+ assert(!cnk_zeebx_probe_original_applet(modfile,miffile,logfile,1000u,&out));
+ memset(report,0,sizeof(report));
+ file=fopen(logfile,"rb");assert(file);
+ report_len=fread(report,1,sizeof(report)-1u,file);
+ assert(!fclose(file));report[report_len]='\\0';
+ assert(strstr(report,"start_event_completed=YES"));
+ assert(strstr(report,"start_event_handled=NO"));
  assert(!remove(modfile));assert(!remove(miffile));assert(!remove(logfile));
 
  /* Corrupt guest module vtable pointer: it must NOT be called as ARM. */
