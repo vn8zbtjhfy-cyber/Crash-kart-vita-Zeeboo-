@@ -61,6 +61,7 @@ add_library(cnk_native_core STATIC
     src/cnk_frustum.c
     src/cnk_png.c
     src/cnk_source_ui.c
+    src/cnk_zeebx_brew.c
     src/cnk_texture_map.c
     src/cnk_texture_manifest.c
     src/cnk_session.c
@@ -719,6 +720,15 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_source_ui PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_source_ui PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME source_ui COMMAND cnk_test_source_ui)
+  # Adapt Zeebx's original BREW .mod and .mif metadata parsers to our
+  # existing portable native core. Tests use synthetic module bytes.
+  add_executable(cnk_inspeccionar_mod_zeebx tools/inspeccionar_mod_zeebx.c)
+  target_link_libraries(cnk_inspeccionar_mod_zeebx PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_inspeccionar_mod_zeebx PRIVATE -Wall -Wextra -Werror)
+  add_executable(cnk_test_zeebx_brew tests/test_native_zeebx_brew.c)
+  target_link_libraries(cnk_test_zeebx_brew PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_brew PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_brew COMMAND cnk_test_zeebx_brew)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
