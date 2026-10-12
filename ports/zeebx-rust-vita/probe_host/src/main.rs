@@ -1,7 +1,7 @@
 //! Reproduction harness: the original game and ARM interpreter, but on a
 //! host with enough RAM and without vitaGL. No claim of playability on Vita.
 //! This measures why CreateInstance consumes many emulated instructions.
-use std::{env, error::Error, fs, path::{Path, PathBuf}, time::Instant};
+use std::{env, error::Error, fs, path::{Path, PathBuf}, time::{Duration, Instant}};
 use zeebx::{
     cpu::{CpuBackend, Reg, interpretador::Interpretador},
     loader::{self, miffile::MifFile, modfile::ModImage},
@@ -62,18 +62,32 @@ fn main()->Result<(),Box<dyn Error>> {
         machine.instructions(),machine.cpu().read_reg(Reg::Pc),machine.clock_ms());
     // Normal Machine::advance performs continuation when Budget saved a PC.
     // Do NOT restart create_applet; that would destroy the caller state.
-    for i in 1..=64u32 {
-        if !matches!(result,AppletResult::Stopped(Outcome::Budget)){break;}
+    // Unlike the earlier 64-slice probe, this covers a much longer
+    // initialization window. The explicit timeout prevents a runaway test.
+    let mut polls=0u32;
+    let mut finished=false;
+    for i in 1..=4096u32 {
+        if !matches!(result,AppletResult::Stopped(Outcome::Budget)) {finished=true;break;}
+        if start.elapsed()>Duration::from_secs(45) {
+            println!("TIMEOUT: CreateInstance still executing after 45 seconds");
+            break;
+        }
         let batch=machine.advance(250_000)?;
         let Some(step)=batch.into_iter().next() else{
             println!("resume[{i}] no deferred execution found");break
         };
-        if i<=8||i%8==0||!matches!(step,Outcome::Budget){
+        polls=i;
+        if i<=8 || i.is_power_of_two() || i%128==0 || !matches!(step,Outcome::Budget){
             println!("resume[{i}] outcome={step:?} instr={} pc={:#010x} clock={}ms elapsed={:?}",
                 machine.instructions(),machine.cpu().read_reg(Reg::Pc),machine.clock_ms(),start.elapsed());
         }
         result=AppletResult::Stopped(step);
+        if !matches!(result,AppletResult::Stopped(Outcome::Budget)){finished=true;break;}
     }
-    println!("FINAL last_step={result:?} instr={} t={:?}",machine.instructions(),start.elapsed());
+    println!("FINAL finished={finished} polls={polls} result={result:?} instr={} pc={:#010x} virtual_clock={}ms elapsed={:?}",
+        machine.instructions(),machine.cpu().read_reg(Reg::Pc),machine.clock_ms(),start.elapsed());
+    if !finished {
+        return Err(format!("CreateInstance still stopped after {polls} polls: {result:?}").into());
+    }
     Ok(())
 }
