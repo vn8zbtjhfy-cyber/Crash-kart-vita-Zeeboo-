@@ -1,0 +1,56 @@
+# Compilación automática del VPK de diagnóstico actualmente disponible.
+# NO es un port jugable ni contiene la ROM original.
+name: CNK Vita compilacion automatica (diagnostico)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cnk-vita-autobuild.yml'
+      - 'src/**'
+      - 'CMakeLists.txt'
+      - 'scripts/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-vpk-diagnostico:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    container:
+      image: vitasdk/vitasdk:2026.08
+    steps:
+      - name: Descargar fuentes privadas
+        uses: actions/checkout@v4
+
+      - name: Verificar que es el diagnostico y no un juego completo
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f src/vita_main.c
+          test -f src/cnk_zeebx_arm.c
+          test -f CMakeLists.txt
+          test ! -e assets/brew/mod/274214/data.vfs
+          echo "Este paquete NO contiene el juego original ni la ROM embebida."
+
+      - name: Compilar y empaquetar VPK de diagnostico con VitaSDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-vita-auto \
+            -DCMAKE_TOOLCHAIN_FILE="$VITASDK/share/vita.toolchain.cmake" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCNK_ENABLE_VITA_ELF_LINK_CHECK=ON \
+            -DCNK_ENABLE_VITA_DIAGNOSTIC_VPK=ON
+          cmake --build build-vita-auto --parallel 4
+          test -s build-vita-auto/CNK3D-HARDWARE-TEST.vpk
+          sha256sum build-vita-auto/CNK3D-HARDWARE-TEST.vpk
+
+      - name: Publicar VPK de diagnostico, NO jugable
+        uses: actions/upload-artifact@v4
+        with:
+          name: CNK3D-Vita-Diagnostico-NO-JUGABLE
+          path: build-vita-auto/CNK3D-HARDWARE-TEST.vpk
+          if-no-files-found: error
+          retention-days: 7
