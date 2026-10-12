@@ -60,6 +60,7 @@ add_library(cnk_native_core STATIC
     src/cnk_camera.c
     src/cnk_frustum.c
     src/cnk_png.c
+    src/cnk_source_ui.c
     src/cnk_texture_map.c
     src/cnk_texture_manifest.c
     src/cnk_session.c
@@ -654,7 +655,7 @@ if(NOT DEFINED ENV{VITASDK})
     tests/vita_app_stub/host_vita_motion.c src/cnk_vita_motion.c
     src/cnk_vita_native_app.c src/cnk_character_gallery.c src/cnk_source_kart_gallery.c src/cnk_gallery_skins.c src/cnk_vita_controls.c
     src/cnk_vitagl_render.c src/cnk_vitagl_objects.c
-    src/cnk_vitagl_game_frame.c src/cnk_vitagl_items.c src/cnk_vitagl_textures.c src/cnk_vitagl_scene_assets.c
+    src/cnk_vitagl_game_frame.c src/cnk_vitagl_items.c src/cnk_vitagl_textures.c src/cnk_vitagl_ui_art.c src/cnk_vitagl_scene_assets.c
     src/cnk_verified_characters.c src/cnk_object_skin.c
     src/cnk_vita_audio.c src/cnk_vita_audio_worker.c)
   target_include_directories(cnk_test_native_vita_loop PRIVATE
@@ -712,6 +713,12 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_ima PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_ima PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_ima COMMAND cnk_test_zeebx_ima)
+  # Source-backed REAL Zeebo UI IDs: tiny synthetic PNG only in CI.
+  # Optional local argument data.vfs verifies the user's original assets.
+  add_executable(cnk_test_source_ui tests/test_native_source_ui.c)
+  target_link_libraries(cnk_test_source_ui PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_source_ui PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME source_ui COMMAND cnk_test_source_ui)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
@@ -781,7 +788,7 @@ else()
     set(CNK_ENABLE_VITAGL_BACKEND ON)
   endif()
   if(CNK_ENABLE_VITAGL_BACKEND)
-    add_library(cnk_vita_backend STATIC src/cnk_vitagl_render.c src/cnk_vita_controls.c src/cnk_vita_motion.c src/cnk_vitagl_textures.c src/cnk_vita_audio.c src/cnk_vitagl_objects.c src/cnk_vitagl_scene_assets.c src/cnk_vitagl_game_frame.c src/cnk_vitagl_items.c src/cnk_object_skin.c src/cnk_verified_crash.c src/cnk_verified_characters.c src/cnk_character_gallery.c src/cnk_source_kart_gallery.c src/cnk_gallery_skins.c src/cnk_vita_native_app.c src/cnk_vita_audio_worker.c)
+    add_library(cnk_vita_backend STATIC src/cnk_vitagl_render.c src/cnk_vita_controls.c src/cnk_vita_motion.c src/cnk_vitagl_textures.c src/cnk_vitagl_ui_art.c src/cnk_vita_audio.c src/cnk_vitagl_objects.c src/cnk_vitagl_scene_assets.c src/cnk_vitagl_game_frame.c src/cnk_vitagl_items.c src/cnk_object_skin.c src/cnk_verified_crash.c src/cnk_verified_characters.c src/cnk_character_gallery.c src/cnk_source_kart_gallery.c src/cnk_gallery_skins.c src/cnk_vita_native_app.c src/cnk_vita_audio_worker.c)
     target_include_directories(cnk_vita_backend PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
     target_link_libraries(cnk_vita_backend PUBLIC cnk_native_core)
     if(CNK_ENABLE_VITA_ELF_LINK_CHECK)
