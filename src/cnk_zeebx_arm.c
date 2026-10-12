@@ -1751,7 +1751,7 @@ static int zeebx_shell_timer_api(cnk_zeebx_arm *c,unsigned slot){
  const uint32_t now=c->virtual_time_ms;
  if(slot==11u){
   const uint32_t fn=c->regs[2],context=c->regs[3];
-  if(!fn)return -4; /* EBADPARM, never schedule NULL */
+  if(!fn)return cnk_zeebx_arm_return_from_api(c,2u); /* Zeebx EBADPARM */
   const int32_t signed_delay=(int32_t)c->regs[1];
   uint32_t delay=signed_delay>0?(uint32_t)signed_delay:0u;
   uint32_t deadline=UINT32_MAX-now<delay?UINT32_MAX:now+delay;
