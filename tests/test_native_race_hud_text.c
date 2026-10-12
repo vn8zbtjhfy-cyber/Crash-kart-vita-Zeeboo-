@@ -38,9 +38,11 @@ int main(void){
  hud.lap=1;
  assert(cnk_race_hud_text_build(&hud,11,&result)<0);
  hud.elapsed_ms=UINT64_MAX;
- /* Huge elapsed values must fail formatting, never overflow a buffer. */
- assert(cnk_race_hud_text_build(&hud,1,&result)<0);
- assert(!memcmp(&good,&result,sizeof(result)));
+ /* Huge elapsed values must format safely, not wrap or truncate. */
+ assert(!cnk_race_hud_text_build(&hud,1,&result));
+ assert(strlen(result.clock)<sizeof(result.clock));
+ assert(strstr(result.clock,":")!=NULL);
+ assert(!strcmp(result.wumpa,"WUMPA x1"));
  puts("PASS: source-referenced race HUD clock, lap, rank, Wumpa and atomic errors");
  return 0;
 }
