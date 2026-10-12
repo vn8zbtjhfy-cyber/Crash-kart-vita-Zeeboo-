@@ -1061,6 +1061,66 @@ int cnk_zeebx_arm_bootstrap(cnk_zeebx_arm *c,uint32_t budget,
  }
 }
 
+/* Zeebx machine/signal.rs: deferred guest callback delivery, only AFTER
+ * the original guest has returned to its host. Reentering while executing
+ * BREW dispatch would corrupt ARM AAPCS registers and game callbacks.
+ * Neither an unknown callback address nor an unresolved BREW API may be
+ * interpreted as success. All callbacks are bounded by the caller's budget.
+ */
+int cnk_zeebx_arm_deliver_signals(cnk_zeebx_arm *c,uint32_t budget,
+                                  cnk_arm_outcome *out,uint32_t *delivered){
+ if(!c||!out||!delivered||!c->initialized||!budget||
+    budget>10000000u||c->regs[15]!=CNK_ARM_RETURN_MAGIC)
+  return -1;
+ *delivered=0u;
+ memset(out,0,sizeof(*out));
+ const uint64_t start=c->executed;
+ while(c->signal_pending_count && c->executed-start<budget){
+  const cnk_zeebx_signal_callback cb=
+   c->signal_pending[c->signal_pending_head];
+  const uint32_t code=cb.function&~1u;
+  const uint64_t exec_end=(uint64_t)CNK_ARM_MOD_BASE+
+                           c->module_size-CNK_ARM_MOD_PREFIX;
+  /* The adapted interpreter does not yet execute guest THUMB.
+   * A malformed function pointer stops BEFORE touching registers. */
+  if((cb.function&1u)||(code&3u)||code<CNK_ARM_MOD_BASE||
+     (uint64_t)code+4u>exec_end){
+   out->reason=CNK_ARM_UNSUPPORTED;
+   out->pc=cb.function;
+   out->executed=c->executed;
+   return -2;
+  }
+  uint32_t saved_regs[16];
+  memcpy(saved_regs,c->regs,sizeof(saved_regs));
+  const uint32_t saved_cpsr=c->cpsr;
+  c->regs[0]=cb.context;
+  c->regs[1]=0u;c->regs[2]=0u;c->regs[3]=0u;
+  c->regs[14]=CNK_ARM_RETURN_MAGIC;
+  c->regs[15]=code;
+  c->cpsr&=~T;
+  cnk_arm_outcome call_out={0};
+  uint32_t apis_handled=0u;
+  int rc=cnk_zeebx_arm_bootstrap(
+   c,(uint32_t)(budget-(c->executed-start)),&call_out,&apis_handled);
+  /* Host-owned saved ARM registers remain untouched even on faults.
+   * Any guest-memory writes persist, just like real callback execution. */
+  memcpy(c->regs,saved_regs,sizeof(saved_regs));
+  c->cpsr=saved_cpsr;
+  if(rc||call_out.reason!=CNK_ARM_RETURNED){
+   *out=call_out;
+   return rc?-3:-2;
+  }
+  c->signal_pending_head=(c->signal_pending_head+1u)%
+                          CNK_ZEEBX_PENDING_SIGNALS;
+  c->signal_pending_count--;
+  (*delivered)++;
+ }
+ out->reason=c->signal_pending_count?CNK_ARM_BUDGET:CNK_ARM_RETURNED;
+ out->pc=c->regs[15];
+ out->executed=c->executed;
+ return 0;
+}
+
 /* Stage 2 reproduced from Zeebx machine/shell.rs::create_applet:
  * read the guest's actual module pointer and vtable, then call
  * CreateInstance slot #2 using the ARM AAPCS (r0..r3).
