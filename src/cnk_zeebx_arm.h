@@ -35,6 +35,16 @@ typedef struct {
 typedef struct {
  uint32_t index,pressed,at_ms;
 } cnk_zeebx_hid_event;
+#define CNK_ZEEBX_MAX_SIGNALS 16u
+#define CNK_ZEEBX_PENDING_SIGNALS 32u
+typedef struct {
+ uint32_t signal_obj,control_obj,callback,context;
+ uint32_t signal_refs,control_refs;
+ uint8_t enabled,attached;
+} cnk_zeebx_signal;
+typedef struct {
+ uint32_t function,context;
+} cnk_zeebx_signal_callback;
 
 typedef enum {
  CNK_ARM_BUDGET=0, CNK_ARM_API=1, CNK_ARM_RETURNED=2,
@@ -58,6 +68,10 @@ typedef struct {
  cnk_zeebx_pad pad; /* separate from the native driving physics */
  cnk_zeebx_hid_event hid_queue[CNK_ZEEBX_HID_QUEUE];
  uint32_t hid_queue_head,hid_queue_count,hid_events_dropped;
+ cnk_zeebx_signal signals[CNK_ZEEBX_MAX_SIGNALS];
+ cnk_zeebx_signal_callback signal_pending[CNK_ZEEBX_PENDING_SIGNALS];
+ uint32_t signal_count,signal_pending_head,signal_pending_count;
+ uint32_t hid_button_signal,hid_position_signal;
  char last_debug_template[128];
  size_t module_size;
  int initialized,applet_pending;
@@ -75,6 +89,11 @@ int cnk_zeebx_arm_set_virtual_time(cnk_zeebx_arm *cpu,uint32_t elapsed_ms);
 /* A snapshot of the actual Vita controller is passed from the host;
  * virtual BREW input never assumes a pressed button on its own. */
 int cnk_zeebx_arm_set_pad(cnk_zeebx_arm *cpu,const cnk_zeebx_pad *pad);
+/* Execute deferred guest ISignal callbacks ONLY at a safe guest return
+ * boundary. Every callback is budgeted and preserves host guest-register
+ * context. Unresolved calls stop explicitly; this is still experimental. */
+int cnk_zeebx_arm_deliver_signals(cnk_zeebx_arm *cpu,uint32_t budget,
+                                  cnk_arm_outcome *out,uint32_t *delivered);
 /* Returns >=0 for an execution outcome, never runs indefinitely.
  * Caller must handle API outcome; no invented successful BREW replies.
  * Every iteration reuses saved registers, flags and memory state. */

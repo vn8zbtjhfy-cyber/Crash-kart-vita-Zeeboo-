@@ -79,6 +79,10 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
           CNK_ARM_API_BASE+(8u<<12)+i*4u);   /* IHID */
   putword(cpu->vtables+9u*CNK_ARM_VTABLE_STRIDE+4u*i,
           CNK_ARM_API_BASE+(9u<<12)+i*4u);   /* IHIDDevice */
+  putword(cpu->vtables+10u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(10u<<12)+i*4u); /* ISignal */
+  putword(cpu->vtables+11u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(11u<<12)+i*4u); /* ISignalCtl */
   putword(cpu->vtables+12u*CNK_ARM_VTABLE_STRIDE+4u*i,
           CNK_ARM_API_BASE+(12u<<12)+i*4u); /* ISignalCBFactory */
   putword(cpu->vtables+23u*CNK_ARM_VTABLE_STRIDE+4u*i,
@@ -497,6 +501,28 @@ static const uint32_t zeebx_axis_uids[CNK_ZEEBX_PAD_AXES]={
 };
 static const unsigned zeebx_axis_slots[CNK_ZEEBX_PAD_AXES]={1,2,3,6};
 
+static cnk_zeebx_signal *signal_for(cnk_zeebx_arm *c,uint32_t obj){
+ for(unsigned i=0;i<c->signal_count;i++){
+  cnk_zeebx_signal *s=&c->signals[i];
+  if(obj==s->signal_obj&&s->signal_refs)return s;
+  if(obj==s->control_obj&&s->control_refs)return s;
+ }
+ return NULL;
+}
+static int queue_signal(cnk_zeebx_arm *c,uint32_t signal_obj){
+ if(!signal_obj)return 0;
+ cnk_zeebx_signal *s=signal_for(c,signal_obj);
+ if(!s||signal_obj!=s->signal_obj)return -3;
+ if(!s->attached||!s->enabled||!s->callback)return 0;
+ if(c->signal_pending_count>=CNK_ZEEBX_PENDING_SIGNALS)return -2;
+ uint32_t tail=(c->signal_pending_head+c->signal_pending_count)%
+               CNK_ZEEBX_PENDING_SIGNALS;
+ c->signal_pending[tail].function=s->callback;
+ c->signal_pending[tail].context=s->context;
+ c->signal_pending_count++;
+ return 0;
+}
+
 int cnk_zeebx_arm_set_pad(cnk_zeebx_arm *c,const cnk_zeebx_pad *pad){
  if(!c||!c->initialized||!pad||
     (pad->buttons & ~((1u<<CNK_ZEEBX_PAD_BUTTONS)-1u)))return -1;
@@ -504,6 +530,19 @@ int cnk_zeebx_arm_set_pad(cnk_zeebx_arm *c,const cnk_zeebx_pad *pad){
   * HID index order. A still-held button does not repeat each frame.
   * Overflow evicts the oldest event and marks the next read as dropped. */
  uint32_t changed=c->pad.buttons^pad->buttons;
+ int axes_changed=memcmp(c->pad.axes,pad->axes,CNK_ZEEBX_PAD_AXES)!=0;
+ /* A pending callback queue cannot silently lose signals. Reject a host
+  * snapshot BEFORE writing its button events if notifications would not
+  * fit. The input's previous state is then still intact. */
+ unsigned notifications=0;
+ cnk_zeebx_signal *button=signal_for(c,c->hid_button_signal);
+ cnk_zeebx_signal *position=signal_for(c,c->hid_position_signal);
+ if(changed&&button&&button->enabled&&button->attached&&button->callback)
+  notifications++;
+ if(axes_changed&&position&&position->enabled&&position->attached&&
+    position->callback)notifications++;
+ if(notifications>CNK_ZEEBX_PENDING_SIGNALS-c->signal_pending_count)
+  return -2;
  for(unsigned i=0;i<CNK_ZEEBX_PAD_BUTTONS;i++)if(changed&(1u<<i)){
   if(c->hid_queue_count==CNK_ZEEBX_HID_QUEUE){
    c->hid_queue_head=(c->hid_queue_head+1u)%CNK_ZEEBX_HID_QUEUE;
@@ -517,6 +556,10 @@ int cnk_zeebx_arm_set_pad(cnk_zeebx_arm *c,const cnk_zeebx_pad *pad){
   c->hid_queue[tail].at_ms=c->virtual_time_ms;
   c->hid_queue_count++;
  }
+ if(changed&&c->hid_button_signal &&
+    queue_signal(c,c->hid_button_signal))return -2;
+ if(axes_changed&&c->hid_position_signal &&
+    queue_signal(c,c->hid_position_signal))return -2;
  c->pad=*pad;
  return 0;
 }
@@ -606,6 +649,103 @@ static int zeebx_device_input(cnk_zeebx_arm *c,unsigned slot){
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
  return -4;
+}
+
+/* From Zeebx machine/signal.rs and BREW aee_slots.rs. CreateSignal is
+ * five-argument ARM AAPCS: (factory,callback,context,ISignal**,
+ * ISignalCtl**) with the fifth argument on the guest stack.
+ * Callbacks are QUEUED and must be delivered at a safe guest boundary.
+ */
+static int zeebx_signal_api(cnk_zeebx_arm *c,unsigned iface,unsigned slot){
+ const uint32_t self=c->regs[0];
+ uint32_t vtbl=0;
+ if(load(c,self,4u,&vtbl)||
+    vtbl!=CNK_ARM_VTABLE_BASE+iface*CNK_ARM_VTABLE_STRIDE)
+  return -3;
+ if(iface==12u&&slot==3u){
+  const uint32_t out_signal=c->regs[3];
+  uint32_t out_control=0;
+  if(load(c,c->regs[13],4u,&out_control))return -3;
+  if((out_signal&&((out_signal&3u)||!map(c,out_signal,4u,1)))||
+     (out_control&&((out_control&3u)||!map(c,out_control,4u,1))))
+   return -3;
+  if(c->signal_count>=CNK_ZEEBX_MAX_SIGNALS||
+     c->object_cursor>OBJECT_BYTES-128u)return -2;
+  const uint32_t s=CNK_ARM_OBJECT_BASE+c->object_cursor,ctl=s+64u;
+  if(store(c,s,4u,CNK_ARM_VTABLE_BASE+10u*CNK_ARM_VTABLE_STRIDE)||
+     store(c,ctl,4u,CNK_ARM_VTABLE_BASE+11u*CNK_ARM_VTABLE_STRIDE))
+   return -3;
+  if(out_signal&&store(c,out_signal,4u,s))return -3;
+  if(out_control&&store(c,out_control,4u,ctl))return -3;
+  cnk_zeebx_signal *binding=&c->signals[c->signal_count++];
+  binding->signal_obj=s;binding->control_obj=ctl;
+  binding->callback=c->regs[1];binding->context=c->regs[2];
+  binding->signal_refs=1u;binding->control_refs=1u;
+  binding->attached=1u;binding->enabled=1u;
+  c->object_cursor+=128u;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(iface!=10u&&iface!=11u)return -4;
+ cnk_zeebx_signal *s=signal_for(c,self);
+ if(!s)return -3;
+ uint32_t *refs=iface==10u?&s->signal_refs:&s->control_refs;
+ if(slot==0u){ /* AddRef */
+  if(*refs==UINT32_MAX)return -2;
+  (*refs)++;
+  return cnk_zeebx_arm_return_from_api(c,*refs);
+ }
+ if(slot==1u){ /* Release */
+  if(!*refs)return -3;
+  (*refs)--;
+  if(iface==10u&&!*refs){
+   s->attached=0u;
+   if(c->hid_button_signal==self)c->hid_button_signal=0u;
+   if(c->hid_position_signal==self)c->hid_position_signal=0u;
+  }
+  return cnk_zeebx_arm_return_from_api(c,*refs);
+ }
+ if(slot==2u){ /* QueryInterface: Zeebx reuses the same object */
+  const uint32_t out=c->regs[2];
+  if(out&&((out&3u)||!map(c,out,4u,1)))return -3;
+  if(out&&store(c,out,4u,self))return -3;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(slot==3u){ /* ISignal/ISignalCtl::Set */
+  const int rc=queue_signal(c,s->signal_obj);
+  if(rc)return rc;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(iface==11u&&slot==4u){ /* ISignalCtl::Detach */
+  s->attached=0u;
+  if(c->hid_button_signal==s->signal_obj)c->hid_button_signal=0u;
+  if(c->hid_position_signal==s->signal_obj)c->hid_position_signal=0u;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(iface==11u&&slot==5u){ /* ISignalCtl::Enable */
+  s->enabled=1u;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ return -4;
+}
+static int zeebx_register_pad_signal(cnk_zeebx_arm *c,unsigned slot){
+ const uint32_t device=c->regs[0],signal=c->regs[1];
+ uint32_t vtbl=0;
+ if(load(c,device,4u,&vtbl)||
+    vtbl!=CNK_ARM_VTABLE_BASE+9u*CNK_ARM_VTABLE_STRIDE)
+  return -3;
+ if(signal){
+  cnk_zeebx_signal *s=signal_for(c,signal);
+  if(!s || s->signal_obj!=signal)return -3;
+ }
+ /* Zeebx sends an initial position callback even when the stick has not
+  * moved: games need this to calibrate the axis UID/range at startup. */
+ if(slot==14u&&signal){
+  const int rc=queue_signal(c,signal);
+  if(rc)return rc;
+ }
+ if(slot==8u)c->hid_button_signal=signal;
+ else c->hid_position_signal=signal;
+ return cnk_zeebx_arm_return_from_api(c,0u);
 }
 
 int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
@@ -809,6 +949,11 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   }
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
+ if((iface==12u&&slot==3u) ||
+    ((iface==10u||iface==11u)&&slot<=5u))
+  return zeebx_signal_api(c,iface,slot);
+ if(iface==9u&&(slot==8u||slot==14u))
+  return zeebx_register_pad_signal(c,slot);
  if(iface==9u && (slot==6u||slot==7u||slot==9u||
                    (slot>=10u&&slot<=13u)))
   return zeebx_device_input(c,slot);
@@ -914,6 +1059,73 @@ int cnk_zeebx_arm_bootstrap(cnk_zeebx_arm *c,uint32_t budget,
    *out=step_out;return 0;
   }
  }
+}
+
+/* Zeebx machine/signal.rs: deferred guest callback delivery, only AFTER
+ * the original guest has returned to its host. Reentering while executing
+ * BREW dispatch would corrupt ARM AAPCS registers and game callbacks.
+ * Neither an unknown callback address nor an unresolved BREW API may be
+ * interpreted as success. All callbacks are bounded by the caller's budget.
+ */
+int cnk_zeebx_arm_deliver_signals(cnk_zeebx_arm *c,uint32_t budget,
+                                  cnk_arm_outcome *out,uint32_t *delivered){
+ if(!c||!out||!delivered||!c->initialized||!budget||
+    budget>10000000u||c->regs[15]!=CNK_ARM_RETURN_MAGIC)
+  return -1;
+ *delivered=0u;
+ memset(out,0,sizeof(*out));
+ const uint64_t start=c->executed;
+ while(c->signal_pending_count && c->executed-start<budget){
+  const cnk_zeebx_signal_callback cb=
+   c->signal_pending[c->signal_pending_head];
+  const uint32_t code=cb.function&~1u;
+  const uint64_t exec_end=(uint64_t)CNK_ARM_MOD_BASE+
+                           c->module_size-CNK_ARM_MOD_PREFIX;
+  /* The adapted interpreter does not yet execute guest THUMB.
+   * A malformed function pointer stops BEFORE touching registers. */
+  if((cb.function&1u)||(code&3u)||code<CNK_ARM_MOD_BASE||
+     (uint64_t)code+4u>exec_end){
+   out->reason=CNK_ARM_UNSUPPORTED;
+   out->pc=cb.function;
+   out->executed=c->executed;
+   return -2;
+  }
+  uint32_t saved_regs[16];
+  memcpy(saved_regs,c->regs,sizeof(saved_regs));
+  const uint32_t saved_cpsr=c->cpsr;
+  c->regs[0]=cb.context;
+  c->regs[1]=0u;c->regs[2]=0u;c->regs[3]=0u;
+  c->regs[14]=CNK_ARM_RETURN_MAGIC;
+  c->regs[15]=code;
+  c->cpsr&=~T;
+  cnk_arm_outcome call_out={0};
+  uint32_t apis_handled=0u;
+  int rc=cnk_zeebx_arm_bootstrap(
+   c,(uint32_t)(budget-(c->executed-start)),&call_out,&apis_handled);
+  /* When BX LR is the last budgeted guest ARM instruction, bootstrap
+   * reports BUDGET before performing another sentinel check. The
+   * instruction HAS reached the return sentinel, so count this callback
+   * as completed instead of losing its event or replaying it next time. */
+  if(!rc && call_out.reason==CNK_ARM_BUDGET &&
+     c->regs[15]==CNK_ARM_RETURN_MAGIC)
+    call_out.reason=CNK_ARM_RETURNED;
+  /* Host-owned saved ARM registers remain untouched even on faults.
+   * Any guest-memory writes persist, just like real callback execution. */
+  memcpy(c->regs,saved_regs,sizeof(saved_regs));
+  c->cpsr=saved_cpsr;
+  if(rc||call_out.reason!=CNK_ARM_RETURNED){
+   *out=call_out;
+   return rc?-3:-2;
+  }
+  c->signal_pending_head=(c->signal_pending_head+1u)%
+                          CNK_ZEEBX_PENDING_SIGNALS;
+  c->signal_pending_count--;
+  (*delivered)++;
+ }
+ out->reason=c->signal_pending_count?CNK_ARM_BUDGET:CNK_ARM_RETURNED;
+ out->pc=c->regs[15];
+ out->executed=c->executed;
+ return 0;
 }
 
 /* Stage 2 reproduced from Zeebx machine/shell.rs::create_applet:

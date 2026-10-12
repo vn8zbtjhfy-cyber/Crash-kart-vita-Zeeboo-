@@ -177,9 +177,9 @@ int main(void){
  expect_success(&c);
  assert(at(&c,dropped)==0u);
  /* An actually unimplemented BREW method remains an explicit trap. */
- api(&c,dev,9u,8u,info,stamp);
+ api(&c,dev,9u,15u,info,stamp);
  assert(!cnk_zeebx_arm_bootstrap(&c,12u,&out,&handled));
- assert(out.reason==CNK_ARM_API&&out.api_slot==8u);
+ assert(out.reason==CNK_ARM_API&&out.api_slot==15u);
 
  cnk_zeebx_pad invalid=active;
  invalid.buttons=1u<<18;

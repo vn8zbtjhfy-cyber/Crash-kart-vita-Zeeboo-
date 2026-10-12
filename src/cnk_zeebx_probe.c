@@ -42,8 +42,9 @@ static int probe_internal(const char *mod_path,const char *mif_path,
  size_t mod_bytes=0,mif_bytes=0;
  cnk_brew_mif_info manifest={0};
  cnk_zeebx_arm cpu={0};
- cnk_arm_outcome load_out={0},applet_out={0};
- uint32_t module_calls=0,applet_calls=0;
+ cnk_arm_outcome load_out={0},applet_out={0},signal_out={0};
+ uint32_t module_calls=0,applet_calls=0,callbacks_delivered=0u;
+ int callback_probe_rc=0,callback_probe_attempted=0;
  uint32_t modptr=0,apptr=0,guest_entry=0,clsid=0;
  int started=0,module_ok=0,applet_ok=0,prep=-1;
  if(!result)return -1;
@@ -88,6 +89,15 @@ static int probe_internal(const char *mod_path,const char *mif_path,
    *result=applet_out;
   }
  }
+ /* Only at the original applet's verified guest return boundary.
+  * Pending BREW HID notifications are deferred and executed as guest ARM,
+  * not host-native function pointers. A failed callback is reported,
+  * never silently treated as a playable successful launch. */
+ if(applet_ok && cpu.signal_pending_count){
+  callback_probe_attempted=1;
+  callback_probe_rc=cnk_zeebx_arm_deliver_signals(
+   &cpu,budget,&signal_out,&callbacks_delivered);
+ }
  FILE *report=fopen(report_path,"wb");
  if(!report){cnk_zeebx_arm_destroy(&cpu);return -8;}
  int length=fprintf(report,
@@ -101,6 +111,9 @@ static int probe_internal(const char *mod_path,const char *mif_path,
   "applet_apis_handled=%u\napplet_ptr=0x%08x\n"
   "applet_created=%s\nsource_display_instances=%u\n"
   "source_filemgr_instances=%u\nguest_dbgprintf_calls=%u\n"
+  "signal_callbacks_attempted=%s\nsignal_callbacks_delivered=%u\n"
+  "signal_callbacks_remaining=%u\nsignal_dispatch_code=%d\n"
+  "signal_dispatch_reason=%s\n"
   "genuine_game_playable=NO\n",
   (unsigned long)mod_bytes,reason_name(load_out.reason),
   (unsigned long long)load_out.executed,load_out.pc,
@@ -110,7 +123,10 @@ static int probe_internal(const char *mod_path,const char *mif_path,
   (started&&!prep)?reason_name(applet_out.reason):"NOT_RUN",
   (unsigned long long)applet_out.executed,applet_out.api_interface,
   applet_out.api_slot,applet_calls,apptr,applet_ok?"YES":"NO",
-  cpu.display_objects,cpu.filemgr_objects,cpu.debug_calls);
+  cpu.display_objects,cpu.filemgr_objects,cpu.debug_calls,
+  callback_probe_attempted?"YES":"NO",callbacks_delivered,
+  cpu.signal_pending_count,callback_probe_rc,
+  callback_probe_attempted?reason_name(signal_out.reason):"NOT_RUN");
  int closed=fclose(report);
  cnk_zeebx_arm_destroy(&cpu);
  return (length<0||closed)?-9:0;
