@@ -77,6 +77,8 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
    * until ported, rather than pretending graphics or HID are working. */
   putword(cpu->vtables+8u*CNK_ARM_VTABLE_STRIDE+4u*i,
           CNK_ARM_API_BASE+(8u<<12)+i*4u);   /* IHID */
+  putword(cpu->vtables+9u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(9u<<12)+i*4u);   /* IHIDDevice */
   putword(cpu->vtables+12u*CNK_ARM_VTABLE_STRIDE+4u*i,
           CNK_ARM_API_BASE+(12u<<12)+i*4u); /* ISignalCBFactory */
   putword(cpu->vtables+23u*CNK_ARM_VTABLE_STRIDE+4u*i,
@@ -629,6 +631,71 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   if(store(c,out_ptr,4u,c->screen_bitmap_addr))return -3;
   c->screen_bitmap_references++;
   return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ /* Zeebx machine/hid.rs with ONE console controller provided by Vita.
+  * The actual button event/position bridge is not connected yet.
+  * GetConnectedDevices has a 5th AAPCS parameter on the guest stack:
+  * handle type (r1), handle array (r2), array capacity (r3), needed
+  * count (sp+0). Validate every guest write before changing memory. */
+ if(iface==8u && slot==7u){ /* IHID::GetConnectedDevices */
+  const uint32_t wanted=c->regs[1],handles=c->regs[2],capacity=c->regs[3];
+  uint32_t needed_ptr=0;
+  if(load(c,c->regs[13],4u,&needed_ptr))return -3;
+  const uint32_t found=wanted==0x0106c3fdu?1u:0u;
+  if((needed_ptr&&!map(c,needed_ptr,4u,1))||
+     (found&&capacity&&handles&&!map(c,handles,4u,1)))
+   return -3;
+  if(needed_ptr && store(c,needed_ptr,4u,found))return -3;
+  if(found&&capacity&&handles && store(c,handles,4u,1u))return -3;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(iface==8u && slot==3u){ /* IHID::CreateDevice */
+  const uint32_t handle=c->regs[1],out=c->regs[2];
+  uint32_t vtbl=0;
+  if(handle!=1u||!out || load(c,c->regs[0],4u,&vtbl)||
+     vtbl!=CNK_ARM_VTABLE_BASE+8u*CNK_ARM_VTABLE_STRIDE ||
+     !map(c,out,4u,1))return -3;
+  if(c->object_cursor>OBJECT_BYTES-64u)return -2;
+  const uint32_t dev=CNK_ARM_OBJECT_BASE+c->object_cursor;
+  if(store(c,dev,4u,CNK_ARM_VTABLE_BASE+9u*CNK_ARM_VTABLE_STRIDE)||
+     store(c,out,4u,dev))return -3;
+  c->object_cursor+=64u;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ /* 12 bytes: AEEUID joystick, USB product ID, USB vendor ID,
+  * bluetooth boolean, sourced from Zeebx's Zeebo controller descriptor. */
+ if((iface==8u && slot==4u)||(iface==9u && slot==3u)){
+  uint32_t vtbl=0;
+  const uint32_t obj=c->regs[0];
+  const uint32_t out=iface==8u?c->regs[2]:c->regs[1];
+  const uint32_t handle=iface==8u?c->regs[1]:1u;
+  if(handle!=1u||load(c,obj,4u,&vtbl)||
+     vtbl!=CNK_ARM_VTABLE_BASE+iface*CNK_ARM_VTABLE_STRIDE||
+     (out&&!map(c,out,12u,1)))return -3;
+  if(out){
+   uint8_t *dst=map(c,out,12u,1);
+   putword(dst,0x0106c3fdu);
+   dst[4]=0x35u;dst[5]=0x01u; /* product 0x0135 */
+   dst[6]=0xaau;dst[7]=0x1eu; /* vendor 0x1eaa */
+   putword(dst+8u,0u);
+  }
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(iface==9u && slot==4u){ /* IHIDDevice::GetDeviceStatus */
+  uint32_t vtbl=0;
+  const uint32_t out=c->regs[1];
+  if(load(c,c->regs[0],4u,&vtbl)||
+     vtbl!=CNK_ARM_VTABLE_BASE+9u*CNK_ARM_VTABLE_STRIDE||
+     (out&&!map(c,out,4u,1)))return -3;
+  if(out&&store(c,out,4u,1u))return -3; /* CONNECTED */
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(iface==8u&&slot==5u){ /* no new connection events */
+  for(unsigned i=1u;i<=3u;i++)if(c->regs[i]&&!map(c,c->regs[i],4u,1))
+   return -3;
+  for(unsigned i=1u;i<=3u;i++)if(c->regs[i] &&
+      store(c,c->regs[i],4u,0u))return -3;
+  return cnk_zeebx_arm_return_from_api(c,1u); /* BREW EFAILED = empty */
  }
  /* The original CNK applet reaches this exact diagnostic helper twice.
   * Zeebx returns AEE_SUCCESS after recording formatted debug text.
