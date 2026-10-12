@@ -850,13 +850,12 @@ else()
           CACHE STRING "VitaSDK libraries required by ELF link check")
       add_executable(cnk_vita_elf_link_check src/vita_main.c)
       if(CNK_ENABLE_VITA_DIAGNOSTIC_VPK)
-        # Vita SDK toolchain issue #150: vita-elf-create appends SCE import
-        # data into RX PT_LOAD and fails if the following RW PT_LOAD is too
-        # close. 64 KiB default gave no gap for this particular binary;
-        # place segments on distinct 1 MiB boundaries *for diagnostics*.
-        # Validate readelf LOAD headers and vita-elf-create in GitHub CI.
+        # VitaSDK binutils linker reserves first PT_LOAD room for SCE metadata
+        # through __sce_headroom (upstream vita-toolchain issue #303 and
+        # buildscripts issue #186). Do NOT fake a giant segment alignment:
+        # it caused overlapping sections in vita-elf-create.
         target_link_options(cnk_vita_elf_link_check PRIVATE
-                            "-Wl,-z,max-page-size=0x100000")
+                            "-Wl,--defsym=__sce_headroom=0x10000")
       endif()
       target_link_libraries(cnk_vita_elf_link_check PRIVATE
           cnk_vita_backend cnk_native_core ${CNK_VITA_LINK_LIBS})
