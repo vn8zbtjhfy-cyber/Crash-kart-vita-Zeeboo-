@@ -162,6 +162,24 @@ int main(void){
  assert(out.reason==CNK_ARM_API&&out.api_interface==9u&&out.api_slot==8u);
  assert(c.hid_button_signal==0u);
 
+ /* A guest callback outside the executable module is never allowed to
+  * execute. Its pending event and the saved guest ARM context are intact
+  * for diagnosis; no bogus success or native function-pointer jump. */
+ put(c.stack+stack_slot,out_control);
+ call(&c,12u,3u,factory,0x50000000u,context,out_signal);
+ success(&c);
+ const uint32_t invalid_signal=get(&c,out_signal);
+ call(&c,10u,3u,invalid_signal,0u,0u,0u);
+ success(&c);
+ assert(c.signal_pending_count==1u);
+ memcpy(saved_regs,c.regs,sizeof(saved_regs));
+ const uint32_t final_cpsr=c.cpsr;
+ assert(cnk_zeebx_arm_deliver_signals(&c,100u,&out,&n)==-2);
+ assert(out.reason==CNK_ARM_UNSUPPORTED&&out.pc==0x50000000u);
+ assert(c.signal_pending_count==1u&&n==0u);
+ assert(!memcmp(saved_regs,c.regs,sizeof(saved_regs)));
+ assert(c.cpsr==final_cpsr&&get(&c,context)==42u);
+
  cnk_zeebx_arm_destroy(&c);
  puts("PASS: Zeebx guest CreateSignal AAPCS, deferred ARM callbacks, register preservation, HID notifications, finite queue, detach");
  return 0;
