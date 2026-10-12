@@ -293,8 +293,10 @@ int main(void){
      CNK_ARM_HEAP_BYTES-4u); /* incomplete guest index buffer */
  trap(&cpu,24u,27u);
  cpu.heap[io]=0xffu;cpu.heap[io+1u]=0xffu; /* valid u16, invalid vertex */
+ cpu.gl_vertex_pointer=CNK_ARM_HEAP_BASE+CNK_ARM_HEAP_BYTES-48u;
  api(&cpu,24u,27u,4u,3u,0x1403u,ibase);
  trap(&cpu,24u,27u);
+ cpu.gl_vertex_pointer=base;
  cpu.heap[io]=2u;cpu.heap[io+1u]=0u;
  /* Invalid guest vertex (NaN) must prevent even an indexed draw. */
  guest_float(&cpu,base+4u,__builtin_nanf(""));
