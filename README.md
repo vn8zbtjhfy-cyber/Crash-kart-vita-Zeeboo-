@@ -1,5 +1,19 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 127: configuración gráfica EGL original de Zeebo
+
+- Primeras llamadas de la **interfaz antigua IEGL** recuperadas desde Zeebx:
+  pantalla Zeebo, inicialización, configuración RGB565 640×480,
+  selección de formatos, cadenas y errores EGL.
+- Conserva la ABI correcta de `AEEGL.h`, incluidos argumentos que
+  vienen de la pila virtual. No presume que el GPU ya dibuje.
+- **31/31 pruebas automáticas sin ROM**:
+  [CI EGL Zeebx](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38201900590).
+- **Pendiente crítico**: contextos y dibujo OpenGL ES/vitaGL, juego
+  original en ejecución continua y validación en consola. No hay juego
+  final jugable ni recursos propietarios públicos.
+- [Informe técnico del avance 127](docs/AVANCE_127_ZEEBX_EGL_LEGACY.md).
+
 Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **Todavía no es un videojuego completo ni se ha verificado su ejecución en consola.**
 
 ## Avances 125-126: puente Zeebx HID y entrada física Vita (experimental)
