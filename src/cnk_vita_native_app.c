@@ -20,6 +20,7 @@
 #include "cnk_driver_bindings.h"
 #include "cnk_results_text.h"
 #include "cnk_race_hud_text.h"
+#include "cnk_vitagl_ui_art.h"
 #include "cnk_lang.h"
 #include "cnk_verified_characters.h"
 #include "cnk_character_gallery.h"
@@ -142,7 +143,8 @@ static void debug_minimap(const cnk_minimap_frame *map){
 }
 /* Original-style screen regions, but still a DEVELOPMENT 5x7 font.
  * Never claim to have recovered original Zeebo HUD sprites or layout. */
-static void race_hud_compact(const cnk_app_snapshot *snap,int tilt_enabled){
+static void race_hud_compact(const cnk_app_snapshot *snap,int tilt_enabled,
+                             const cnk_vitagl_ui_art *ui_art){
  cnk_race_hud_text text={0};
  if(cnk_race_hud_text_build(&snap->hud,snap->player_items.wumpa,&text))
   return;
@@ -200,10 +202,13 @@ static void race_hud_compact(const cnk_app_snapshot *snap,int tilt_enabled){
   text5((960.f-6.f*scale*(float)strlen(message))*.5f,218.f,scale,message);
  }
  if(snap->minimap.path_count)debug_minimap(&snap->minimap);
+ (void)cnk_vitagl_ui_art_draw(ui_art,CNK_SOURCE_UI_WUMPA,
+                              728.f,50.f,25.f,25.f);
 }
 static void debug_overlay(const cnk_app_snapshot *snap,int draw_rc,int gallery_on,
                           int kart_gallery_on,unsigned kart_lod,const cnk_lang_pack *lang,
-                          int dev_visual_preview,int tilt_enabled){
+                          int dev_visual_preview,int tilt_enabled,
+                          const cnk_vitagl_ui_art *ui_art){
  char a[120],b[120],c[120];
  if(snap->state==CNK_FRONTEND_SELECT){
   const char *track=cnk_lang_text(lang,29); /* Zeebo LANG ordinal: SELECT TRACK */
@@ -268,7 +273,7 @@ static void debug_overlay(const cnk_app_snapshot *snap,int draw_rc,int gallery_o
   glDisable(GL_BLEND);
  }
  if(snap->state==CNK_FRONTEND_RACE && snap->has_hud){
-  race_hud_compact(snap,tilt_enabled);
+  race_hud_compact(snap,tilt_enabled,ui_art);
   glMatrixMode(GL_MODELVIEW);glPopMatrix();
   glMatrixMode(GL_PROJECTION);glPopMatrix();
   glMatrixMode(GL_MODELVIEW);
@@ -280,6 +285,12 @@ static void debug_overlay(const cnk_app_snapshot *snap,int draw_rc,int gallery_o
  text5(18,10,2.0f,"CRASH NITRO KART 3D - NATIVE DEVELOPMENT");
  text5(18,34,2.0f,a);
  text5(18,58,2.0f,b);
+ /* The actual Zeebo logo is loaded from the user-owned FUFS archive,
+  * authenticated by its source index, resource ID and exact PNG CRC.
+  * Never show a guessed sprite on a mismatched game build. */
+ if(snap->state==CNK_FRONTEND_SELECT)
+  (void)cnk_vitagl_ui_art_draw(ui_art,CNK_SOURCE_UI_TITLE,
+                               679.f,120.f,261.f,126.f);
  /* A completed, authenticated DEV Story can be reviewed after restarting.
   * No fabricated original Zeebo campaign chapters are implied. */
  if(snap->state==CNK_FRONTEND_SELECT && snap->has_completed_story){
@@ -542,6 +553,7 @@ int cnk_vita_native_run_with_kart_skins(const char *vfs_path,
  unsigned gallery_angle_step=0;
  cnk_vitagl_textures track_textures={0};
  cnk_vitagl_textures item_textures={0};
+ cnk_vitagl_ui_art ui_art={0};
  int item_textures_active=0;
  cnk_vita_audio_worker audio={0};
  cnk_sound_cues cues={0};
@@ -724,6 +736,10 @@ int cnk_vita_native_run_with_kart_skins(const char *vfs_path,
  if(cnk_vita_controls_init()<0){result=-3;goto cleanup;}
  vglInit(0x800000u);
  gpu_started=1;
+ /* Original Zeebo interface artwork is optional and never packaged.
+  * Failure leaves the existing text UI fully functional. */
+ if(cnk_vitagl_ui_art_load(&ui_art,&vfs))
+  fprintf(stderr,"CNK: original UI sprites unavailable; text HUD retained\\n");
  /* Optional verified original PNG indices for live item actors. No entry
   * = explicit untextured development markers, never a fake Zeebo sprite. */
  FILE *item_probe=fopen("app0:/verified_item_textures.tsv","rb");
@@ -929,7 +945,7 @@ int cnk_vita_native_run_with_kart_skins(const char *vfs_path,
    * particular, do not submit an incomplete display list to the GPU. */
   if(draw_rc){result=-47;break;}
   debug_overlay(&snapshot,draw_rc,have_gallery,have_kart_gallery,
-                gallery_lod,&native_lang,preview_active,motion.sampling);
+                gallery_lod,&native_lang,preview_active,motion.sampling,&ui_art);
   /* GL errors (for example, exhausted video memory) do not necessarily
    * change a draw function's return value. Diagnose them before swapping;
    * cleanup below still owns and releases the scene and texture handles. */
@@ -952,6 +968,7 @@ cleanup:
   cnk_sound_cues_close(&cues);
  }
  if(gpu_started){
+  cnk_vitagl_ui_art_free(&ui_art);
   cnk_vitagl_textures_free(&track_textures);
   cnk_vitagl_textures_free(&item_textures);
   cnk_character_pack_free(&character_pack);
