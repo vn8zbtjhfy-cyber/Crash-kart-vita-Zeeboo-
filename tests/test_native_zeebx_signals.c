@@ -140,6 +140,10 @@ int main(void){
  assert(!cnk_zeebx_arm_bootstrap(&c,24u,&out,&handled));
  assert(out.reason==CNK_ARM_API&&out.api_interface==10u&&out.api_slot==3u);
  assert(c.signal_pending_count==CNK_ZEEBX_PENDING_SIGNALS);
+ /* A failed API must be explicitly returned as BREW EFAILED before the
+  * host is at a legal callback-delivery boundary. No silent success. */
+ assert(!cnk_zeebx_arm_return_from_api(&c,1u));
+ assert(c.regs[15]==CNK_ARM_RETURN_MAGIC);
  assert(!cnk_zeebx_arm_deliver_signals(&c,30u,&out,&n));
  assert(out.reason==CNK_ARM_BUDGET&&n==10u);
  assert(!cnk_zeebx_arm_deliver_signals(&c,100u,&out,&n));
