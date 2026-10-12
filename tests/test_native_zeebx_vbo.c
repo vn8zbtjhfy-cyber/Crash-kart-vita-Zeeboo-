@@ -91,7 +91,10 @@ int main(void){
  assert(!cnk_zeebx_arm_read_u32(&cpu,names,&vbo));
  assert(!cnk_zeebx_arm_read_u32(&cpu,names+4u,&ibo));
  assert(vbo&&ibo&&vbo!=ibo);
+ api(&cpu,137u,vbo,0u,0u,0u);assert(invoke(&cpu)==0u);
+ /* Generated name exists but is not a buffer until its first Bind. */
  api(&cpu,119u,0x8892u,vbo,0u,0u);assert(invoke(&cpu)==0u);
+ api(&cpu,137u,vbo,0u,0u,0u);assert(invoke(&cpu)==1u);
  assert(cpu.gl_array_buffer==vbo);
  /* Valid VBO memory is wholly private, with 9 fixed XYZ words at offset 0,
   * and UV at offset 64; subdata fills a null-initialized BufferData. */
