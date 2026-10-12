@@ -4,7 +4,7 @@
 
 /* Locate a user-provided FUFS archive without distributing source assets.
  * Returns one of the supplied string pointers, or NULL if none appears to
- * contain a FUFS header. The full archive is validated later by fufs_open(). */
+ * have valid FUFS directory bounds; payloads are not decompressed here.\n * fufs_open() performs full loading and additional checks at game startup. */
 const char *cnk_vita_source_select(const char *const *candidates,size_t count);
 
 /* Preferred external location for the original user-owned data.vfs:
