@@ -1,13 +1,15 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
-Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **No es todavía un juego completo ni hay un VPK verificado.**
+Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **Todavía no es un videojuego completo ni se ha verificado su ejecución en consola.**
 
-## Avance 108 (11 de octubre de 2026)
+## Avance 110 (11 de octubre de 2026)
 
-- **Primer enlace de ejecutable ELF para ARM/PS Vita aprobado:** GitHub Actions [38185478090](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38185478090), commit `4e2d24e`.
-- **Auditoría ARM y archivo ELF de diagnóstico aprobados:** GitHub Actions [38185657768](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38185657768), commit `8c18777`. Se verificaron `ELF32`, `ARM`, `main` y `cnk_vita_native_run`. El ejecutable no es instalable; el artefacto expira según la política de retención.
-- **129 de 129 pruebas de PC locales pasaron**, incluida la prueba del bucle nativo simulado y liberación de texturas. La validación automática de GitHub **sin ROM** ya pasó con **10 pruebas** (incluidos diagnósticos y seguridad del ZIP), ejecución [38185881976](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38185881976); no equivale a probar una Vita real.
-- Corregidas dependencias de enlace: `vitaGL`, `stdc++`, `mathneon`, `taihen_stub` y stubs del sistema, además de la llamada obsoleta `vglEnd()`.
+- **130/130 pruebas de PC Release** con los recursos privados y **2/2 pruebas seleccionadas ASan/UBSan** para el control del mando y el bucle de Vita.
+- **11/11 pruebas de PC sin ROM aprobadas en GitHub Actions**, incluyendo telemetría y diagnóstico: [ejecución 38186433951](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38186433951).
+- **VitaSDK aprobó la compilación y enlace ARM ELF** para la versión del avance 110: [ejecución 38186433962](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38186433962), commit `bdc6825`.
+- Avance 109: recopilación mínima de rendimiento en `ux0:data/cnk3d_perf.txt` para que, **cuando pueda ejecutarse en Vita**, podamos medir cuadros, tirones y suspensiones sin confundirlos con fallos de renderizado.
+- Avance 110: la lectura del mando tolera hasta siete muestras vacías seguidas con **entrada neutral**, recupera tras la siguiente lectura válida y rechaza fallos persistentes o errores reales.
+- Ver `docs/AVANCE_108_ENLACE_ARM_ELF.md`, `docs/AVANCE_109_TELEMETRIA_RENDIMIENTO.md` y `docs/AVANCE_110_CONTROLES_MUESTRAS_VITA.md`.
 
 ## Qué todavía falta
 
