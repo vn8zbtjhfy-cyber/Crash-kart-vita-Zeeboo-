@@ -670,7 +670,7 @@ if(NOT DEFINED ENV{VITASDK})
   add_executable(cnk_test_vita_source_path tests/test_native_vita_source_path.c)
   target_link_libraries(cnk_test_vita_source_path PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_vita_source_path PRIVATE -UNDEBUG -Wall -Wextra -Werror)
-  add_test(NAME vita_source_path COMMAND cnk_test_vita_source_path)
+  add_test(NAME vita_source_path COMMAND cnk_test_vita_source_path "${CMAKE_CURRENT_SOURCE_DIR}/data.vfs")
 
   add_executable(cnk_test_vita_telemetry tests/test_native_vita_telemetry.c)
   target_link_libraries(cnk_test_vita_telemetry PRIVATE cnk_native_core z m)
