@@ -343,6 +343,28 @@ static cnk_arm_reason step(cnk_zeebx_arm *c,uint32_t *bad){
   c->regs[15]=pc+4u;
   return CNK_ARM_BUDGET;
  }
+ /* ARMv5 PSR transfers are used by BREW startup code. In user mode
+  * only the CPSR flag byte can be written; banked SPSR and privileged
+  * control fields remain explicitly unsupported. */
+ if((op&0x0fbf0fffu)==0x010f0000u){ /* MRS Rd,CPSR */
+  unsigned rd=(op>>12)&15u;
+  if((op&(1u<<22))||rd==15u)return CNK_ARM_UNSUPPORTED;
+  c->regs[rd]=c->cpsr;
+  c->regs[15]=pc+4u;
+  return CNK_ARM_BUDGET;
+ }
+ if((op&0x0fb0fff0u)==0x0120f000u ||
+    (op&0x0fb0f000u)==0x0320f000u){ /* MSR CPSR_f,reg/imm */
+  unsigned fields=(op>>16)&15u;
+  int immediate=(op&(1u<<25))!=0;
+  if((op&(1u<<22))||fields!=8u||
+     (!immediate&&(op&15u)==15u))return CNK_ARM_UNSUPPORTED;
+  uint32_t value=immediate?
+   ror32(op&255u,((op>>8)&15u)*2u):regval(c,op&15u,pc);
+  c->cpsr=(c->cpsr&~0xf8000000u)|(value&0xf8000000u);
+  c->regs[15]=pc+4u;
+  return CNK_ARM_BUDGET;
+ }
  if(family<=1u){ /* ARM data processing, Zeebx ALU and shifter */
   int immediate=(op&(1u<<25))!=0;
   unsigned opcode=(op>>21)&15u, rn=(op>>16)&15u,rd=(op>>12)&15u;

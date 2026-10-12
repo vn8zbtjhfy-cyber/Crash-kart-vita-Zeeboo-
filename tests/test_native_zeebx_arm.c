@@ -99,6 +99,38 @@ int main(void){
  assert(out.reason==CNK_ARM_FAULT&&out.address==CNK_ARM_STACK_BASE);
  cnk_zeebx_arm_destroy(&cpu);
 
+ /* ARMv5 MRS/MSR regression, without any original game code.
+  * These used to stop as unsupported even for legal CPSR flag access. */
+ memset(module,0,sizeof(module));
+ word(module+ 0,0xe328f102u); /* MSR CPSR_f,#0x80000000 */
+ word(module+ 4,0xe10f2000u); /* MRS r2,CPSR */
+ word(module+ 8,0xe128f000u); /* MSR CPSR_f,r0 */
+ word(module+12,0xe10f3000u); /* MRS r3,CPSR */
+ word(module+16,0xe12fff1eu); /* BX lr */
+ assert(!cnk_zeebx_arm_init(&cpu,module,sizeof(module)));
+ assert(!cnk_zeebx_arm_run(&cpu,16,&out));
+ assert(out.reason==CNK_ARM_RETURNED&&out.executed==5u);
+ assert(cpu.regs[2]==0x80000010u);
+ assert(cpu.regs[3]==0x30000010u);
+ assert(cpu.cpsr==0x30000010u);
+ cnk_zeebx_arm_destroy(&cpu);
+
+ memset(module,0,sizeof(module));
+ word(module+0,0xe14f2000u); /* MRS r2,SPSR: no user-mode SPSR */
+ assert(!cnk_zeebx_arm_init(&cpu,module,sizeof(module)));
+ assert(!cnk_zeebx_arm_run(&cpu,4,&out));
+ assert(out.reason==CNK_ARM_UNSUPPORTED&&out.executed==0u);
+ assert(out.opcode==0xe14f2000u);
+ cnk_zeebx_arm_destroy(&cpu);
+
+ memset(module,0,sizeof(module));
+ word(module+0,0xe121f000u); /* MSR CPSR_c,r0: privileged field */
+ assert(!cnk_zeebx_arm_init(&cpu,module,sizeof(module)));
+ assert(!cnk_zeebx_arm_run(&cpu,4,&out));
+ assert(out.reason==CNK_ARM_UNSUPPORTED&&out.executed==0u);
+ assert(out.opcode==0xe121f000u);
+ cnk_zeebx_arm_destroy(&cpu);
+
  puts("PASS: original Zeebx ARM instruction execution, virtual BREW API traps, stack, flags, isolated failures");
  return 0;
 }
