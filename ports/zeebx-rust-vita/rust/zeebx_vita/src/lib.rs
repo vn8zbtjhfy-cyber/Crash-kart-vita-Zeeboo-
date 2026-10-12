@@ -92,7 +92,7 @@ impl Running{
  fn tick(&mut self,input:ZeebxVitaPad)->Result<bool,String>{
   let first_step=!self.logged_first_tick;
   self.logged_first_tick=true;
-  if(first_step)log_stage(c"R.tick.enter");
+  if first_step { log_stage(c"R.tick.enter"); }
   let next=Pad{buttons:input.buttons & ((1<<zeebx::input::BUTTONS)-1),axes:input.axes.map(|a|a.clamp(-128,127))};
   self.machine.set_port_pad(0,next);
   for (key,down) in zeebx::input::teclas_do_controle(&self.pad_before,&next){self.machine.set_key(key,down);}
@@ -111,13 +111,13 @@ impl Running{
      return Ok(true);
     }
    }
-   if(first_step)log_stage(c"R.tick.advance.enter");
+   if first_step { log_stage(c"R.tick.advance.enter"); }
    self.machine.comeca_volta();
    let outcomes=self.machine.advance(BUDGET).map_err(|e|e.to_string())?;
    let signals=self.machine.deliver_signals(BUDGET).map_err(|e|e.to_string())?;
    let cb=self.machine.deliver_callbacks(BUDGET).map_err(|e|e.to_string())?;
    self.machine.fecha_volta();
-   if(first_step)log_stage(c"R.tick.advance.ok");
+   if first_step { log_stage(c"R.tick.advance.ok"); }
    check(&outcomes)?;check(&signals)?;check(&cb)?;
    if self.machine.pediu_para_fechar(){let _=self.machine.encerra_applet();return Err("Applet cerrado".into());}
    if self.machine.gl_swaps()!=before{self.publish_frame();return Ok(true);}
