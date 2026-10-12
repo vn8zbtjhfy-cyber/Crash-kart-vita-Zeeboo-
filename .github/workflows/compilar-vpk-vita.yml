@@ -13,6 +13,8 @@ jobs:
   build-vpk:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    container:
+      image: vitasdk/vitasdk:2026.08
     env:
       VITASDK: /opt/vitasdk
       CARGO_TARGET_ARMV7_SONY_VITA_NEWLIBEABIHF_LINKER: arm-vita-eabi-gcc
@@ -21,16 +23,26 @@ jobs:
     steps:
       - name: Checkout repo privado
         uses: actions/checkout@v4
-      - name: Instalar herramientas
+      - name: Preparar Rust nightly dentro del contenedor VitaSDK
+        shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y cmake ninja-build build-essential pkg-config python3 git curl unzip zip libclang-dev
+          command -v arm-vita-eabi-gcc
+          command -v cmake
+          command -v python3
+          if ! command -v curl >/dev/null; then
+            if command -v apt-get >/dev/null; then
+              apt-get update -y && apt-get install -y curl ca-certificates
+            elif command -v apk >/dev/null; then
+              apk add --no-cache curl ca-certificates
+            fi
+          fi
+          if ! command -v rustup >/dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          fi
+          export PATH="$HOME/.cargo/bin:$VITASDK/bin:$PATH"
           rustup toolchain install nightly --profile minimal --component rust-src
-          git clone --depth 1 https://github.com/vitasdk/vdpm.git "$RUNNER_TEMP/vdpm"
-          "$RUNNER_TEMP/vdpm/bootstrap-vitasdk.sh" --install-dir "$VITASDK"
-          export PATH="$VITASDK/bin:$PATH"
-          "$RUNNER_TEMP/vdpm/vdpm" install vitaGL
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           echo "$VITASDK/bin" >> "$GITHUB_PATH"
       - name: Preparar Zeebx e integrar CPU y IFILE de memoria
         run: |
