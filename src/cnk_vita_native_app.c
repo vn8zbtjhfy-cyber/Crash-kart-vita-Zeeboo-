@@ -5,6 +5,8 @@
 #include "cnk_vita_native_app.h"
 #include "cnk_app_runtime.h"
 #include "cnk_vita_controls.h"
+#include "cnk_zeebx_probe.h"
+#include "cnk_vita_zeebx_gl.h"
 #include "cnk_vita_motion.h"
 #include "cnk_vitagl_game_frame.h"
 #include "cnk_vitagl_scene_assets.h"
@@ -736,6 +738,28 @@ int cnk_vita_native_run_with_kart_skins(const char *vfs_path,
  if(cnk_vita_controls_init()<0){result=-3;goto cleanup;}
  vglInit(0x800000u);
  gpu_started=1;
+ /* Optional bounded original Zeebo GL research: only AFTER GPU init.
+  * The main native racing runtime remains the default. No commercial
+  * assets are shipped or retrieved from the public source repository. */
+ FILE *guest_flag=fopen("ux0:data/cnk3d/zeebx_probe.flag","rb");
+ if(guest_flag){
+  fclose(guest_flag);
+  cnk_zeebx_pad guest_pad={0};
+  for(unsigned i=0;i<CNK_ZEEBX_PAD_AXES;i++)
+   guest_pad.axes[i]=128u;
+  (void)cnk_vita_controls_read_zeebx(&guest_pad);
+  const cnk_zeebx_gl_host guest_gpu=cnk_vita_zeebx_gl_callbacks();
+  cnk_arm_outcome outcome={0};
+  int probe_rc=cnk_zeebx_probe_original_applet_with_gl(
+   "ux0:data/cnk3d/cnk2.mod",
+   "ux0:data/cnk3d/274214.mif",
+   "ux0:data/cnk3d/zeebx_probe.txt",200000u,
+   &guest_pad,&guest_gpu,NULL,&outcome);
+  fprintf(stderr,"CNK: original Zeebx GL probe code=%d reason=%u pc=%08x\n",
+          probe_rc,(unsigned)outcome.reason,outcome.pc);
+  /* Native gameplay must not inherit the Zeebo's letterbox viewport. */
+  glViewport(0,0,960,544);
+ }
  /* Original Zeebo interface artwork is optional and never packaged.
   * Failure leaves the existing text UI fully functional. */
  if(cnk_vitagl_ui_art_load(&ui_art,&vfs))

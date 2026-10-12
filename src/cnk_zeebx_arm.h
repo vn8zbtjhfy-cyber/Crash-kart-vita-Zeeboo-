@@ -46,6 +46,17 @@ typedef struct {
  uint32_t function,context;
 } cnk_zeebx_signal_callback;
 
+/* Explicit Vita GPU host services. A guest GL call must never claim it
+ * rendered unless a real, initialized renderer accepts the request.
+ * Callbacks return 0 for success; any other value traps the guest API. */
+typedef struct {
+ int (*make_current)(void *user,uint32_t width,uint32_t height);
+ int (*clear_color)(void *user,float r,float g,float b,float a);
+ int (*clear)(void *user,uint32_t mask);
+ int (*viewport)(void *user,int32_t x,int32_t y,uint32_t w,uint32_t h);
+ int (*present)(void *user);
+} cnk_zeebx_gl_host;
+
 typedef enum {
  CNK_ARM_BUDGET=0, CNK_ARM_API=1, CNK_ARM_RETURNED=2,
  CNK_ARM_FAULT=3, CNK_ARM_UNSUPPORTED=4
@@ -68,6 +79,10 @@ typedef struct {
  /* Zeebx legacy IEGL (AEEGL.h): guest-owned configuration only.
   * GL contexts/swap are not functional until the Vita GPU bridge exists. */
  uint32_t egl_error,egl_initialized,egl_queries;
+ uint32_t egl_surface,egl_context,egl_current_surface,egl_current_context;
+ uint32_t gl_clear_calls,gl_presents,gl_viewport_calls;
+ cnk_zeebx_gl_host gl_host;
+ void *gl_host_user;
  uint32_t egl_string_vendor,egl_string_version,egl_string_extensions;
  cnk_zeebx_pad pad; /* separate from the native driving physics */
  cnk_zeebx_hid_event hid_queue[CNK_ZEEBX_HID_QUEUE];
@@ -93,6 +108,10 @@ int cnk_zeebx_arm_set_virtual_time(cnk_zeebx_arm *cpu,uint32_t elapsed_ms);
 /* A snapshot of the actual Vita controller is passed from the host;
  * virtual BREW input never assumes a pressed button on its own. */
 int cnk_zeebx_arm_set_pad(cnk_zeebx_arm *cpu,const cnk_zeebx_pad *pad);
+/* Bind from Vita ONLY after vitaGL has initialized. Unbound guest GL
+ * calls explicitly stop, not silently emulate a finished renderer. */
+int cnk_zeebx_arm_set_gl_host(cnk_zeebx_arm *cpu,
+                              const cnk_zeebx_gl_host *host,void *user);
 /* Execute deferred guest ISignal callbacks ONLY at a safe guest return
  * boundary. Every callback is budgeted and preserves host guest-register
  * context. Unresolved calls stop explicitly; this is still experimental. */

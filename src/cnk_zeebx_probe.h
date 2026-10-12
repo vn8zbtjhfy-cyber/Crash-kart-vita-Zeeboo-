@@ -28,4 +28,12 @@ int cnk_zeebx_probe_original_applet_with_pad(const char *original_mod_path,
                                               uint32_t instruction_budget,
                                               const cnk_zeebx_pad *pad,
                                               cnk_arm_outcome *result);
+/* GPU-enabled diagnostic is allowed only when a real host vitaGL context
+ * already exists. Without bound callbacks, guest GL still traps.
+ * Original commercial game files remain private and off-repository. */
+int cnk_zeebx_probe_original_applet_with_gl(
+ const char *original_mod_path,const char *original_mif_path,
+ const char *report_path,uint32_t instruction_budget,
+ const cnk_zeebx_pad *pad,const cnk_zeebx_gl_host *host,
+ void *host_user,cnk_arm_outcome *result);
 #endif
