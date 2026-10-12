@@ -37,7 +37,8 @@ static const char *reason_name(cnk_arm_reason r){
 }
 static int probe_internal(const char *mod_path,const char *mif_path,
                           const char *report_path,uint32_t budget,
-                          const cnk_zeebx_pad *pad,cnk_arm_outcome *result){
+                          const cnk_zeebx_pad *pad,const cnk_zeebx_gl_host *host,
+                          void *host_user,cnk_arm_outcome *result){
  uint8_t *mod=NULL,*mif=NULL;
  size_t mod_bytes=0,mif_bytes=0;
  cnk_brew_mif_info manifest={0};
@@ -66,6 +67,10 @@ static int probe_internal(const char *mod_path,const char *mif_path,
  free(mod);
  if(rc)return -5;
  if(pad && cnk_zeebx_arm_set_pad(&cpu,pad)){
+  cnk_zeebx_arm_destroy(&cpu);return -5;
+ }
+ /* Only GPU-initialized Vita callers supply real GPU callbacks. */
+ if(host && cnk_zeebx_arm_set_gl_host(&cpu,host,host_user)){
   cnk_zeebx_arm_destroy(&cpu);return -5;
  }
  rc=cnk_zeebx_arm_bootstrap(&cpu,budget,&load_out,&module_calls);
@@ -114,6 +119,8 @@ static int probe_internal(const char *mod_path,const char *mif_path,
   "signal_callbacks_attempted=%s\nsignal_callbacks_delivered=%u\n"
   "signal_callbacks_remaining=%u\nsignal_dispatch_code=%d\n"
   "signal_dispatch_reason=%s\n"
+  "gpu_host_bound=%s\nguest_gl_clear_calls=%u\n"
+  "guest_gl_viewports=%u\nguest_gl_presented_frames=%u\n"
   "genuine_game_playable=NO\n",
   (unsigned long)mod_bytes,reason_name(load_out.reason),
   (unsigned long long)load_out.executed,load_out.pc,
@@ -126,20 +133,22 @@ static int probe_internal(const char *mod_path,const char *mif_path,
   cpu.display_objects,cpu.filemgr_objects,cpu.debug_calls,
   callback_probe_attempted?"YES":"NO",callbacks_delivered,
   cpu.signal_pending_count,callback_probe_rc,
-  callback_probe_attempted?reason_name(signal_out.reason):"NOT_RUN");
+  callback_probe_attempted?reason_name(signal_out.reason):"NOT_RUN",
+  host?"YES":"NO",cpu.gl_clear_calls,cpu.gl_viewport_calls,
+  cpu.gl_presents);
  int closed=fclose(report);
  cnk_zeebx_arm_destroy(&cpu);
  return (length<0||closed)?-9:0;
 }
 int cnk_zeebx_probe_original(const char *mod_path,const char *report_path,
                              uint32_t budget,cnk_arm_outcome *result){
- return probe_internal(mod_path,NULL,report_path,budget,NULL,result);
+ return probe_internal(mod_path,NULL,report_path,budget,NULL,NULL,NULL,result);
 }
 int cnk_zeebx_probe_original_applet(const char *mod_path,const char *mif_path,
                                     const char *report_path,uint32_t budget,
                                     cnk_arm_outcome *result){
  if(!mif_path)return -1;
- return probe_internal(mod_path,mif_path,report_path,budget,NULL,result);
+ return probe_internal(mod_path,mif_path,report_path,budget,NULL,NULL,NULL,result);
 }
 
 int cnk_zeebx_probe_original_applet_with_pad(const char *mod_path,
@@ -149,5 +158,14 @@ int cnk_zeebx_probe_original_applet_with_pad(const char *mod_path,
                                               const cnk_zeebx_pad *pad,
                                               cnk_arm_outcome *result){
  if(!mif_path || !pad)return -1;
- return probe_internal(mod_path,mif_path,report_path,budget,pad,result);
+ return probe_internal(mod_path,mif_path,report_path,budget,pad,NULL,NULL,result);
+}
+
+int cnk_zeebx_probe_original_applet_with_gl(
+ const char *mod_path,const char *mif_path,const char *report_path,
+ uint32_t budget,const cnk_zeebx_pad *pad,const cnk_zeebx_gl_host *host,
+ void *host_user,cnk_arm_outcome *result){
+ if(!mod_path||!mif_path||!pad||!host)return -1;
+ return probe_internal(mod_path,mif_path,report_path,budget,
+                       pad,host,host_user,result);
 }
