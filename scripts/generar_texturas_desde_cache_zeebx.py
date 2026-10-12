@@ -109,6 +109,19 @@ def inspect_png(data: bytes) -> bool:
     return ihdr and idat and iend
 
 
+def vita_uploadable_png(data: bytes) -> bool:
+    """Match the native vitaGL uploader's dimensions and RGBA memory cap.
+
+    This is a preflight only: libpng must still decode the full image on Vita.
+    """
+    if not inspect_png(data):
+        return False
+    width = int.from_bytes(data[16:20], "big")
+    height = int.from_bytes(data[20:24], "big")
+    return (width <= 4096 and height <= 4096
+            and width * height * 4 <= 32 * 1024 * 1024)
+
+
 def scene_textures(data: bytes) -> list[str] | None:
     """Read original PIFF SCEN TXTR string table, preserving exact slot order."""
     if (len(data) < 12 or data[:4] != b"PIFF" or data[8:12] != b"SCEN"
@@ -172,6 +185,10 @@ def build_verified(vfs: Fufs, cache: Path):
         if raw.startswith(PNG_SIG):
             if not inspect_png(raw):
                 raise ValueError(f"corrupt source PNG index {i}")
+            # The native uploader refuses textures above 4096px or 32 MiB RGBA.
+            # Do not create bindings which are guaranteed to fail at runtime.
+            if not vita_uploadable_png(raw):
+                continue
             digest = hashlib.sha256(raw).digest()
             original.setdefault(digest, []).append((i, ident, raw))
         elif raw.startswith(b"PIFF") and raw[8:12] == b"SCEN":
@@ -198,7 +215,7 @@ def build_verified(vfs: Fufs, cache: Path):
                 ambiguous.add(basename)
                 continue
             raw = file.read_bytes()
-            if not inspect_png(raw):
+            if not vita_uploadable_png(raw):
                 ambiguous.add(basename)
                 continue
             h = hashlib.sha256(raw).digest()
@@ -243,9 +260,10 @@ def write_manifest(output: Path, rows: list[tuple]) -> None:
             for scene_i, scene_id, slot, name, png_i, png_id in rows:
                 f.write(f"{scene_i}\t{scene_id:08x}\t{slot}\t{name}\t"
                         f"{png_i}\t{png_id:08x}\n")
-        if output.exists():
-            raise FileExistsError(f"manifest created concurrently: {output}")
-        os.replace(tempname, output)
+        # Atomic create-if-absent: os.replace() could silently overwrite a
+        # reviewed manifest created by another process after the exists() check.
+        # The temporary file and destination share a directory/filesystem.
+        os.link(tempname, output)
     finally:
         if os.path.exists(tempname):
             os.unlink(tempname)
