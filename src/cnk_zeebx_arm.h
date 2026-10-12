@@ -55,6 +55,15 @@ typedef struct {
  int (*clear)(void *user,uint32_t mask);
  int (*viewport)(void *user,int32_t x,int32_t y,uint32_t w,uint32_t h);
  int (*present)(void *user);
+ /* Zeebx GL_LEGACY matrix entries. Optional until implemented by host:
+  * unsupported calls must TRAP, never silently return success. */
+ int (*matrix_mode)(void *user,uint32_t mode);
+ int (*load_identity)(void *user);
+ int (*push_matrix)(void *user);
+ int (*pop_matrix)(void *user);
+ int (*translate)(void *user,float x,float y,float z);
+ int (*scale)(void *user,float x,float y,float z);
+ int (*rotate)(void *user,float degrees,float x,float y,float z);
 } cnk_zeebx_gl_host;
 
 typedef enum {

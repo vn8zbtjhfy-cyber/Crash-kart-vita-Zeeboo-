@@ -58,9 +58,50 @@ static int vita_present(void *user){
  vglSwapBuffers(GL_FALSE);
  return 0;
 }
+/* OpenGL ES 1.x matrix stack operations: submit to the initialized Vita
+ * graphics context. GL errors (including stack underflow) trap the guest. */
+static int vita_matrix_mode(void *user,uint32_t mode){
+ (void)user;
+ glMatrixMode((GLenum)mode);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_load_identity(void *user){
+ (void)user;
+ glLoadIdentity();
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_push_matrix(void *user){
+ (void)user;
+ glPushMatrix();
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_pop_matrix(void *user){
+ (void)user;
+ glPopMatrix();
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_translate(void *user,float x,float y,float z){
+ (void)user;
+ glTranslatef(x,y,z);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_scale(void *user,float x,float y,float z){
+ (void)user;
+ glScalef(x,y,z);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_rotate(void *user,float degrees,float x,float y,float z){
+ (void)user;
+ glRotatef(degrees,x,y,z);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
 cnk_zeebx_gl_host cnk_vita_zeebx_gl_callbacks(void){
  const cnk_zeebx_gl_host host={
-  vita_begin,vita_clear_color,vita_clear,vita_viewport,vita_present
+  .make_current=vita_begin,.clear_color=vita_clear_color,
+  .clear=vita_clear,.viewport=vita_viewport,.present=vita_present,
+  .matrix_mode=vita_matrix_mode,.load_identity=vita_load_identity,
+  .push_matrix=vita_push_matrix,.pop_matrix=vita_pop_matrix,
+  .translate=vita_translate,.scale=vita_scale,.rotate=vita_rotate
  };
  return host;
 }
