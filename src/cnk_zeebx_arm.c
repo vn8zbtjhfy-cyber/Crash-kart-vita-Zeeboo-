@@ -72,6 +72,17 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
           CNK_ARM_API_BASE+(7u<<12)+i*4u);
   putword(cpu->vtables+14u*CNK_ARM_VTABLE_STRIDE+4u*i,
           CNK_ARM_API_BASE+(14u<<12)+i*4u);
+  /* Crash requests these four BREW classes. Keep their Zeebx aee.rs
+   * interface numbers intact; unknown methods STOP at their own slots
+   * until ported, rather than pretending graphics or HID are working. */
+  putword(cpu->vtables+8u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(8u<<12)+i*4u);   /* IHID */
+  putword(cpu->vtables+12u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(12u<<12)+i*4u); /* ISignalCBFactory */
+  putword(cpu->vtables+23u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(23u<<12)+i*4u); /* legacy EGL */
+  putword(cpu->vtables+24u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(24u<<12)+i*4u); /* legacy GL */
   putword(cpu->helpers+4u*i,CNK_ARM_API_BASE+(6u<<12)+i*4u);
  }
  cpu->regs[0]=CNK_ARM_OBJECT_BASE;
@@ -637,15 +648,21 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   c->debug_calls++;
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
- /* Zeebx Machine::shell_create_instance: these ClassIDs come from the
-  * BREW 4 SDK and were individually observed when executing the original
-  * user-owned cnk2.mod. No generic success for unknown classes. */
+ /* Zeebx Machine::shell_create_instance and brew/aee.rs:
+  * Crash's class scan (docs/varredura in Zeebx upstream) records HID,
+  * ISignalCBFactory, legacy AEEGL EGL/GL, Display, FileMgr and Sound.
+  * Create a genuine guest-side object/vtable for the exact class, but
+  * NEVER return fake success for methods not implemented yet. */
  if(iface==0u&&slot==2u){
   const uint32_t clsid=c->regs[1],out_ptr=c->regs[2];
   uint32_t target_iface=0;
   if(clsid==0x01001001u)target_iface=5u; /* IDisplay */
   else if(clsid==0x01001003u)target_iface=3u; /* IFileMgr */
   else if(clsid==0x01001056u)target_iface=14u; /* ISound */
+  else if(clsid==0x0106c411u)target_iface=8u;  /* Zeebo IHID */
+  else if(clsid==0x01041207u)target_iface=12u; /* ISignalCBFactory */
+  else if(clsid==0x01014bc4u)target_iface=23u; /* legacy EGL, AEEGL.h */
+  else if(clsid==0x01014bc3u)target_iface=24u; /* legacy GL, AEEGL.h */
   else return -4;
   if(c->regs[0]!=CNK_ARM_OBJECT_BASE||!out_ptr||
      !map(c,out_ptr,4u,1))return -3;
@@ -657,7 +674,11 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   c->object_cursor+=64u;
   if(target_iface==5u)c->display_objects++;
   else if(target_iface==3u)c->filemgr_objects++;
-  else c->sound_objects++;
+  else if(target_iface==14u)c->sound_objects++;
+  else if(target_iface==8u)c->hid_objects++;
+  else if(target_iface==12u)c->signal_factory_objects++;
+  else if(target_iface==23u)c->egl_legacy_objects++;
+  else if(target_iface==24u)c->gl_legacy_objects++;
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
  return -4; /* Unsupported API MUST NOT silently return success. */
