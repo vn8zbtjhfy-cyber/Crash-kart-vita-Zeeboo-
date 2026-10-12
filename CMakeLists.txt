@@ -769,6 +769,10 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_idib PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_idib PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_idib COMMAND cnk_test_zeebx_idib)
+  add_executable(cnk_test_zeebx_hid_state tests/test_native_zeebx_hid_state.c)
+  target_link_libraries(cnk_test_zeebx_hid_state PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_hid_state PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_hid_state COMMAND cnk_test_zeebx_hid_state)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
@@ -849,9 +853,26 @@ else()
           "vitaGL;vitashark;SceShaccCgExt;stdc++;mathneon;png;z;m;taihen_stub;SceAppMgr_stub;SceCommonDialog_stub;SceKernelDmacMgr_stub;SceProcessmgr_stub;SceCtrl_stub;SceMotion_stub;SceDisplay_stub;SceAudio_stub;SceGxm_stub;SceLibKernel_stub;SceKernelThreadMgr_stub;SceShaccCg_stub;SceSysmodule_stub;SceIofilemgr_stub"
           CACHE STRING "VitaSDK libraries required by ELF link check")
       add_executable(cnk_vita_elf_link_check src/vita_main.c)
+      if(CNK_ENABLE_VITA_DIAGNOSTIC_VPK)
+        # VitaSDK binutils linker reserves first PT_LOAD room for SCE metadata
+        # through __sce_headroom (upstream vita-toolchain issue #303 and
+        # buildscripts issue #186). Do NOT fake a giant segment alignment:
+        # it caused overlapping sections in vita-elf-create.
+        target_link_options(cnk_vita_elf_link_check PRIVATE
+                            "-Wl,--defsym=__sce_headroom=0x10000")
+      endif()
       target_link_libraries(cnk_vita_elf_link_check PRIVATE
           cnk_vita_backend cnk_native_core ${CNK_VITA_LINK_LIBS})
-      # Deliberately no vita_create_self and no vita_create_vpk calls.
+      # Normally we only link the diagnostic ELF. User-requested PS Vita
+      # hardware test is strictly opt-in and NEVER includes ROM/data.vfs.
+      option(CNK_ENABLE_VITA_DIAGNOSTIC_VPK
+             "Build temporary installable PS Vita hardware test, not a finished game" OFF)
+      if(CNK_ENABLE_VITA_DIAGNOSTIC_VPK)
+        include("$ENV{VITASDK}/share/vita.cmake" REQUIRED)
+        vita_create_self(eboot.bin cnk_vita_elf_link_check UNSAFE)
+        vita_create_vpk(CNK3D-HARDWARE-TEST.vpk CNKT00001 eboot.bin
+                        VERSION "01.00" NAME "CNK3D TEST")
+      endif()
     endif()
   endif()
   # NO declarar un VPK del juego antes de integrar motor, física, audio y escenas.

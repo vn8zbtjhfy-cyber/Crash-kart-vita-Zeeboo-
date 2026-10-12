@@ -72,6 +72,19 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
           CNK_ARM_API_BASE+(7u<<12)+i*4u);
   putword(cpu->vtables+14u*CNK_ARM_VTABLE_STRIDE+4u*i,
           CNK_ARM_API_BASE+(14u<<12)+i*4u);
+  /* Crash requests these four BREW classes. Keep their Zeebx aee.rs
+   * interface numbers intact; unknown methods STOP at their own slots
+   * until ported, rather than pretending graphics or HID are working. */
+  putword(cpu->vtables+8u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(8u<<12)+i*4u);   /* IHID */
+  putword(cpu->vtables+9u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(9u<<12)+i*4u);   /* IHIDDevice */
+  putword(cpu->vtables+12u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(12u<<12)+i*4u); /* ISignalCBFactory */
+  putword(cpu->vtables+23u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(23u<<12)+i*4u); /* legacy EGL */
+  putword(cpu->vtables+24u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(24u<<12)+i*4u); /* legacy GL */
   putword(cpu->helpers+4u*i,CNK_ARM_API_BASE+(6u<<12)+i*4u);
  }
  cpu->regs[0]=CNK_ARM_OBJECT_BASE;
@@ -81,6 +94,7 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
  cpu->regs[14]=CNK_ARM_RETURN_MAGIC;
  cpu->regs[15]=CNK_ARM_MOD_BASE+info.entry_offset;
  cpu->cpsr=0x10u; /* user mode ARM */
+ for(unsigned i=0;i<CNK_ZEEBX_PAD_AXES;i++)cpu->pad.axes[i]=128u;
  cpu->heap_cursor=0u;
  cpu->shell_refs=1u;
  cpu->object_cursor=16u; /* Shell, Module**, IApplet** reserved */
@@ -467,6 +481,133 @@ int cnk_zeebx_arm_set_virtual_time(cnk_zeebx_arm *c,uint32_t ms){
  c->virtual_time_ms=ms;
  return 0;
 }
+/* Source-backed Zeebx input/mod.rs identifiers, original Zeebo HID SDK.
+ * Preserve the exact 18 entries/order including duplicated unused UID.
+ * Values are not guessed runtime events: only host-provided pad snapshots.
+ */
+static const uint32_t zeebx_button_uids[CNK_ZEEBX_PAD_BUTTONS]={
+ 0x0106c40bu,0x0106c40au,0x0106c40cu,0x0106c40du,
+ 0x0106c408u,0x0106c407u,0x0106c406u,0x0106c409u,
+ 0x0106c405u,0x0106c403u,0x0106c404u,0x0106c402u,
+ 0x0106c3feu,0x0106c3ffu,0x0106c400u,0x0106c401u,
+ 0x0106c4d0u,0x0106c408u
+};
+static const uint32_t zeebx_axis_uids[CNK_ZEEBX_PAD_AXES]={
+ 0x0106c4d0u,0x0106c4d1u,0x0106c4ceu,0x0106c4cfu
+};
+static const unsigned zeebx_axis_slots[CNK_ZEEBX_PAD_AXES]={1,2,3,6};
+
+int cnk_zeebx_arm_set_pad(cnk_zeebx_arm *c,const cnk_zeebx_pad *pad){
+ if(!c||!c->initialized||!pad||
+    (pad->buttons & ~((1u<<CNK_ZEEBX_PAD_BUTTONS)-1u)))return -1;
+ /* Preserve the source's per-button press AND release events in ascending
+  * HID index order. A still-held button does not repeat each frame.
+  * Overflow evicts the oldest event and marks the next read as dropped. */
+ uint32_t changed=c->pad.buttons^pad->buttons;
+ for(unsigned i=0;i<CNK_ZEEBX_PAD_BUTTONS;i++)if(changed&(1u<<i)){
+  if(c->hid_queue_count==CNK_ZEEBX_HID_QUEUE){
+   c->hid_queue_head=(c->hid_queue_head+1u)%CNK_ZEEBX_HID_QUEUE;
+   c->hid_queue_count--;
+   c->hid_events_dropped=1u;
+  }
+  uint32_t tail=(c->hid_queue_head+c->hid_queue_count)%
+                 CNK_ZEEBX_HID_QUEUE;
+  c->hid_queue[tail].index=i;
+  c->hid_queue[tail].pressed=(pad->buttons>>i)&1u;
+  c->hid_queue[tail].at_ms=c->virtual_time_ms;
+  c->hid_queue_count++;
+ }
+ c->pad=*pad;
+ return 0;
+}
+/* IHIDDevice slots from Zeebx brew/aee_slots.rs, not a guessed ABI.
+ * The method's object must be a real guest IHIDDevice. All guest output
+ * spans are checked BEFORE writing. Bad pointers remain explicit stops.
+ */
+static int zeebx_device_input(cnk_zeebx_arm *c,unsigned slot){
+ uint32_t vtbl=0;
+ if(load(c,c->regs[0],4u,&vtbl)||
+    vtbl!=CNK_ARM_VTABLE_BASE+9u*CNK_ARM_VTABLE_STRIDE)return -3;
+ const uint32_t output=c->regs[1];
+ if(slot==9u){ /* GetNextButtonEvent(info*, timestamp*, dropped*) */
+  const uint32_t info=c->regs[1],timestamp=c->regs[2],dropped=c->regs[3];
+  /* A rejected call must not consume the event, partially write data or
+   * clear the overflow report. Validate all output spans up front. */
+  if((info&&((info&3u)||!map(c,info,20u,1)))||
+     (timestamp&&((timestamp&3u)||!map(c,timestamp,4u,1)))||
+     (dropped&&((dropped&3u)||!map(c,dropped,4u,1))))return -3;
+  const int has=c->hid_queue_count!=0u;
+  cnk_zeebx_hid_event ev={0};
+  if(has)ev=c->hid_queue[c->hid_queue_head];
+  if(info){
+   uint8_t *out=map(c,info,20u,1);
+   putword(out+0u,has?ev.index:0u);
+   putword(out+4u,has?ev.pressed:0u);
+   putword(out+8u,has?zeebx_button_uids[ev.index]:0u);
+   putword(out+12u,0u);
+   putword(out+16u,has?1u:0u);
+  }
+  if(timestamp && store(c,timestamp,4u,has?ev.at_ms:c->virtual_time_ms))
+   return -3;
+  if(dropped && store(c,dropped,4u,c->hid_events_dropped))
+   return -3;
+  if(has){
+   c->hid_queue_head=(c->hid_queue_head+1u)%CNK_ZEEBX_HID_QUEUE;
+   c->hid_queue_count--;
+  }
+  c->hid_events_dropped=0u;
+  return cnk_zeebx_arm_return_from_api(c,has?0u:1u);
+ }
+ if(slot==7u){ /* GetNumberOfButtons(uint32*) */
+  if(output && store(c,output,4u,CNK_ZEEBX_PAD_BUTTONS))return -3;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(slot==6u){ /* GetButtonInfo(id/UID, AEEHIDButtonInfo*) */
+  const uint32_t requested=c->regs[1],out=c->regs[2];
+  unsigned idx=CNK_ZEEBX_PAD_BUTTONS;
+  /* The Zeebo SDK accepts both index and the actual UID. */
+  for(unsigned i=0;i<CNK_ZEEBX_PAD_BUTTONS;i++)
+   if(requested==zeebx_button_uids[i]){idx=i;break;}
+  if(idx==CNK_ZEEBX_PAD_BUTTONS&&requested<CNK_ZEEBX_PAD_BUTTONS)
+   idx=(unsigned)requested;
+  if(idx==CNK_ZEEBX_PAD_BUTTONS)return -4;
+  if(out){
+   uint8_t *p=map(c,out,20u,1);
+   if(!p || (out&3u))return -3;
+   putword(p+0u,idx);
+   putword(p+4u,(c->pad.buttons>>idx)&1u);
+   putword(p+8u,zeebx_button_uids[idx]);
+   putword(p+12u,0u);
+   putword(p+16u,1u);
+  }
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(slot>=10u&&slot<=13u){
+  /* 25 words: boolean bRelativeAxes and 24 axis slots. */
+  if(output){
+   uint8_t *dst=map(c,output,25u*4u,1);
+   if(!dst || (output&3u))return -3;
+   /* GetPositionState: unused axes must be centered at 128, not 0.
+    * GetAxesInfo: unused axes have UID=0, meaning "no axis".
+    * Min/Max: all 24 possible axes need a proper range.
+    */
+   for(unsigned i=0;i<25u;i++){
+    uint32_t value=0;
+    if(i && (slot==10u||slot==12u))value=slot==10u?128u:255u;
+    putword(dst+4u*i,value);
+   }
+   for(unsigned i=0;i<CNK_ZEEBX_PAD_AXES;i++){
+    uint32_t value=slot==10u?(uint32_t)c->pad.axes[i]:
+                   slot==13u?zeebx_axis_uids[i]:
+                   slot==12u?255u:0u;
+    putword(dst+4u*zeebx_axis_slots[i],value);
+   }
+  }
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ return -4;
+}
+
 int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
  if(!c||!c->initialized)return -1;
  uint32_t pc=c->regs[15];
@@ -619,6 +760,74 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   c->screen_bitmap_references++;
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
+ /* Zeebx machine/hid.rs with ONE console controller provided by Vita.
+  * The actual button event/position bridge is not connected yet.
+  * GetConnectedDevices has a 5th AAPCS parameter on the guest stack:
+  * handle type (r1), handle array (r2), array capacity (r3), needed
+  * count (sp+0). Validate every guest write before changing memory. */
+ if(iface==8u && slot==7u){ /* IHID::GetConnectedDevices */
+  const uint32_t wanted=c->regs[1],handles=c->regs[2],capacity=c->regs[3];
+  uint32_t needed_ptr=0;
+  if(load(c,c->regs[13],4u,&needed_ptr))return -3;
+  const uint32_t found=wanted==0x0106c3fdu?1u:0u;
+  if((needed_ptr&&!map(c,needed_ptr,4u,1))||
+     (found&&capacity&&handles&&!map(c,handles,4u,1)))
+   return -3;
+  if(needed_ptr && store(c,needed_ptr,4u,found))return -3;
+  if(found&&capacity&&handles && store(c,handles,4u,1u))return -3;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(iface==8u && slot==3u){ /* IHID::CreateDevice */
+  const uint32_t handle=c->regs[1],out=c->regs[2];
+  uint32_t vtbl=0;
+  if(handle!=1u||!out || load(c,c->regs[0],4u,&vtbl)||
+     vtbl!=CNK_ARM_VTABLE_BASE+8u*CNK_ARM_VTABLE_STRIDE ||
+     !map(c,out,4u,1))return -3;
+  if(c->object_cursor>OBJECT_BYTES-64u)return -2;
+  const uint32_t dev=CNK_ARM_OBJECT_BASE+c->object_cursor;
+  if(store(c,dev,4u,CNK_ARM_VTABLE_BASE+9u*CNK_ARM_VTABLE_STRIDE)||
+     store(c,out,4u,dev))return -3;
+  c->object_cursor+=64u;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ /* 12 bytes: AEEUID joystick, USB product ID, USB vendor ID,
+  * bluetooth boolean, sourced from Zeebx's Zeebo controller descriptor. */
+ if((iface==8u && slot==4u)||(iface==9u && slot==3u)){
+  uint32_t vtbl=0;
+  const uint32_t obj=c->regs[0];
+  const uint32_t out=iface==8u?c->regs[2]:c->regs[1];
+  const uint32_t handle=iface==8u?c->regs[1]:1u;
+  if(handle!=1u||load(c,obj,4u,&vtbl)||
+     vtbl!=CNK_ARM_VTABLE_BASE+iface*CNK_ARM_VTABLE_STRIDE||
+     (out&&!map(c,out,12u,1)))return -3;
+  if(out){
+   uint8_t *dst=map(c,out,12u,1);
+   putword(dst,0x0106c3fdu);
+   dst[4]=0x35u;dst[5]=0x01u; /* product 0x0135 */
+   dst[6]=0xaau;dst[7]=0x1eu; /* vendor 0x1eaa */
+   putword(dst+8u,0u);
+  }
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(iface==9u && (slot==6u||slot==7u||slot==9u||
+                   (slot>=10u&&slot<=13u)))
+  return zeebx_device_input(c,slot);
+ if(iface==9u && slot==4u){ /* IHIDDevice::GetDeviceStatus */
+  uint32_t vtbl=0;
+  const uint32_t out=c->regs[1];
+  if(load(c,c->regs[0],4u,&vtbl)||
+     vtbl!=CNK_ARM_VTABLE_BASE+9u*CNK_ARM_VTABLE_STRIDE||
+     (out&&!map(c,out,4u,1)))return -3;
+  if(out&&store(c,out,4u,1u))return -3; /* CONNECTED */
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ if(iface==8u&&slot==5u){ /* no new connection events */
+  for(unsigned i=1u;i<=3u;i++)if(c->regs[i]&&!map(c,c->regs[i],4u,1))
+   return -3;
+  for(unsigned i=1u;i<=3u;i++)if(c->regs[i] &&
+      store(c,c->regs[i],4u,0u))return -3;
+  return cnk_zeebx_arm_return_from_api(c,1u); /* BREW EFAILED = empty */
+ }
  /* The original CNK applet reaches this exact diagnostic helper twice.
   * Zeebx returns AEE_SUCCESS after recording formatted debug text.
   * Preserve the bounded raw format string without interpreting guest
@@ -637,15 +846,21 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   c->debug_calls++;
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
- /* Zeebx Machine::shell_create_instance: these ClassIDs come from the
-  * BREW 4 SDK and were individually observed when executing the original
-  * user-owned cnk2.mod. No generic success for unknown classes. */
+ /* Zeebx Machine::shell_create_instance and brew/aee.rs:
+  * Crash's class scan (docs/varredura in Zeebx upstream) records HID,
+  * ISignalCBFactory, legacy AEEGL EGL/GL, Display, FileMgr and Sound.
+  * Create a genuine guest-side object/vtable for the exact class, but
+  * NEVER return fake success for methods not implemented yet. */
  if(iface==0u&&slot==2u){
   const uint32_t clsid=c->regs[1],out_ptr=c->regs[2];
   uint32_t target_iface=0;
   if(clsid==0x01001001u)target_iface=5u; /* IDisplay */
   else if(clsid==0x01001003u)target_iface=3u; /* IFileMgr */
   else if(clsid==0x01001056u)target_iface=14u; /* ISound */
+  else if(clsid==0x0106c411u)target_iface=8u;  /* Zeebo IHID */
+  else if(clsid==0x01041207u)target_iface=12u; /* ISignalCBFactory */
+  else if(clsid==0x01014bc4u)target_iface=23u; /* legacy EGL, AEEGL.h */
+  else if(clsid==0x01014bc3u)target_iface=24u; /* legacy GL, AEEGL.h */
   else return -4;
   if(c->regs[0]!=CNK_ARM_OBJECT_BASE||!out_ptr||
      !map(c,out_ptr,4u,1))return -3;
@@ -657,7 +872,11 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   c->object_cursor+=64u;
   if(target_iface==5u)c->display_objects++;
   else if(target_iface==3u)c->filemgr_objects++;
-  else c->sound_objects++;
+  else if(target_iface==14u)c->sound_objects++;
+  else if(target_iface==8u)c->hid_objects++;
+  else if(target_iface==12u)c->signal_factory_objects++;
+  else if(target_iface==23u)c->egl_legacy_objects++;
+  else if(target_iface==24u)c->gl_legacy_objects++;
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
  return -4; /* Unsupported API MUST NOT silently return success. */

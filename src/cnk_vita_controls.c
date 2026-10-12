@@ -79,3 +79,39 @@ int cnk_vita_controls_read_actions(cnk_driver_input *out,
  if(!ui_buttons)return -1;
  return read_pad(out,ui_buttons,exit_requested);
 }
+
+/* Source: Zeebx input/mod.rs BUTTON_UIDS, AXIS_SLOTS and neutral=128.
+ * Vita face buttons -> original Z-Pad face-button index positions;
+ * physical D-pad is separate from the four analog axes.
+ * This returns one real physical snapshot, not a fabricated key event.
+ */
+int cnk_vita_controls_read_zeebx(cnk_zeebx_pad *out){
+ if(!out)return -1;
+ memset(out,0,sizeof(*out));
+ for(unsigned i=0;i<CNK_ZEEBX_PAD_AXES;i++)out->axes[i]=128u;
+ SceCtrlData pad;
+ memset(&pad,0,sizeof(pad));
+ int received=sceCtrlPeekBufferPositive(0,&pad,1);
+ if(received<=0)return received<0?-2:-3;
+ const struct {uint32_t vita;unsigned index;} mapping[]={
+  {SCE_CTRL_CROSS,0u},    /* Zeebo button 1 */
+  {SCE_CTRL_CIRCLE,1u},   /* Zeebo button 2 */
+  {SCE_CTRL_SQUARE,2u},   /* Zeebo button 3 */
+  {SCE_CTRL_TRIANGLE,3u}, /* Zeebo button 4 */
+  {SCE_CTRL_RTRIGGER,4u}, /* Zeebo right shoulder upper */
+  {SCE_CTRL_LTRIGGER,6u}, /* Zeebo left shoulder upper */
+  {SCE_CTRL_SELECT,9u},   /* Zeebo back/home */
+  {SCE_CTRL_START,11u},   /* Zeebo start */
+  {SCE_CTRL_UP,12u},
+  {SCE_CTRL_LEFT,13u},
+  {SCE_CTRL_DOWN,14u},
+  {SCE_CTRL_RIGHT,15u}
+ };
+ for(unsigned i=0;i<sizeof(mapping)/sizeof(mapping[0]);i++)
+  if(pad.buttons&mapping[i].vita)out->buttons|=1u<<mapping[i].index;
+ out->axes[0]=pad.lx;
+ out->axes[1]=pad.ly;
+ out->axes[2]=pad.rx;
+ out->axes[3]=pad.ry;
+ return 0;
+}
