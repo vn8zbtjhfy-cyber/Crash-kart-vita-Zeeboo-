@@ -57,6 +57,22 @@ jobs:
           p.write_text(t)
           print('Host ARM interpreter enabled for probe')
           PY
+          # Host-only test accessor for the applet returned through
+          # CreateInstance's out pointer. Never changes the Vita release.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('zeebx-emu/src/machine/shell.rs')
+          s=p.read_text()
+          needle='impl<C: CpuBackend> Machine<C> {'
+          assert s.count(needle)==1
+          s=s.replace(needle, needle+'''
+    pub fn host_probe_created_applet(&self) -> Result<u32, CpuError> {
+        self.cpu.read_u32(self.module.out_module + 4)
+    }
+''',1)
+          p.write_text(s)
+          print('Host-only applet pointer accessor installed')
+          PY
       - name: Comparar arranque ARM y presupuesto CreateInstance
         env:
           CNK_ASSETS: ../assets

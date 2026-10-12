@@ -86,8 +86,41 @@ fn main()->Result<(),Box<dyn Error>> {
     }
     println!("FINAL finished={finished} polls={polls} result={result:?} instr={} pc={:#010x} virtual_clock={}ms elapsed={:?}",
         machine.instructions(),machine.cpu().read_reg(Reg::Pc),machine.clock_ms(),start.elapsed());
-    if !finished {
-        return Err(format!("CreateInstance still stopped after {polls} polls: {result:?}").into());
+    if !matches!(result,AppletResult::Stopped(Outcome::Returned{code:0})) {
+        return Err(format!("CreateInstance did not return success after {polls} polls: {result:?}").into());
     }
+    let applet=machine.host_probe_created_applet()?;
+    println!("CreateInstance APPLET_POINTER={applet:#010x}");
+    if applet==0 { return Err("CreateInstance returned null applet pointer".into()); }
+    let start_outcome=machine.start_applet(applet,clsid,500_000)?;
+    println!("EVT_APP_START outcome={start_outcome:?} instr={} clock={}ms",
+        machine.instructions(),machine.clock_ms());
+    let baseline=machine.gl_swaps();
+    let mut first_frame=false;
+    let play_start=Instant::now();
+    for i in 1..=2000u32 {
+        if play_start.elapsed()>Duration::from_secs(30){println!("PLAY START timeout");break;}
+        machine.comeca_volta();
+        let outcomes=machine.advance(500_000)?;
+        let _signals=machine.deliver_signals(500_000)?;
+        let _callbacks=machine.deliver_callbacks(500_000)?;
+        let mut updates=0;
+        while machine.toma_quadro_do_update().is_some(){updates+=1;}
+        machine.fecha_volta();
+        let swaps=machine.gl_swaps();
+        if updates>0 || swaps>baseline{
+            println!("FIRST_FRAME iteration={i} updates={updates} swaps={swaps} instr={} clock={}ms elapsed={:?}",
+                machine.instructions(),machine.clock_ms(),play_start.elapsed());
+            first_frame=true;
+            break;
+        }
+        if i<=4 || i.is_power_of_two() || i%256==0 {
+            let nonzero=machine.screen().pixels().iter().any(|&px|px!=0);
+            println!("PLAY[{i}] outcome={outcomes:?} instr={} clock={}ms screen_nonzero={} elapsed={:?}",
+                machine.instructions(),machine.clock_ms(),nonzero,play_start.elapsed());
+        }
+    }
+    println!("FINAL_RENDER frame_seen={first_frame} total_instr={} t={:?}",machine.instructions(),start.elapsed());
+    if !first_frame { return Err("No IDisplay_Update or GL swap observed on host".into()); }
     Ok(())
 }
