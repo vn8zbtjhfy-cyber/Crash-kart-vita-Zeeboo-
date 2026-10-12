@@ -115,6 +115,12 @@ typedef struct {
  int (*texture_env_mode)(void *user,uint32_t mode);
  int (*texture_upload)(void *user,uint32_t width,uint32_t height,
                        uint32_t format,uint32_t type,const uint8_t *pixels);
+ /* A real GLES1 atlas update: pixels are packed guest texels copied
+  * before the callback; host MUST reject invalid target rectangles. */
+ int (*texture_sub_upload)(void *user,uint32_t x,uint32_t y,
+                            uint32_t width,uint32_t height,
+                            uint32_t format,uint32_t type,
+                            const uint8_t *pixels);
  int (*draw_textured_triangles)(void *user,const float *xyz,
                                 const float *uv,uint32_t count);
  int (*draw_colored_textured_triangles)(void *user,const float *xyz,
@@ -154,7 +160,8 @@ typedef struct {
  uint32_t gl_array_buffer,gl_element_buffer,gl_vertex_buffer,gl_uv_buffer;
  uint32_t gl_next_buffer_name,gl_total_buffer_bytes;
  cnk_zeebx_gl_buffer gl_buffers[CNK_ZEEBX_MAX_GL_BUFFERS];
- uint32_t gl_texture_uploads,gl_textured_draw_calls;
+ uint32_t gl_texture_uploads,gl_texture_sub_uploads,gl_textured_draw_calls;
+ uint32_t gl_unpack_alignment; /* Zeebx glPixelStorei, default 4 */
  uint8_t gl_uv_enabled,gl_texturing_enabled,gl_color_enabled;
  cnk_zeebx_gl_host gl_host;
  void *gl_host_user;

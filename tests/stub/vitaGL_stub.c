@@ -163,6 +163,36 @@ void glTexImage2D(GLenum target,GLint level,GLint internalfmt,GLsizei w,
    cnk_test_gl.fail_upload_on_number=0;
  }
 }
+void glTexSubImage2D(GLenum target,GLint level,GLint x,GLint y,
+                     GLsizei w,GLsizei h,GLenum format,GLenum type,
+                     const void *data){
+ if(target!=GL_TEXTURE_2D||level!=0||!data||x<0||y<0||
+    w<=0||h<=0||
+    (uint32_t)x+(uint32_t)w>cnk_test_gl.last_upload_width||
+    (uint32_t)y+(uint32_t)h>cnk_test_gl.last_upload_height||
+    !((format==GL_RGBA&&type==GL_UNSIGNED_BYTE)||
+      (format==0x1907u&&type==0x8363u))){
+  cnk_test_gl.invalid++;
+  cnk_test_gl.queued_error=0x0501u;
+  return;
+ }
+ cnk_test_gl.subimages_uploaded++;
+ cnk_test_gl.last_subimage[0]=x;
+ cnk_test_gl.last_subimage[1]=y;
+ cnk_test_gl.last_subimage[2]=w;
+ cnk_test_gl.last_subimage[3]=h;
+ const size_t bpp=(format==GL_RGBA)?4u:2u;
+ const unsigned char *px=(const unsigned char*)data;
+ for(size_t i=0;i<(size_t)w*(size_t)h*bpp;i+=bpp){
+  int nonzero=0;
+  for(size_t j=0;j<bpp;j++)if(px[i+j])nonzero=1;
+  if(nonzero)cnk_test_gl.nonzero_texels++;
+ }
+ if(cnk_test_gl.fail_next_upload){
+  cnk_test_gl.queued_error=GL_OUT_OF_MEMORY;
+  cnk_test_gl.fail_next_upload=0;
+ }
+}
 void glTexCoord2f(GLfloat u,GLfloat v){
  if(!isfinite(u)||!isfinite(v))cnk_test_gl.invalid++;
  cnk_test_gl.texcoords_emitted++;
