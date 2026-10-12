@@ -122,11 +122,19 @@ jobs:
           git clone --depth 1 --branch development https://github.com/ZeebxTeam/zeebx-emu.git zeebx-emu
           python3 tools/patch_zeebx_interpreter.py zeebx-emu
           python3 tools/patch_zeebx_embedded_fs.py zeebx-emu
+          python3 tools/patch_zeebx_sqlite_vita.py zeebx-emu
+          grep -F 'sqlite = ["dep:rusqlite"]' zeebx-emu/Cargo.toml
+          grep -F 'rusqlite = { version = "0.37", optional = true' zeebx-emu/Cargo.toml
       - name: Compilar puente Rust con Cargo ANTES de CMake
         run: |
           set -euo pipefail
           export PATH="$VITASDK/bin:$PATH"
           cd ports/zeebx-rust-vita
+          cargo +nightly tree --manifest-path rust/zeebx_vita/Cargo.toml --target armv7-sony-vita-newlibeabihf --edges normal,build > /tmp/zeebx_vita_deps.txt
+          if grep -E '(^|[[:space:]])(rusqlite|libsqlite3-sys)[[:space:]]' /tmp/zeebx_vita_deps.txt; then
+            echo "ERROR: Vita Cargo dependencies still contain SQLite" >&2
+            exit 1
+          fi
           cargo +nightly build -Z build-std=std,panic_abort --release --target armv7-sony-vita-newlibeabihf --manifest-path rust/zeebx_vita/Cargo.toml
       - name: Validar todos los datos comerciales embebidos
         run: |
