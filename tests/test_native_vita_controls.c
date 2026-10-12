@@ -7,7 +7,8 @@ static SceCtrlData sample={0,128,128};
 static int fail_read=0;
 int sceCtrlSetSamplingMode(int mode){return mode==SCE_CTRL_MODE_ANALOG?0:-1;}
 int sceCtrlPeekBufferPositive(int port,SceCtrlData *pad,int count){
- if(port||count!=1||fail_read)return 0;
+ if(port||count!=1)return -1;
+ if(fail_read)return fail_read<0?-1:0;
  *pad=sample;return 1;
 }
 int main(void){
@@ -57,9 +58,27 @@ int main(void){
  sample.buttons=SCE_CTRL_LEFT;
  assert(!cnk_vita_controls_read_actions(&input,&buttons,&exit_req));
  assert(buttons==CNK_UI_PREVIOUS && input.steer==-1);
+ /* Native nonblocking pad polls sometimes have no new input sample.
+  * Neutralize promptly; never inherit throttle or a menu confirmation. */
  fail_read=1;
+ for(int i=0;i<7;i++){
+  input.throttle=1;input.steer=-1;buttons=CNK_UI_CONFIRM;exit_req=1;
+  assert(!cnk_vita_controls_read_actions(&input,&buttons,&exit_req));
+  assert(input.throttle==0 && input.brake==0 && input.steer==0);
+  assert(buttons==0 && !exit_req);
+ }
+ assert(cnk_vita_controls_read_actions(&input,&buttons,&exit_req)<0);
+ fail_read=0;sample.buttons=SCE_CTRL_CROSS;
+ assert(!cnk_vita_controls_read_actions(&input,&buttons,&exit_req));
+ assert(input.throttle==1 && (buttons&CNK_UI_CONFIRM));
+ /* One empty poll after recovery is again tolerated. */
+ fail_read=1;
+ assert(!cnk_vita_controls_read_actions(&input,&buttons,&exit_req));
+ fail_read=-1;
  assert(cnk_vita_controls_read_actions(&input,&buttons,&exit_req)<0);
  assert(cnk_vita_controls_read_actions(&input,NULL,&exit_req)<0);
- puts("VITA INPUT PASS: physical controls, menu actions, analog, error path");
+ assert(!cnk_vita_controls_init());
+ fail_read=1;assert(!cnk_vita_controls_read_actions(&input,&buttons,&exit_req));
+ puts("VITA INPUT PASS: physical controls, analog, transient missing samples, error path");
  return 0;
 }

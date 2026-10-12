@@ -12,12 +12,30 @@ static float deadzone(float v){
  return v>0 ? (v-threshold)/(1.0f-threshold) :
               (v+threshold)/(1.0f-threshold);
 }
-int cnk_vita_controls_init(void){return sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);}
+/* A single nonblocking peek may report no new sample even with a healthy
+ * controller. Use neutral input briefly instead of quitting the race. A real
+ * SDK error or eight consecutive empty polls still aborts safely. */
+static unsigned empty_polls=0;
+int cnk_vita_controls_init(void){
+ empty_polls=0;
+ return sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
+}
 static int read_pad(cnk_driver_input *out,uint32_t *ui_bits,int *exit_requested){
  if(!out)return -1;
+ /* Never reuse acceleration, steering, or a held UI event when a sample is
+  * absent; synthetic neutral frames cannot activate a menu item. */
+ memset(out,0,sizeof(*out));
+ if(ui_bits)*ui_bits=0;
+ if(exit_requested)*exit_requested=0;
  SceCtrlData pad;
  memset(&pad,0,sizeof(pad));
- if(sceCtrlPeekBufferPositive(0,&pad,1)<1)return -2;
+ int received=sceCtrlPeekBufferPositive(0,&pad,1);
+ if(received<0)return -2;
+ if(received==0){
+  if(empty_polls<8u)empty_polls++;
+  return empty_polls<8u?0:-2;
+ }
+ empty_polls=0;
  out->steer=deadzone(((float)pad.lx-128.0f)/127.0f);
  if(out->steer>1)out->steer=1;
  if(out->steer< -1)out->steer=-1;
