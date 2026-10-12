@@ -917,7 +917,7 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
   if(a0!=4u)return -4;
   return zeebx_gl_draw_vertices(c,a1,a2,0u,0u);
  case 27u: /* glDrawElements(GL_TRIANGLES, count, type, guest_indices) */
-  if(a0!=4u)return -4;
+  if(a0!=4u || (a2!=0x1401u&&a2!=0x1403u))return -4;
   return zeebx_gl_draw_vertices(c,0u,a1,a2,a3);
  case 37u: /* glGetError: only after supported host calls */
   return cnk_zeebx_arm_return_from_api(c,0u);
