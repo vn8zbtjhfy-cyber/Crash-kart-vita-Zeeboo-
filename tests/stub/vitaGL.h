@@ -11,6 +11,11 @@ typedef int GLint;
 typedef int GLsizei;
 typedef float GLfloat;
 #define GL_DEPTH_TEST 0x0B71u
+#define GL_ALPHA_TEST 0x0BC0u
+#define GL_POLYGON_OFFSET_FILL 0x8037u
+#define GL_GREATER 0x0204u
+#define GL_FLAT 0x1D00u
+#define GL_SMOOTH 0x1D01u
 #define GL_COLOR_BUFFER_BIT 0x4000u
 #define GL_DEPTH_BUFFER_BIT 0x0100u
 #define GL_STENCIL_BUFFER_BIT 0x0400u
@@ -68,6 +73,9 @@ void glEnable(GLenum capability);
 void glDisable(GLenum capability);
 void glDepthFunc(GLenum func);
 void glDepthMask(GLboolean enabled);
+void glAlphaFunc(GLenum comparison,GLfloat reference);
+void glPolygonOffset(GLfloat factor,GLfloat units);
+void glShadeModel(GLenum mode);
 void glBlendFunc(GLenum src,GLenum dst);
 void glCullFace(GLenum face);
 void glFrontFace(GLenum mode);
@@ -104,6 +112,10 @@ typedef struct {
  uint32_t projection_loads,modelview_loads, invalid;
  uint32_t frustum_calls,ortho_calls;
  float last_projection[6];
+ uint32_t alpha_calls,polygon_offset_calls,shade_calls;
+ GLenum last_alpha_comparison,last_shade;
+ float last_alpha_reference,last_polygon_factor,last_polygon_units;
+ int alpha_test_enabled,polygon_offset_enabled;
  uint32_t texture_callbacks;
  uint32_t texenv_calls;
  GLenum texenv_mode;

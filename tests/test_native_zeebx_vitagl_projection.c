@@ -24,6 +24,40 @@ int main(void){
  /* The exact original Zeebo 640x480 rectangle maps into the Vita
   * 725x544 centered pillarbox. No stretching to 960x544. */
  assert(gpu.scissor&&gpu.set_capability);
+ /* Production VitaGL callbacks must execute actual GL entrypoints;
+  * the recorder is NOT a substitute for these state changes. */
+ assert(gpu.alpha_func && gpu.polygon_offset && gpu.shade_model);
+ assert(!gpu.set_capability(NULL,GL_ALPHA_TEST,1));
+ assert(cnk_test_gl.alpha_test_enabled==1);
+ assert(!gpu.alpha_func(NULL,GL_GREATER,0.5f));
+ assert(cnk_test_gl.alpha_calls==1u);
+ assert(cnk_test_gl.last_alpha_comparison==GL_GREATER);
+ assert(cnk_test_gl.last_alpha_reference==0.5f);
+ assert(gpu.alpha_func(NULL,0xffffu,0.5f)!=0);
+ assert(gpu.alpha_func(NULL,GL_GREATER,2.f)!=0);
+ assert(cnk_test_gl.alpha_calls==1u);
+ assert(!gpu.set_capability(NULL,GL_POLYGON_OFFSET_FILL,1));
+ assert(cnk_test_gl.polygon_offset_enabled==1);
+ assert(!gpu.polygon_offset(NULL,0.5f,-2.f));
+ assert(cnk_test_gl.polygon_offset_calls==1u);
+ assert(cnk_test_gl.last_polygon_factor==0.5f);
+ assert(cnk_test_gl.last_polygon_units==-2.f);
+ assert(!gpu.shade_model(NULL,GL_FLAT));
+ assert(!gpu.shade_model(NULL,GL_SMOOTH));
+ assert(cnk_test_gl.shade_calls==2u);
+ assert(cnk_test_gl.last_shade==GL_SMOOTH);
+ assert(gpu.shade_model(NULL,0xffffu)!=0);
+ assert(cnk_test_gl.shade_calls==2u);
+ cnk_test_gl.queued_error=GL_OUT_OF_MEMORY;
+ assert(gpu.alpha_func(NULL,GL_GREATER,0.5f)!=0);
+ cnk_test_gl.queued_error=GL_OUT_OF_MEMORY;
+ assert(gpu.polygon_offset(NULL,0.5f,-2.f)!=0);
+ cnk_test_gl.queued_error=GL_OUT_OF_MEMORY;
+ assert(gpu.shade_model(NULL,GL_SMOOTH)!=0);
+ assert(!gpu.set_capability(NULL,GL_ALPHA_TEST,0));
+ assert(!gpu.set_capability(NULL,GL_POLYGON_OFFSET_FILL,0));
+ assert(cnk_test_gl.alpha_test_enabled==0);
+ assert(cnk_test_gl.polygon_offset_enabled==0);
  assert(!gpu.set_capability(NULL,GL_SCISSOR_TEST,1));
  assert(cnk_test_gl.scissor_enabled==1);
  assert(!gpu.scissor(NULL,0,0,640u,480u));

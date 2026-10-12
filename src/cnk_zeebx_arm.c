@@ -1264,6 +1264,27 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
                 a2=c->regs[2],a3=c->regs[3];
  int rc=-1;
  switch(slot){
+ /* Real Zeebo GLES1 translucent sprites and kart polygon handling.
+  * Slots are exact GL_LEGACY AEEGL.h indices from Zeebx aee_slots.rs;
+  * the x suffix means signed 16.16 FIXED, not raw float bits. */
+ case 4u: /* glAlphaFuncx(compare, reference) */
+  if(a0<0x0200u||a0>0x0207u||!c->gl_host.alpha_func)
+   return -4;
+  {float ref=zeebx_gl_fixed(a1);
+   if(ref<0.f)ref=0.f;
+   if(ref>1.f)ref=1.f;
+   if(c->gl_host.alpha_func(c->gl_host_user,a0,ref))return -4;
+  }
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 59u: /* glPolygonOffsetx(factor,units) */
+  if(!c->gl_host.polygon_offset||
+     c->gl_host.polygon_offset(c->gl_host_user,
+        zeebx_gl_fixed(a0),zeebx_gl_fixed(a1)))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 67u: /* glShadeModel(GL_FLAT/GL_SMOOTH) */
+  if((a0!=0x1d00u&&a0!=0x1d01u)||!c->gl_host.shade_model||
+     c->gl_host.shade_model(c->gl_host_user,a0))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
  /* All indices from ZeebxTeam/zeebx-emu/src/brew/aee_slots.rs
   * GL_LEGACY (AEEGL.h). This IGL does not pass a 'this' pointer.
   * Only valid GLES1 state is forwarded; unported state is rejected. */
@@ -1385,7 +1406,8 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
  case 24u: /* glDisable(capability) */
  case 28u: /* glEnable(capability) */
   if((a0!=0x0b71u&&a0!=0x0be2u&&a0!=0x0b44u&&
-      a0!=0x0c11u&&a0!=CNK_GLTEX_TARGET)||
+      a0!=0x0c11u&&a0!=0x0bc0u&&a0!=0x8037u&&
+      a0!=CNK_GLTEX_TARGET)||
      (a0==CNK_GLTEX_TARGET && slot==28u &&
       (!c->gl_host.texture_bind||!c->gl_host.texture_upload||
        !c->gl_host.draw_textured_triangles))||

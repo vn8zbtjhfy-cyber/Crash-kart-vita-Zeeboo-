@@ -267,7 +267,8 @@ static int vita_draw_colored_textured_triangles(
 static int vita_set_capability(void *user,uint32_t cap,int enabled){
  (void)user;
  if(cap!=0x0b71u && cap!=0x0be2u && cap!=0x0b44u &&
-    cap!=GL_TEXTURE_2D && cap!=GL_SCISSOR_TEST)return -1;
+    cap!=GL_TEXTURE_2D && cap!=GL_SCISSOR_TEST &&
+    cap!=0x0bc0u && cap!=0x8037u)return -1;
  if(enabled)glEnable((GLenum)cap);
  else glDisable((GLenum)cap);
  return glGetError()==GL_NO_ERROR?0:-1;
@@ -285,6 +286,26 @@ static int vita_depth_func(void *user,uint32_t func){
 static int vita_depth_mask(void *user,int enable){
  (void)user;
  glDepthMask(enable?GL_TRUE:GL_FALSE);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+/* Exact GLES1 state from the source game. Every state change reaches
+ * the actual Vita graphics driver and reports GL errors to Zeebx. */
+static int vita_alpha_func(void *user,uint32_t compare,float reference){
+ (void)user;
+ if(compare<0x0200u||compare>0x0207u||
+    reference<0.f||reference>1.f)return -1;
+ glAlphaFunc((GLenum)compare,reference);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_polygon_offset(void *user,float factor,float units){
+ (void)user;
+ glPolygonOffset(factor,units);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_shade_model(void *user,uint32_t mode){
+ (void)user;
+ if(mode!=0x1d00u&&mode!=0x1d01u)return -1;
+ glShadeModel((GLenum)mode);
  return glGetError()==GL_NO_ERROR?0:-1;
 }
 static int vita_cull_face(void *user,uint32_t face){
@@ -323,6 +344,8 @@ cnk_zeebx_gl_host cnk_vita_zeebx_gl_callbacks(void){
   .draw_colored_triangles=vita_draw_colored_triangles,
   .set_capability=vita_set_capability,.blend_func=vita_blend_func,
   .depth_func=vita_depth_func,.depth_mask=vita_depth_mask,
+  .alpha_func=vita_alpha_func,.polygon_offset=vita_polygon_offset,
+  .shade_model=vita_shade_model,
   .cull_face=vita_cull_face,.front_face=vita_front_face,
   .color4=vita_color4,.color_mask=vita_color_mask,
   .texture_gen=vita_texture_gen,.texture_delete=vita_texture_delete,
