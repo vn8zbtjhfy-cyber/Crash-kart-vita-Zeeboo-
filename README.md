@@ -2,6 +2,25 @@
 
 Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **Todavía no es un videojuego completo ni se ha verificado su ejecución en consola.**
 
+## Avance 127: callbacks originales de señales BREW
+
+Se incorporó la fábrica `ISignalCBFactory::CreateSignal` con el quinto
+parámetro del ABI ARM en la pila, objetos guest `ISignal`/`ISignalCtl`,
+registro de eventos del mando `RegisterForButtonEvent` y
+`RegisterForPositionChange`, y cola de avisos acotada. La primera
+lectura de posición se notifica incluso con el analógico inmóvil.
+
+`cnk_zeebx_arm_deliver_signals` interpreta los callbacks originales
+**solo en un punto seguro de retorno del applet**, con límite de
+instrucciones y restauración de registros. Los errores de API, direcciones
+inválidas y desbordamientos se detienen explícitamente. Se enlazó la
+entrega al diagnóstico opcional del applet y se reportan los avisos
+realmente atendidos, sin declarar por ello un juego jugable.
+
+**31 pruebas portátiles sin ROM** y compilación VitaSDK se comprueban
+por GitHub Actions. Los tests ejercitan ARM sintético, no la carrera
+completa del juego original.
+
 ## Avances 125-126: puente Zeebx HID y entrada física Vita (experimental)
 
 - **Se conserva el motor de carreras nativo.** En el puente de ejecución
