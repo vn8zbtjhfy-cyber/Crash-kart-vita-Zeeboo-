@@ -55,9 +55,13 @@ static int vita_present(void *user){
  vglSwapBuffers(GL_FALSE);
  return 0;
 }
-int cnk_vita_zeebx_gl_attach(cnk_zeebx_arm *cpu){
+cnk_zeebx_gl_host cnk_vita_zeebx_gl_callbacks(void){
  const cnk_zeebx_gl_host host={
   vita_begin,vita_clear_color,vita_clear,vita_viewport,vita_present
  };
+ return host;
+}
+int cnk_vita_zeebx_gl_attach(cnk_zeebx_arm *cpu){
+ const cnk_zeebx_gl_host host=cnk_vita_zeebx_gl_callbacks();
  return cnk_zeebx_arm_set_gl_host(cpu,&host,NULL);
 }
