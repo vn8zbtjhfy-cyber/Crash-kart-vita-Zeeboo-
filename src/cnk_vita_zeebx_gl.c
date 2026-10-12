@@ -136,11 +136,66 @@ static int vita_draw_triangles(void *user,const float *xyz,uint32_t count){
  glEnd();
  return glGetError()==GL_NO_ERROR?0:-1;
 }
+/* Zeebx/BREW GL_LEGACY: GLES 1.0 texture objects use actual vitaGL
+ * storage. The guest copy is temporary and consumed by glTexImage2D;
+ * texture names belong to the host context, not the emulated address map. */
+static int vita_texture_gen(void *u,uint32_t n,uint32_t *names){
+ (void)u;
+ if(!n||n>32u||!names)return -1;
+ GLuint handles[32]={0};
+ glGenTextures((GLsizei)n,handles);
+ if(glGetError()!=GL_NO_ERROR)return -1;
+ for(uint32_t i=0;i<n;i++)names[i]=(uint32_t)handles[i];
+ return 0;
+}
+static int vita_texture_delete(void *u,uint32_t n,const uint32_t *names){
+ (void)u;
+ if(n>32u||(!names&&n))return -1;
+ GLuint handles[32];
+ for(uint32_t i=0;i<n;i++)handles[i]=(GLuint)names[i];
+ glDeleteTextures((GLsizei)n,handles);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_texture_bind(void *u,uint32_t name){
+ (void)u;
+ glBindTexture(GL_TEXTURE_2D,(GLuint)name);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_texture_parameter(void *u,uint32_t pname,uint32_t value){
+ (void)u;
+ glTexParameteri(GL_TEXTURE_2D,(GLenum)pname,(GLint)value);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_texture_upload(void *u,uint32_t w,uint32_t h,
+                               uint32_t format,uint32_t type,
+                               const uint8_t *pixels){
+ (void)u;
+ if(!w||!h||w>512u||h>512u||!pixels)return -1;
+ glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+ if(glGetError()!=GL_NO_ERROR)return -1;
+ glTexImage2D(GL_TEXTURE_2D,0,(GLint)format,(GLsizei)w,(GLsizei)h,
+              0,(GLenum)format,(GLenum)type,pixels);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_draw_textured_triangles(void *u,const float *xyz,
+                                       const float *uv,uint32_t count){
+ (void)u;
+ if(!xyz||!uv||!count||count>CNK_ZEEBX_MAX_DRAW_VERTICES||count%3u)
+  return -1;
+ glBegin(GL_TRIANGLES);
+ for(uint32_t i=0;i<count;i++){
+  glTexCoord2f(uv[2u*i],uv[2u*i+1u]);
+  glVertex3f(xyz[3u*i],xyz[3u*i+1u],xyz[3u*i+2u]);
+ }
+ glEnd();
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
 /* Explicit GLES 1.x state from the Zeebo original. No silent success:
  * report a Vita GPU error to the guest interpreter immediately. */
 static int vita_set_capability(void *user,uint32_t cap,int enabled){
  (void)user;
- if(cap!=0x0b71u && cap!=0x0be2u && cap!=0x0b44u)return -1;
+ if(cap!=0x0b71u && cap!=0x0be2u && cap!=0x0b44u &&
+    cap!=GL_TEXTURE_2D)return -1;
  if(enabled)glEnable((GLenum)cap);
  else glDisable((GLenum)cap);
  return glGetError()==GL_NO_ERROR?0:-1;
@@ -195,7 +250,11 @@ cnk_zeebx_gl_host cnk_vita_zeebx_gl_callbacks(void){
   .set_capability=vita_set_capability,.blend_func=vita_blend_func,
   .depth_func=vita_depth_func,.depth_mask=vita_depth_mask,
   .cull_face=vita_cull_face,.front_face=vita_front_face,
-  .color4=vita_color4,.color_mask=vita_color_mask
+  .color4=vita_color4,.color_mask=vita_color_mask,
+  .texture_gen=vita_texture_gen,.texture_delete=vita_texture_delete,
+  .texture_bind=vita_texture_bind,.texture_parameter=vita_texture_parameter,
+  .texture_upload=vita_texture_upload,
+  .draw_textured_triangles=vita_draw_textured_triangles
  };
  return host;
 }

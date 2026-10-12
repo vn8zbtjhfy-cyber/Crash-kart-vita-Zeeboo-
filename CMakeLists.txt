@@ -810,6 +810,18 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_vitagl_projection PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_vitagl_projection PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_vitagl_projection COMMAND cnk_test_zeebx_vitagl_projection)
+  add_executable(cnk_test_zeebx_textures tests/test_native_zeebx_textures.c)
+  target_link_libraries(cnk_test_zeebx_textures PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_textures PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_textures COMMAND cnk_test_zeebx_textures)
+  add_executable(cnk_test_zeebx_vitagl_textures
+    tests/test_native_zeebx_vitagl_textures.c tests/stub/vitaGL_stub.c
+    src/cnk_vita_zeebx_gl.c)
+  target_include_directories(cnk_test_zeebx_vitagl_textures PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/stub")
+  target_link_libraries(cnk_test_zeebx_vitagl_textures PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_vitagl_textures PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_vitagl_textures COMMAND cnk_test_zeebx_vitagl_textures)
   # Zeebx GL_LEGACY original triangle primitives, indexed & sequential.
   # No ROM assets: synthetic ARM guest bytes and strict GPU recorder.
   add_executable(cnk_test_zeebx_gl_primitives tests/test_native_zeebx_gl_primitives.c)

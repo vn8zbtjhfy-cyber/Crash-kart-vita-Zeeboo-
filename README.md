@@ -1,5 +1,22 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 136: texturas RGB565/RGBA y UV originales hacia vitaGL
+
+- El invitado ARM Zeebo invoca las operaciones originales de creación,
+  selección, configuración y carga de texturas de `GL_LEGACY`. Las cargas
+  soportadas (`RGBA8` y `RGB565`, hasta 512×512) llegan al backend
+  real vitaGL, sin rutas de éxito ficticias.
+- `glTexCoordPointer` y los arreglos de coordenadas UV quedan conectados
+  a `DrawArrays` y `DrawElements`, incluidos triángulos, tiras y abanicos.
+- **39/39 pruebas sin ROM aprobadas** en
+  [GitHub Actions](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38208510285).
+- Este bloque todavía no significa que el juego original ya arranque ni
+  sea jugable en una consola real. Faltan ejecutar los eventos del applet,
+  enlazar archivos y sonido originales, completar llamadas gráficas,
+  optimizar y verificar hardware. El 45.9% anterior es un estimado
+  histórico, no porcentaje de jugabilidad certificado.
+- [Informe técnico de texturas y límites](docs/AVANCE_135_ZEEBX_TEXTURAS_VITA.md).
+
 ## Avance 135: tiras y abanicos 3D del Zeebo
 
 La ejecución gráfica de Zeebx ahora acepta `GL_TRIANGLES`,

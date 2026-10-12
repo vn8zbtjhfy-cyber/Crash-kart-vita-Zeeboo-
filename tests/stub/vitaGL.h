@@ -11,6 +11,9 @@ typedef int GLint;
 typedef int GLsizei;
 typedef float GLfloat;
 #define GL_DEPTH_TEST 0x0B71u
+#define GL_COLOR_BUFFER_BIT 0x4000u
+#define GL_DEPTH_BUFFER_BIT 0x0100u
+#define GL_STENCIL_BUFFER_BIT 0x0400u
 #define GL_BLEND 0x0BE2u
 #define GL_SRC_ALPHA 0x0302u
 #define GL_ONE_MINUS_SRC_ALPHA 0x0303u
@@ -33,6 +36,15 @@ typedef float GLfloat;
 #define GL_LINEAR 0x2601u
 #define GL_NO_ERROR 0u
 #define GL_OUT_OF_MEMORY 0x0505u
+/* Narrow declarations used by the REAL Vita Zeebx graphics adapter.
+ * Test executables supply host-only recorders, never the console GPU. */
+void glBegin(GLenum primitive);
+void glEnd(void);
+void glVertex3f(GLfloat x,GLfloat y,GLfloat z);
+void glClearColor(GLfloat r,GLfloat g,GLfloat b,GLfloat a);
+void glClear(GLenum mask);
+void glLoadIdentity(void);
+void vglSwapBuffers(GLboolean vsync);
 void glGenTextures(GLsizei n,GLuint *textures);
 void glDeleteTextures(GLsizei n,const GLuint *textures);
 void glPixelStorei(GLenum pname,GLint param);
@@ -67,10 +79,12 @@ void glTexCoordPointer(GLint size,GLenum type,GLsizei stride,const void *ptr);
 void glBindTexture(GLenum target,GLuint texture);
 void glColor4f(GLfloat r,GLfloat g,GLfloat b,GLfloat a);
 void glDrawArrays(GLenum mode,GLint first,GLsizei count);
+void glTexCoord2f(GLfloat u,GLfloat v);
 
 typedef struct {
  uint32_t vertex_limit;
  uint64_t drawn_vertices, draw_calls, textured_calls, untextured_calls;
+ uint32_t texcoords_emitted;
  uint32_t matrix_loads,matrix_multiplications, matrix_stack_depth;
  float recorded_model_matrices[16 * 16];
  float last_camera_view[16];
