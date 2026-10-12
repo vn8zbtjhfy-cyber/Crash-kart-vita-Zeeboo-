@@ -19,7 +19,6 @@ jobs:
     container:
       image: vitasdk/vitasdk:2026.08
     env:
-      VITASDK: /opt/vitasdk
       CARGO_TARGET_ARMV7_SONY_VITA_NEWLIBEABIHF_LINKER: arm-vita-eabi-gcc
       CC_armv7_sony_vita_newlibeabihf: arm-vita-eabi-gcc
       AR_armv7_sony_vita_newlibeabihf: arm-vita-eabi-ar
@@ -142,7 +141,17 @@ jobs:
           set -euo pipefail
           export PATH="$VITASDK/bin:$PATH"
           cd ports/zeebx-rust-vita
-          cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$VITASDK/share/vita.toolchain.cmake" -DCMAKE_BUILD_TYPE=Release -DNITRO_EXPERIMENTAL_VPK=ON
+          echo "VitaSDK root: $VITASDK"
+          test -f "$VITASDK/share/vita.toolchain.cmake"
+          if command -v ninja >/dev/null 2>&1; then
+            generator=(-G Ninja)
+          elif command -v make >/dev/null 2>&1; then
+            generator=()
+          else
+            echo "ERROR: Missing Ninja and make" >&2
+            exit 1
+          fi
+          cmake -S . -B build "${generator[@]}" -DCMAKE_TOOLCHAIN_FILE="$VITASDK/share/vita.toolchain.cmake" -DCMAKE_BUILD_TYPE=Release -DNITRO_EXPERIMENTAL_VPK=ON
           cmake --build build --parallel 2
           test -s build/Crash_Nitro_Kart_3D.vpk
       - name: Publicar solo si existe VPK real compilado
