@@ -51,9 +51,9 @@ jobs:
           from pathlib import Path
           p = Path('zeebx-emu/src/cpu/mod.rs')
           t = p.read_text()
-          anchor = '#[cfg(any(test, target_arch = "wasm32", target_os = "ios"))]\\npub mod interpretador;'
+          anchor = '#[cfg(any(test, target_arch = "wasm32", target_os = "ios"))]'
           assert t.count(anchor) == 1, 'Zeebx CPU cfg changed'
-          t = t.replace(anchor, 'pub mod interpretador;')
+          t = t.replace(anchor, '')
           p.write_text(t)
           print('Host ARM interpreter enabled for probe')
           PY
