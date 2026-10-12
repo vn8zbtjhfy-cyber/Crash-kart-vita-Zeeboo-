@@ -180,6 +180,8 @@ typedef struct {
  uint32_t hid_button_signal,hid_position_signal;
  char last_debug_template[128];
  size_t module_size;
+ uint32_t applet_start_addr,applet_instance;
+ uint8_t applet_start_dispatched;
  int initialized,applet_pending;
 } cnk_zeebx_arm;
 
@@ -234,4 +236,12 @@ int cnk_zeebx_arm_prepare_applet(cnk_zeebx_arm *cpu,uint32_t clsid,
 int cnk_zeebx_arm_applet_result(cnk_zeebx_arm *cpu,
                                 const cnk_arm_outcome *stop,
                                 uint32_t *applet_ptr);
+/* Stage 3 follows upstream Zeebx Machine::start_applet and calls
+ * IApplet::HandleEvent(slot 2, EVT_APP_START=0) with a real 24-byte
+ * guest AEEAppStart and a Zeebo IDisplay guest object. This is a
+ * BOUNDED diagnostic. It does not imply a playable native game. */
+int cnk_zeebx_arm_prepare_start_event(cnk_zeebx_arm *cpu,
+                                      uint32_t applet,uint32_t clsid,
+                                      uint32_t *entry,
+                                      uint32_t *start_ptr);
 #endif
