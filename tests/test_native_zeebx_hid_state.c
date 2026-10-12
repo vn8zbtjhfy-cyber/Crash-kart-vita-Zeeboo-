@@ -116,14 +116,75 @@ int main(void){
  api(&c,dev,9u,13u,info+1u,0u);
  assert(!cnk_zeebx_arm_bootstrap(&c,12u,&out,&handled));
  assert(out.reason==CNK_ARM_API&&out.api_slot==13u);
- api(&c,dev,9u,9u,info,0u); /* button events not yet implemented */
+ /* The first real host snapshot pressed buttons 0, 11 and 13.
+  * Zeebx delivers press/release events in ascending HID index order. */
+ assert(c.hid_queue_count==3u);
+ const uint32_t stamp=CNK_ARM_OBJECT_BASE+0x600u;
+ const uint32_t dropped=CNK_ARM_OBJECT_BASE+0x604u;
+ api(&c,dev,9u,9u,unsafe,stamp);
+ c.regs[3]=dropped;
  assert(!cnk_zeebx_arm_bootstrap(&c,12u,&out,&handled));
  assert(out.reason==CNK_ARM_API&&out.api_slot==9u);
+ assert(c.hid_queue_count==3u); /* invalid output must NOT pop */
+ const unsigned first_three[]={0u,11u,13u};
+ for(unsigned i=0;i<3u;i++){
+  api(&c,dev,9u,9u,info,stamp);
+  c.regs[3]=dropped;
+  expect_success(&c);
+  assert(at(&c,info)==first_three[i]);
+  assert(at(&c,info+4u)==1u);
+  assert(at(&c,stamp)==0u && at(&c,dropped)==0u);
+ }
+ assert(c.hid_queue_count==0u);
+ api(&c,dev,9u,9u,info,stamp);
+ c.regs[3]=dropped;
+ assert(!cnk_zeebx_arm_bootstrap(&c,12u,&out,&handled));
+ assert(out.reason==CNK_ARM_RETURNED && handled==1u);
+ assert(c.regs[0]==1u); /* EFAILED: no events, not a fake press */
+ assert(at(&c,info)==0u && at(&c,info+4u)==0u);
+ /* Repeating same physical snapshot must not duplicate events. */
+ assert(!cnk_zeebx_arm_set_pad(&c,&active));
+ assert(c.hid_queue_count==0u);
+ assert(!cnk_zeebx_arm_set_virtual_time(&c,1234u));
+ cnk_zeebx_pad released=active;
+ released.buttons=0u;
+ assert(!cnk_zeebx_arm_set_pad(&c,&released));
+ assert(c.hid_queue_count==3u);
+ for(unsigned i=0;i<3u;i++){
+  api(&c,dev,9u,9u,info,stamp);
+  c.regs[3]=dropped;
+  expect_success(&c);
+  assert(at(&c,info)==first_three[i] && at(&c,info+4u)==0u);
+  assert(at(&c,stamp)==1234u);
+ }
+
+ /* Overflow is finite and visible, keeps freshest events. */
+ cnk_zeebx_pad moving=released;
+ for(unsigned i=0;i<70u;i++){
+  moving.buttons^=1u;
+  assert(!cnk_zeebx_arm_set_pad(&c,&moving));
+ }
+ assert(c.hid_queue_count==CNK_ZEEBX_HID_QUEUE);
+ assert(c.hid_events_dropped==1u);
+ api(&c,dev,9u,9u,info,stamp);
+ c.regs[3]=dropped;
+ expect_success(&c);
+ assert(at(&c,info)==0u);
+ assert(at(&c,dropped)==1u);
+ assert(c.hid_queue_count==CNK_ZEEBX_HID_QUEUE-1u);
+ api(&c,dev,9u,9u,info,stamp);
+ c.regs[3]=dropped;
+ expect_success(&c);
+ assert(at(&c,dropped)==0u);
+ /* An actually unimplemented BREW method remains an explicit trap. */
+ api(&c,dev,9u,8u,info,stamp);
+ assert(!cnk_zeebx_arm_bootstrap(&c,12u,&out,&handled));
+ assert(out.reason==CNK_ARM_API&&out.api_slot==8u);
 
  cnk_zeebx_pad invalid=active;
  invalid.buttons=1u<<18;
  assert(cnk_zeebx_arm_set_pad(&c,&invalid)<0);
- assert(c.pad.buttons==active.buttons);
+ assert(c.pad.buttons==moving.buttons);
  assert(cnk_zeebx_arm_set_pad(&c,NULL)<0);
  cnk_zeebx_arm_destroy(&c);
  puts("PASS: Zeebx guest HID: physical snapshot, 18 button UIDs, four axes,"
