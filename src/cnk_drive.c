@@ -131,12 +131,32 @@ static int local_progress(cnk_ai_driver *ai,cnk_vec3 pos,float *fraction,float *
  *distance=sqrtf(best);
  return 0;
 }
+/* Rebase guidance after a large displacement without discarding the
+ * completed route loop. This affects AI steering only, never race gates. */
+static void ai_rebase_route(cnk_ai_driver *ai,float fraction){
+ float distance=fraction*ai->route_length;
+ if(ai->closed && ai->progress_initialized)
+  distance+=ai->route_length*
+    floorf((ai->progress_units-distance)/ai->route_length+0.5f);
+ ai->progress_units=distance;
+ ai->progress_initialized=1;
+}
 int cnk_ai_controls(cnk_ai_driver *ai,const cnk_kart *kart,
                     const cnk_drive_tuning *t,cnk_driver_input *out){
  if(!ai||!kart||!out||cnk_drive_validate(t)||!ai->route||
     !finite_vec(kart->position)||!isfinite(kart->heading)||!isfinite(kart->speed))return -1;
  float fraction=0.0f,deviation=0.0f;
- if(local_progress(ai,kart->position,&fraction,&deviation))return -2;
+ /* A collision, item or recovery can move a rival beyond every local
+  * route window. Failing here previously aborted the entire race. Reacquire
+  * the nearest source-DRV segment and keep the other racers running. */
+ if(local_progress(ai,kart->position,&fraction,&deviation)){
+  cnk_nav_projection global={0};
+  if(cnk_nav_nearest(ai->route,kart->position,ai->closed,&global) ||
+     !isfinite(global.fraction)||!isfinite(global.distance))return -2;
+  ai_rebase_route(ai,global.fraction);
+  fraction=global.fraction;
+  deviation=global.distance;
+ }
  /* If a kart was physically displaced far away from the expected corridor,
   * allow reacquisition rather than spinning forever around a stale target.
   * A guarded threshold avoids lane-switching near ordinary intersections. */
@@ -144,7 +164,7 @@ int cnk_ai_controls(cnk_ai_driver *ai,const cnk_kart *kart,
   cnk_nav_projection global;
   if(!cnk_nav_nearest(ai->route,kart->position,ai->closed,&global)&&
      global.distance+12.0f<deviation){
-   ai->progress_units=global.fraction*ai->route_length;
+   ai_rebase_route(ai,global.fraction);
    fraction=global.fraction;deviation=global.distance;
   }
  }
