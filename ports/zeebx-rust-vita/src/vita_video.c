@@ -5,7 +5,11 @@
 #define H 544
 static GLuint tex=0;static uint32_t old_w=0,old_h=0;
 int vita_video_init(void){
- if(!vglInit(0))return -1;
+ // vitaGL's vglInit() returns GL_TRUE only when requested resolution
+ // was clamped to display limits; GL_FALSE is also returned on normal
+ // successful initialization. It is NOT a conventional success boolean.
+ // See upstream vitaGL source/vgl.c: return res_fallback.
+ (void)vglInit(0);
  glViewport(0,0,W,H);glDisable(GL_DEPTH_TEST);glDisable(GL_CULL_FACE);
  glDisable(GL_BLEND);glEnable(GL_TEXTURE_2D);
  glGenTextures(1,&tex);glBindTexture(GL_TEXTURE_2D,tex);
