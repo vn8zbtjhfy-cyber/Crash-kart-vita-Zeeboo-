@@ -58,6 +58,9 @@ void glTexEnvi(GLenum target,GLenum pname,GLint param);
 void glTexImage2D(GLenum target,GLint level,GLint internalformat,GLsizei width,
                   GLsizei height,GLint border,GLenum format,GLenum type,
                   const void *data);
+void glTexSubImage2D(GLenum target,GLint level,GLint xoffset,GLint yoffset,
+                     GLsizei width,GLsizei height,GLenum format,GLenum type,
+                     const void *data);
 GLenum glGetError(void);
 void glViewport(GLint x,GLint y,GLsizei width,GLsizei height);
 void glScissor(GLint x,GLint y,GLsizei width,GLsizei height);
@@ -104,7 +107,8 @@ typedef struct {
  uint32_t texture_callbacks;
  uint32_t texenv_calls;
  GLenum texenv_mode;
- uint32_t images_uploaded,handles_created,handles_deleted;
+ uint32_t images_uploaded,subimages_uploaded,handles_created,handles_deleted;
+ GLint last_subimage[4];
  uint64_t pixels_uploaded, nonzero_texels;
  uint32_t last_upload_width,last_upload_height;
  GLenum queued_error;
