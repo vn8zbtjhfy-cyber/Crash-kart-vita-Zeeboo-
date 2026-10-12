@@ -1065,10 +1065,12 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
   return cnk_zeebx_arm_return_from_api(c,0u);
  case 23u: /* glDisable(capability) */
  case 28u: /* glEnable(capability) */
-  if((a0!=0x0b71u&&a0!=0x0be2u&&a0!=0x0b44u)||
+  if((a0!=0x0b71u&&a0!=0x0be2u&&a0!=0x0b44u&&
+      a0!=CNK_GLTEX_TARGET)||
      !c->gl_host.set_capability||
      c->gl_host.set_capability(c->gl_host_user,a0,
                                slot==28u?1:0))return -4;
+  if(a0==CNK_GLTEX_TARGET)c->gl_texturing_enabled=slot==28u?1u:0u;
   return cnk_zeebx_arm_return_from_api(c,0u);
  case 34u: /* glFrontFace(GL_CW/GL_CCW) */
   if((a0!=0x0900u&&a0!=0x0901u)||
@@ -1095,10 +1097,11 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
   if(rc)return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
- case 25u: /* glDisableClientState(GL_VERTEX_ARRAY) */
- case 29u: /* glEnableClientState(GL_VERTEX_ARRAY) */
-  if(a0!=0x8074u)return -4; /* other client arrays not ported */
-  c->gl_vertex_enabled=slot==29u?1u:0u;
+ case 25u: /* glDisableClientState */
+ case 29u: /* glEnableClientState */
+  if(a0==0x8074u)c->gl_vertex_enabled=slot==29u?1u:0u;
+  else if(a0==0x8078u)c->gl_uv_enabled=slot==29u?1u:0u;
+  else return -4; /* color/normal arrays need separate verified ABI */
   return cnk_zeebx_arm_return_from_api(c,0u);
  case 26u: /* glDrawArrays(GL_TRIANGLES, first, count) */
   if(a0!=4u)return -4;
