@@ -1,5 +1,20 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 128: negociación EGL original de Zeebo
+
+- Se conserva la rama de señales BREW del avance 127. Se añadió desde
+  Zeebx la ABI del **EGL antiguo** que usa `cnk2.mod`: pantalla,
+  `eglInitialize`, `eglQueryString`, elección y consulta de
+  configuración 640×480 RGB565, errores y limpieza de estado.
+- La selección de atributos valida el quinto argumento AAPCS en la
+  pila virtual y nunca permite direcciones fuera de la memoria del juego.
+- No inventamos contexto OpenGL ES ni imágenes: `eglCreateContext`,
+  `eglMakeCurrent` y `eglSwapBuffers` siguen detenidos hasta que
+  exista un GPU Vita funcional para las llamadas originales.
+- Las pruebas de PC se ejecutan sin ROM; el juego completo aún no
+  es jugable ni está probado físicamente en PS Vita.
+- [Detalle técnico del avance 128](docs/AVANCE_128_ZEEBX_EGL_LEGACY.md).
+
 Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **Todavía no es un videojuego completo ni se ha verificado su ejecución en consola.**
 
 ## Avance 127: callbacks originales de señales BREW

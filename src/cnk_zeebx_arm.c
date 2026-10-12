@@ -100,6 +100,7 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
  cpu->cpsr=0x10u; /* user mode ARM */
  for(unsigned i=0;i<CNK_ZEEBX_PAD_AXES;i++)cpu->pad.axes[i]=128u;
  cpu->heap_cursor=0u;
+ cpu->egl_error=0x3000u; /* initial EGL_SUCCESS */
  cpu->shell_refs=1u;
  cpu->object_cursor=16u; /* Shell, Module**, IApplet** reserved */
  cpu->initialized=1;
@@ -748,6 +749,170 @@ static int zeebx_register_pad_signal(cnk_zeebx_arm *c,unsigned slot){
  return cnk_zeebx_arm_return_from_api(c,0u);
 }
 
+/* Original IEGL from Zeebx brew/aee_slots.rs and src/machine/egl.rs.
+ * This OLD AEEGL.h vtable does NOT pass the object as r0, unlike IEGL11.
+ * The guest receives only a configuration descriptor here. In particular,
+ * eglCreateContext/eglMakeCurrent/eglSwapBuffers intentionally remain
+ * UNIMPLEMENTED until an actual VitaGL rendering bridge is connected.
+ * Returning success for those methods would silently fake a playing game.
+ */
+#define CNK_EGL_SUCCESS 0x3000u
+#define CNK_EGL_BAD_ATTRIBUTE 0x3004u
+#define CNK_EGL_DISPLAY 1u
+#define CNK_EGL_CONFIG 1u
+#define CNK_EGL_NONE 0x3038u
+static int zeebx_egl_config_attribute(uint32_t attr,uint32_t *out){
+ uint32_t value=0;
+ switch(attr){
+  case 0x3020u: value=16u;break; /* EGL_BUFFER_SIZE */
+  case 0x3021u: value=0u;break;  /* ALPHA_SIZE */
+  case 0x3022u: case 0x3024u:value=5u;break; /* BLUE/RED */
+  case 0x3023u:value=6u;break; /* GREEN_SIZE */
+  case 0x3025u:value=16u;break;/* DEPTH_SIZE */
+  case 0x3026u:value=8u;break; /* STENCIL_SIZE */
+  case 0x3028u:value=CNK_EGL_CONFIG;break;
+  case 0x302au:value=480u;break; /* MAX_PBUFFER_HEIGHT */
+  case 0x302bu:value=640u*480u;break; /* MAX_PBUFFER_PIXELS */
+  case 0x302cu:value=640u;break; /* MAX_PBUFFER_WIDTH */
+  case 0x302du:value=1u;break; /* NATIVE_RENDERABLE */
+  case 0x3033u:value=0x7u;break; /* SURFACE_TYPE */
+  case 0x303fu:value=0x308eu;break; /* COLOR_BUFFER_TYPE RGB */
+  case 0x3040u:value=0x1u;break; /* RENDERABLE_TYPE GLES */
+  case 0x303bu:case 0x303cu:value=1u;break; /* SWAP_INTERVAL */
+  case 0x3027u:case 0x302fu:case 0x3034u:
+   value=CNK_EGL_NONE;break;
+  case 0x3029u:case 0x302eu:case 0x3031u:case 0x3032u:
+  case 0x3035u:case 0x3036u:case 0x3037u:
+  case 0x3039u:case 0x303au:
+   value=0u;break;
+  default:return -1;
+ }
+ *out=value;
+ return 0;
+}
+static int zeebx_egl_write_at(cnk_zeebx_arm *c,uint32_t ptr,uint32_t val){
+ if(ptr && ((ptr&3u)||store(c,ptr,4u,val)))return -3;
+ return 0;
+}
+static int zeebx_egl_intern(cnk_zeebx_arm *c,uint32_t *cache,
+                             const char *str){
+ if(!*cache){
+  size_t len=strlen(str)+1u;
+  uint32_t start=(c->heap_cursor+3u)&~3u;
+  if(start<c->heap_cursor||len>CNK_ARM_HEAP_BYTES-start)return -2;
+  uint32_t ptr=CNK_ARM_HEAP_BASE+start;
+  uint8_t *dst=map(c,ptr,len,1);
+  if(!dst)return -3;
+  memcpy(dst,str,len);
+  c->heap_cursor=start+(uint32_t)len;
+  *cache=ptr;
+ }
+ return cnk_zeebx_arm_return_from_api(c,*cache);
+}
+static int zeebx_egl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
+ if(!c || !c->initialized)return -1;
+ uint32_t a0=c->regs[0],a1=c->regs[1],a2=c->regs[2],a3=c->regs[3];
+ c->egl_queries++;
+ switch(slot){
+ case 3u:{ /* eglGetError() clears the last error. */
+  uint32_t err=c->egl_error?c->egl_error:CNK_EGL_SUCCESS;
+  c->egl_error=CNK_EGL_SUCCESS;
+  return cnk_zeebx_arm_return_from_api(c,err);
+ }
+ case 4u: /* eglGetDisplay(native_display) -> one Zeebo screen. */
+  return cnk_zeebx_arm_return_from_api(c,CNK_EGL_DISPLAY);
+ case 5u: /* eglInitialize(display,major*,minor*) */
+  if(a0!=CNK_EGL_DISPLAY)return cnk_zeebx_arm_return_from_api(c,0u);
+  if((a1&&((a1&3u)||!map(c,a1,4u,1)))||
+     (a2&&((a2&3u)||!map(c,a2,4u,1))))return -3;
+  if(zeebx_egl_write_at(c,a1,1u)||zeebx_egl_write_at(c,a2,0u))
+   return -3;
+  c->egl_initialized=1u;
+  return cnk_zeebx_arm_return_from_api(c,1u);
+ case 6u: /* eglTerminate(display) */
+  if(a0!=CNK_EGL_DISPLAY)return cnk_zeebx_arm_return_from_api(c,0u);
+  c->egl_initialized=0u;
+  return cnk_zeebx_arm_return_from_api(c,1u);
+ case 7u:{ /* eglQueryString(display,name): no unported extensions advertised */
+  if(a0!=CNK_EGL_DISPLAY || !c->egl_initialized)
+   return cnk_zeebx_arm_return_from_api(c,0u);
+  if(a1==0x3053u)return zeebx_egl_intern(c,&c->egl_string_vendor,"Zeebx");
+  if(a1==0x3054u)return zeebx_egl_intern(c,&c->egl_string_version,"1.1");
+  if(a1==0x3055u)return zeebx_egl_intern(c,&c->egl_string_extensions,"");
+  c->egl_error=CNK_EGL_BAD_ATTRIBUTE;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ case 9u:{ /* eglGetConfigs(display,configs,size,num*) */
+  if(!c->egl_initialized||a0!=CNK_EGL_DISPLAY)
+   return cnk_zeebx_arm_return_from_api(c,0u);
+  if((a1&&a2&&((a1&3u)||!map(c,a1,4u,1)))||
+     (a3&&((a3&3u)||!map(c,a3,4u,1))))return -3;
+  if(a1&&a2 && zeebx_egl_write_at(c,a1,CNK_EGL_CONFIG))return -3;
+  if(zeebx_egl_write_at(c,a3,a1?(a2?1u:0u):1u))return -3;
+  return cnk_zeebx_arm_return_from_api(c,1u);
+ }
+ case 10u:{ /* eglChooseConfig(dpy,attribs,cfgs,size,num*) */
+  if(!c->egl_initialized||a0!=CNK_EGL_DISPLAY)
+   return cnk_zeebx_arm_return_from_api(c,0u);
+  uint32_t count_out=0,matching=1u;
+  if(load(c,c->regs[13],4u,&count_out))return -3;
+  if((a2&&a3&&((a2&3u)||!map(c,a2,4u,1)))||
+     (count_out&&((count_out&3u)||!map(c,count_out,4u,1))))
+   return -3;
+  if(a1){
+   if(a1&3u)return -3;
+   int ended=0;
+   for(unsigned i=0;i<64u;i++){
+    uint32_t attr=0,wanted=0,available=0;
+    uint64_t item=(uint64_t)a1+8u*i;
+    if(item>UINT32_MAX || load(c,(uint32_t)item,4u,&attr))
+     return -3;
+    if(attr==CNK_EGL_NONE){ended=1;break;}
+    if(item+8u>UINT32_MAX ||
+       load(c,(uint32_t)(item+4u),4u,&wanted))return -3;
+    if(zeebx_egl_config_attribute(attr,&available)){
+     c->egl_error=CNK_EGL_BAD_ATTRIBUTE;
+     return cnk_zeebx_arm_return_from_api(c,0u);
+    }
+    /* Filter bitmasks by containment; min-size attrs by >=. */
+    if(attr==0x3033u||attr==0x3040u){
+     if((available&wanted)!=wanted)matching=0u;
+    }else if(attr==0x3028u||attr==0x303fu){
+     if(available!=wanted)matching=0u;
+    }else if(available<wanted)matching=0u;
+   }
+   if(!ended)return -3; /* never walk arbitrary guest memory forever */
+  }
+  if(a2&&a3&&matching&&zeebx_egl_write_at(c,a2,CNK_EGL_CONFIG))
+   return -3;
+  if(zeebx_egl_write_at(c,count_out,
+                       (a2 ? (a3?matching:0u) : matching)))return -3;
+  return cnk_zeebx_arm_return_from_api(c,1u);
+ }
+ case 11u:{ /* eglGetConfigAttrib(dpy,cfg,attribute,value*) */
+  if(!c->egl_initialized||a0!=CNK_EGL_DISPLAY||
+     a1!=CNK_EGL_CONFIG)return cnk_zeebx_arm_return_from_api(c,0u);
+  uint32_t value=0;
+  if(zeebx_egl_config_attribute(a2,&value)){
+   c->egl_error=CNK_EGL_BAD_ATTRIBUTE;
+   return cnk_zeebx_arm_return_from_api(c,0u);
+  }
+  if(zeebx_egl_write_at(c,a3,value))return -3;
+  return cnk_zeebx_arm_return_from_api(c,1u);
+ }
+ case 20u: /* eglGetCurrentContext: no GL context has been created */
+ case 21u: /* eglGetCurrentSurface */
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ case 22u: /* eglGetCurrentDisplay */
+  return cnk_zeebx_arm_return_from_api(c,
+                                      c->egl_initialized?CNK_EGL_DISPLAY:0u);
+ default:
+  /* Importantly, the GL context, surface and swap calls STOP here.
+   * A successful EGL setup does not mean actual graphics run on Vita. */
+  return -4;
+ }
+}
+
 int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
  if(!c||!c->initialized)return -1;
  uint32_t pc=c->regs[15];
@@ -755,6 +920,8 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   return -1;
  unsigned iface=(pc-CNK_ARM_API_BASE)>>12u;
  unsigned slot=((pc-CNK_ARM_API_BASE)&0xfffu)/4u;
+ /* Old BREW AEEGL.h passes function args directly, not this pointer. */
+ if(iface==23u)return zeebx_egl_legacy_call(c,slot);
  /* Zeebx AEEStdLib::memset at helper index 1, as used by the
   * original cnk2.mod while constructing its applet state. Validate
   * writable guest bounds before modifying ANY bytes. */
