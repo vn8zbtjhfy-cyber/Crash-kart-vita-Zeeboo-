@@ -39,3 +39,28 @@ Vita OS. It only inspects the header and ClassID metadata of user-supplied
 `.mod` and `.mif` files, and adds a non-ROM regression plus a host-only
 diagnostic command. Distributing a final native port with these adaptations
 requires complying with the GPL terms for the linked project.
+
+## Avance 121: intérprete ARM y bootstrap BREW adaptados de Zeebx
+
+Se adaptó una parte **ejecutable real** del intérprete ARM1176 de Zeebx:
+- Original `src/cpu/interpretador.rs`, intérprete ARM/Thumb (GPL-2.0-or-later).
+- Original `src/loader/mod.rs`, distribución de memoria BREW y registros de `AEEMod_Load`.
+- Original `src/brew/aee.rs` y `src/brew/aee_helpers.rs`: trampolines de interfaces y
+  slots de helpers BREW.
+
+El código adaptado es `src/cnk_zeebx_arm.[ch]` y `src/cnk_zeebx_probe.[ch]`.
+Es un subconjunto modificado en C99, que actualmente soporta instrucciones
+A32 básicas, memoria guest, llamadas a helpers AEE, sus primeros handlers,
+asignación `malloc` y `IShell::AddRef`. **No implementa todavía toda la CPU
+ARM/Thumb, los gráficos GLES/BREW ni eventos del applet**. El código GPL
+coexiste con las partes del juego nativo; no debe redistribuirse como
+si fuera código propietario ni ocultarse la obligación de proporcionar
+fuentes del trabajo derivado bajo los términos aplicables.
+
+La **fuente completa del emulador Zeebx** se conserva sin modificaciones
+como submódulo Git `third_party/zeebx_emulator`, fijado en el commit
+`f6d3e7bd6b27ca7f02d0e6f76a40a3c3f45d1cd9`. Para obtenerla:
+`git submodule update --init --recursive`. Este submódulo sirve como
+referencia versionada de implementación completa; **NO** se compila
+automáticamente dentro de VitaSDK ni debe presentarse como emulador funcional
+en la consola. No contiene ni distribuye juego comercial alguno.
