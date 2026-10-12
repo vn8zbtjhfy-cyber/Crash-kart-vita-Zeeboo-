@@ -53,6 +53,8 @@ void glColorMask(GLboolean red,GLboolean green,GLboolean blue,GLboolean alpha);
 void glMatrixMode(GLenum mode);
 void glLoadMatrixf(const GLfloat *matrix);
 void glMultMatrixf(const GLfloat *matrix);
+void glFrustumf(GLfloat l,GLfloat r,GLfloat b,GLfloat t,GLfloat n,GLfloat f);
+void glOrthof(GLfloat l,GLfloat r,GLfloat b,GLfloat t,GLfloat n,GLfloat f);
 void glPushMatrix(void);
 void glPopMatrix(void);
 void glTranslatef(GLfloat x,GLfloat y,GLfloat z);
