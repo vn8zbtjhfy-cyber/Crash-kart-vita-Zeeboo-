@@ -29,6 +29,12 @@ typedef struct {
  uint32_t buttons; /* bit per Zeebx input/mod.rs BUTTON_UIDS entry */
  uint8_t axes[CNK_ZEEBX_PAD_AXES]; /* absolute [0..255], neutral=128 */
 } cnk_zeebx_pad;
+/* Finite guest event FIFO. Only transitions from confirmed host samples
+ * are queued; the guest reads them through GetNextButtonEvent slot 9. */
+#define CNK_ZEEBX_HID_QUEUE 64u
+typedef struct {
+ uint32_t index,pressed,at_ms;
+} cnk_zeebx_hid_event;
 
 typedef enum {
  CNK_ARM_BUDGET=0, CNK_ARM_API=1, CNK_ARM_RETURNED=2,
@@ -50,6 +56,8 @@ typedef struct {
  uint32_t screen_bitmap_pixels; /* RGB565 guest buffer, allocated on first IDIB */
  uint32_t virtual_time_ms;
  cnk_zeebx_pad pad; /* separate from the native driving physics */
+ cnk_zeebx_hid_event hid_queue[CNK_ZEEBX_HID_QUEUE];
+ uint32_t hid_queue_head,hid_queue_count,hid_events_dropped;
  char last_debug_template[128];
  size_t module_size;
  int initialized,applet_pending;
