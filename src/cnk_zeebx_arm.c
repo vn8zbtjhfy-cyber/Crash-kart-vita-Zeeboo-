@@ -79,6 +79,10 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
           CNK_ARM_API_BASE+(8u<<12)+i*4u);   /* IHID */
   putword(cpu->vtables+9u*CNK_ARM_VTABLE_STRIDE+4u*i,
           CNK_ARM_API_BASE+(9u<<12)+i*4u);   /* IHIDDevice */
+  putword(cpu->vtables+10u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(10u<<12)+i*4u); /* ISignal */
+  putword(cpu->vtables+11u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(11u<<12)+i*4u); /* ISignalCtl */
   putword(cpu->vtables+12u*CNK_ARM_VTABLE_STRIDE+4u*i,
           CNK_ARM_API_BASE+(12u<<12)+i*4u); /* ISignalCBFactory */
   putword(cpu->vtables+23u*CNK_ARM_VTABLE_STRIDE+4u*i,
@@ -497,6 +501,28 @@ static const uint32_t zeebx_axis_uids[CNK_ZEEBX_PAD_AXES]={
 };
 static const unsigned zeebx_axis_slots[CNK_ZEEBX_PAD_AXES]={1,2,3,6};
 
+static cnk_zeebx_signal *signal_for(cnk_zeebx_arm *c,uint32_t obj){
+ for(unsigned i=0;i<c->signal_count;i++){
+  cnk_zeebx_signal *s=&c->signals[i];
+  if(obj==s->signal_obj&&s->signal_refs)return s;
+  if(obj==s->control_obj&&s->control_refs)return s;
+ }
+ return NULL;
+}
+static int queue_signal(cnk_zeebx_arm *c,uint32_t signal_obj){
+ if(!signal_obj)return 0;
+ cnk_zeebx_signal *s=signal_for(c,signal_obj);
+ if(!s||signal_obj!=s->signal_obj)return -3;
+ if(!s->attached||!s->enabled||!s->callback)return 0;
+ if(c->signal_pending_count>=CNK_ZEEBX_PENDING_SIGNALS)return -2;
+ uint32_t tail=(c->signal_pending_head+c->signal_pending_count)%
+               CNK_ZEEBX_PENDING_SIGNALS;
+ c->signal_pending[tail].function=s->callback;
+ c->signal_pending[tail].context=s->context;
+ c->signal_pending_count++;
+ return 0;
+}
+
 int cnk_zeebx_arm_set_pad(cnk_zeebx_arm *c,const cnk_zeebx_pad *pad){
  if(!c||!c->initialized||!pad||
     (pad->buttons & ~((1u<<CNK_ZEEBX_PAD_BUTTONS)-1u)))return -1;
@@ -504,6 +530,19 @@ int cnk_zeebx_arm_set_pad(cnk_zeebx_arm *c,const cnk_zeebx_pad *pad){
   * HID index order. A still-held button does not repeat each frame.
   * Overflow evicts the oldest event and marks the next read as dropped. */
  uint32_t changed=c->pad.buttons^pad->buttons;
+ int axes_changed=memcmp(c->pad.axes,pad->axes,CNK_ZEEBX_PAD_AXES)!=0;
+ /* A pending callback queue cannot silently lose signals. Reject a host
+  * snapshot BEFORE writing its button events if notifications would not
+  * fit. The input's previous state is then still intact. */
+ unsigned notifications=0;
+ cnk_zeebx_signal *button=signal_for(c,c->hid_button_signal);
+ cnk_zeebx_signal *position=signal_for(c,c->hid_position_signal);
+ if(changed&&button&&button->enabled&&button->attached&&button->callback)
+  notifications++;
+ if(axes_changed&&position&&position->enabled&&position->attached&&
+    position->callback)notifications++;
+ if(notifications>CNK_ZEEBX_PENDING_SIGNALS-c->signal_pending_count)
+  return -2;
  for(unsigned i=0;i<CNK_ZEEBX_PAD_BUTTONS;i++)if(changed&(1u<<i)){
   if(c->hid_queue_count==CNK_ZEEBX_HID_QUEUE){
    c->hid_queue_head=(c->hid_queue_head+1u)%CNK_ZEEBX_HID_QUEUE;
@@ -517,6 +556,10 @@ int cnk_zeebx_arm_set_pad(cnk_zeebx_arm *c,const cnk_zeebx_pad *pad){
   c->hid_queue[tail].at_ms=c->virtual_time_ms;
   c->hid_queue_count++;
  }
+ if(changed&&c->hid_button_signal &&
+    queue_signal(c,c->hid_button_signal))return -2;
+ if(axes_changed&&c->hid_position_signal &&
+    queue_signal(c,c->hid_position_signal))return -2;
  c->pad=*pad;
  return 0;
 }
