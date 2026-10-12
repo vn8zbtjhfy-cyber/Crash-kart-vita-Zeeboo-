@@ -31,6 +31,18 @@ void glMultMatrixf(const GLfloat *m){
 }
 void glPushMatrix(void){cnk_test_gl.matrix_stack_depth++;}
 void glPopMatrix(void){if(!cnk_test_gl.matrix_stack_depth)cnk_test_gl.invalid++;else cnk_test_gl.matrix_stack_depth--;}
+/* Test shim validates arguments; this is not the real Vita GPU. */
+void glTranslatef(GLfloat x,GLfloat y,GLfloat z){
+ if(!isfinite(x)||!isfinite(y)||!isfinite(z))cnk_test_gl.invalid++;
+}
+void glScalef(GLfloat x,GLfloat y,GLfloat z){
+ if(!isfinite(x)||!isfinite(y)||!isfinite(z))cnk_test_gl.invalid++;
+}
+void glRotatef(GLfloat angle,GLfloat x,GLfloat y,GLfloat z){
+ if(!isfinite(angle)||!isfinite(x)||!isfinite(y)||!isfinite(z))
+  cnk_test_gl.invalid++;
+}
+
 void glEnableClientState(GLenum a){(void)a;}
 void glDisableClientState(GLenum a){(void)a;}
 void glVertexPointer(GLint n,GLenum type,GLsizei stride,const void *p){
