@@ -8,7 +8,7 @@ on:
       - '.github/workflows/compilar-vpk-vita.yml'
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
   build-vpk:
     runs-on: ubuntu-24.04
@@ -57,14 +57,9 @@ jobs:
                       raise SystemExit("ERROR: fallo SHA256 de "+item["path"])
           print("ZIP restaurado y verificado: 12 recursos originales")
           PY
-          if [ -d assets-parts ]; then
-            git -C "$GITHUB_WORKSPACE" config user.name "github-actions[bot]"
-            git -C "$GITHUB_WORKSPACE" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git -C "$GITHUB_WORKSPACE" add -f ports/zeebx-rust-vita/assets-original.zip
-            git -C "$GITHUB_WORKSPACE" rm -r -f ports/zeebx-rust-vita/assets-parts
-            git -C "$GITHUB_WORKSPACE" commit -m "assets: consolidar ZIP privado original verificado"
-            git -C "$GITHUB_WORKSPACE" push origin HEAD:main
-          fi
+          # Los recursos se reconstruyen exclusivamente en el workspace del job.
+          # Nunca hacer git commit/push desde esta etapa.
+          test -s assets-original.zip
       - name: Extraer los 12 recursos originales antes de compilar
         run: |
           set -euo pipefail
