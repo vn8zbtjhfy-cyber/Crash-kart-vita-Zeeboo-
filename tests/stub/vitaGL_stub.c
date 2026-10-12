@@ -43,12 +43,19 @@ void glMultMatrixf(const GLfloat *m){
 void glFrustumf(GLfloat l,GLfloat r,GLfloat b,GLfloat t,GLfloat n,GLfloat f){
  if(!isfinite(l)||!isfinite(r)||!isfinite(b)||!isfinite(t)||
     !isfinite(n)||!isfinite(f)||l==r||b==t||n==f||
-    n<=0.f||f<=0.f)cnk_test_gl.invalid++;
+    n<=0.f||f<=0.f){cnk_test_gl.invalid++;return;}
+ cnk_test_gl.frustum_calls++;
+ const float args[6]={l,r,b,t,n,f};
+ memcpy(cnk_test_gl.last_projection,args,sizeof(args));
 }
 void glOrthof(GLfloat l,GLfloat r,GLfloat b,GLfloat t,GLfloat n,GLfloat f){
  if(!isfinite(l)||!isfinite(r)||!isfinite(b)||!isfinite(t)||
-    !isfinite(n)||!isfinite(f)||l==r||b==t||n==f)
-   cnk_test_gl.invalid++;
+    !isfinite(n)||!isfinite(f)||l==r||b==t||n==f){
+   cnk_test_gl.invalid++;return;
+ }
+ cnk_test_gl.ortho_calls++;
+ const float args[6]={l,r,b,t,n,f};
+ memcpy(cnk_test_gl.last_projection,args,sizeof(args));
 }
 void glPushMatrix(void){cnk_test_gl.matrix_stack_depth++;}
 void glPopMatrix(void){if(!cnk_test_gl.matrix_stack_depth)cnk_test_gl.invalid++;else cnk_test_gl.matrix_stack_depth--;}
