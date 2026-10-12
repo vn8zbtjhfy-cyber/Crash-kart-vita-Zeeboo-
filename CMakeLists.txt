@@ -849,6 +849,13 @@ else()
           "vitaGL;vitashark;SceShaccCgExt;stdc++;mathneon;png;z;m;taihen_stub;SceAppMgr_stub;SceCommonDialog_stub;SceKernelDmacMgr_stub;SceProcessmgr_stub;SceCtrl_stub;SceMotion_stub;SceDisplay_stub;SceAudio_stub;SceGxm_stub;SceLibKernel_stub;SceKernelThreadMgr_stub;SceShaccCg_stub;SceSysmodule_stub;SceIofilemgr_stub"
           CACHE STRING "VitaSDK libraries required by ELF link check")
       add_executable(cnk_vita_elf_link_check src/vita_main.c)
+      if(CNK_ENABLE_VITA_DIAGNOSTIC_VPK)
+        # vita-elf-create appends its SCE import/module metadata to the
+        # first PT_LOAD; reserve extra address space before the writable
+        # segment using GNU ld's segment page alignment for test builds.
+        target_link_options(cnk_vita_elf_link_check PRIVATE
+                            "-Wl,-z,max-page-size=0x10000")
+      endif()
       target_link_libraries(cnk_vita_elf_link_check PRIVATE
           cnk_vita_backend cnk_native_core ${CNK_VITA_LINK_LIBS})
       # Normally we only link the diagnostic ELF. User-requested PS Vita
