@@ -500,7 +500,7 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
    if(!byte)break;
    c->last_debug_template[n]=(char)(uint8_t)byte;
   }
-  c->last_debug_template[n]='\\0';
+  c->last_debug_template[n]='\0';
   c->debug_calls++;
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
