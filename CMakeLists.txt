@@ -759,6 +759,13 @@ if(NOT DEFINED ENV{VITASDK})
   target_compile_options(cnk_test_zeebx_file_read PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_file_read COMMAND cnk_test_zeebx_file_read
            "${CMAKE_CURRENT_BINARY_DIR}")
+  # Exact original BREW GetInfo AEEFileInfo layout (separate from GetInfoEx).
+  # Disposable synthetic host file; zero proprietary game files in CI.
+  add_executable(cnk_test_zeebx_file_info tests/test_native_zeebx_file_info.c)
+  target_link_libraries(cnk_test_zeebx_file_info PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_file_info PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_file_info COMMAND cnk_test_zeebx_file_info
+           "${CMAKE_CURRENT_BINARY_DIR}")
   add_executable(cnk_test_zeebx_brew_factories tests/test_native_zeebx_brew_factories.c)
   target_link_libraries(cnk_test_zeebx_brew_factories PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_brew_factories PRIVATE -UNDEBUG -Wall -Wextra -Werror)

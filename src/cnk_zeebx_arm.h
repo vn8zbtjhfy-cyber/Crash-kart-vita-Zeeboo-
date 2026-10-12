@@ -39,6 +39,7 @@
 typedef struct {
  uint32_t object,refs;
  FILE *stream;
+ char guest_name[192]; /* source guest name for IFile::GetInfo */
 } cnk_zeebx_guest_file;
 
 #define CNK_ZEEBX_MAX_GL_BUFFERS 32u
