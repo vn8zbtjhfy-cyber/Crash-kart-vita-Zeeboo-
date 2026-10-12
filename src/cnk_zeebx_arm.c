@@ -102,6 +102,7 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
  cpu->regs[15]=CNK_ARM_MOD_BASE+info.entry_offset;
  cpu->cpsr=0x10u; /* user mode ARM */
  for(unsigned i=0;i<CNK_ZEEBX_PAD_AXES;i++)cpu->pad.axes[i]=128u;
+ cpu->gl_unpack_alignment=4u; /* GLES1 default, from Zeebx gl.rs */
  cpu->heap_cursor=0u;
  cpu->egl_error=0x3000u; /* initial EGL_SUCCESS */
  cpu->shell_refs=1u;
@@ -1033,6 +1034,67 @@ static int zeebx_gl_delete_textures(cnk_zeebx_arm *c,uint32_t count,
   if(names[i]&&names[i]==c->gl_bound_texture)c->gl_bound_texture=0u;
  return cnk_zeebx_arm_return_from_api(c,0u);
 }
+/* Zeebx machine/gl.rs::le_texels: the guest observes GLES default
+ * GL_UNPACK_ALIGNMENT=4, configurable by glPixelStorei(1,2,4,8).
+ * Always return a tightly packed PRIVATE copy to vitaGL: no untrusted
+ * ARM guest pointer is retained across the GPU callback. Bounded 1 MiB.
+ * The last row can end exactly at the guest memory boundary: do not
+ * require trailing padding after that row.
+ */
+static uint8_t *zeebx_gl_copy_texels(cnk_zeebx_arm *c,
+                                      uint32_t addr,uint32_t width,
+                                      uint32_t height,uint32_t format,
+                                      uint32_t type){
+ if(!c||!addr||!width||!height||width>CNK_GLTEX_MAX_EDGE||
+    height>CNK_GLTEX_MAX_EDGE)return NULL;
+ const uint32_t bpp=(format==CNK_GLTEX_RGBA&&type==CNK_GLTEX_U8)?4u:
+                    (format==CNK_GLTEX_RGB&&type==CNK_GLTEX_RGB565)?2u:0u;
+ if(!bpp)return NULL;
+ const uint32_t align=c->gl_unpack_alignment;
+ if(align!=1u&&align!=2u&&align!=4u&&align!=8u)return NULL;
+ const uint64_t row=(uint64_t)width*bpp;
+ const uint64_t pitch=(row+align-1u)&~((uint64_t)align-1u);
+ const uint64_t packed=row*height;
+ const uint64_t span=(uint64_t)(height-1u)*pitch+row;
+ if(!packed||packed>CNK_GLTEX_MAX_BYTES||
+    span>CNK_GLTEX_MAX_BYTES+4096u||
+    span>UINT32_MAX || (uint64_t)addr+span>UINT32_MAX)return NULL;
+ const uint8_t *src=map(c,addr,(size_t)span,0);
+ if(!src)return NULL;
+ uint8_t *out=(uint8_t*)malloc((size_t)packed);
+ if(!out)return NULL;
+ for(uint32_t y=0;y<height;y++)
+  memcpy(out+(size_t)y*(size_t)row,
+         src+(size_t)y*(size_t)pitch,(size_t)row);
+ return out;
+}
+static int zeebx_gl_tex_sub_image(cnk_zeebx_arm *c){
+ if(!c->gl_host.texture_sub_upload || !c->gl_bound_texture||
+    c->gl_texture_sub_uploads==UINT32_MAX)return -4;
+ const uint32_t target=c->regs[0],level=c->regs[1],
+                x=c->regs[2],y=c->regs[3],sp=c->regs[13];
+ uint32_t w=0,h=0,format=0,type=0,pixels=0;
+ /* 9 GLES arguments: r0..r3 and five words on the guest ARM stack. */
+ if((sp&3u)||sp>UINT32_MAX-20u||
+    load(c,sp,4u,&w)||load(c,sp+4u,4u,&h)||
+    load(c,sp+8u,4u,&format)||load(c,sp+12u,4u,&type)||
+    load(c,sp+16u,4u,&pixels))return -4;
+ /* No partial image if a negative offset or oversized rectangle arrives.
+  * The actual host GL checks the destination texture's dimensions. */
+ if(target!=CNK_GLTEX_TARGET||level!=0u||
+    x>CNK_GLTEX_MAX_EDGE||y>CNK_GLTEX_MAX_EDGE||
+    !w||!h||w>CNK_GLTEX_MAX_EDGE||h>CNK_GLTEX_MAX_EDGE||
+    (uint64_t)x+w>CNK_GLTEX_MAX_EDGE||
+    (uint64_t)y+h>CNK_GLTEX_MAX_EDGE)return -4;
+ uint8_t *safe=zeebx_gl_copy_texels(c,pixels,w,h,format,type);
+ if(!safe)return -4;
+ const int rc=c->gl_host.texture_sub_upload(
+   c->gl_host_user,x,y,w,h,format,type,safe);
+ free(safe);
+ if(rc)return -4;
+ c->gl_texture_sub_uploads++;
+ return cnk_zeebx_arm_return_from_api(c,0u);
+}
 static int zeebx_gl_tex_image(cnk_zeebx_arm *c){
  if(!c->gl_host.texture_upload || !c->gl_bound_texture||
     c->gl_texture_uploads==UINT32_MAX)return -4;
@@ -1050,16 +1112,10 @@ static int zeebx_gl_tex_image(cnk_zeebx_arm *c){
     h>CNK_GLTEX_MAX_EDGE||format!=internal||
     !((format==CNK_GLTEX_RGBA&&type==CNK_GLTEX_U8)||
       (format==CNK_GLTEX_RGB&&type==CNK_GLTEX_RGB565)))return -4;
- const uint64_t bytes=(uint64_t)width*h*
-          (format==CNK_GLTEX_RGBA?4u:2u);
- if(bytes>CNK_GLTEX_MAX_BYTES||!pixels)return -4;
- const uint8_t *src=map(c,pixels,(size_t)bytes,0);
- if(!src)return -4;
- /* Copy out of the emulated address space so no GPU callback retains a
-  * guest-memory view; the host upload must consume synchronously. */
- uint8_t *safe=(uint8_t*)malloc((size_t)bytes);
+ /* Source-side pixel store row pitch is distinct from Vita's compact
+  * upload: Zeebx gl.rs::le_texels packs each row before submission. */
+ uint8_t *safe=zeebx_gl_copy_texels(c,pixels,width,h,format,type);
  if(!safe)return -4;
- memcpy(safe,src,(size_t)bytes);
  const int error=c->gl_host.texture_upload(c->gl_host_user,width,h,
                                            format,type,safe);
  free(safe);
@@ -1254,6 +1310,13 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
  }
  case 74u: /* glTexImage2D with five guest stack arguments */
   return zeebx_gl_tex_image(c);
+ case 76u: /* glTexSubImage2D, Zeebx GL_LEGACY vtable slot */
+  return zeebx_gl_tex_sub_image(c);
+ case 57u: /* glPixelStorei(GL_UNPACK_ALIGNMENT,1/2/4/8) */
+  if(a0!=0x0cf5u || (a1!=1u&&a1!=2u&&a1!=4u&&a1!=8u))
+   return -4;
+  c->gl_unpack_alignment=a1;
+  return cnk_zeebx_arm_return_from_api(c,0u);
  case 75u: /* glTexParameterx */
   if(a0!=CNK_GLTEX_TARGET||!c->gl_bound_texture||
      !zeebx_gl_tex_parameter_valid(a1,a2)||
