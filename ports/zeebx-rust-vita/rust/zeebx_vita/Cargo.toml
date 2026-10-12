@@ -9,7 +9,13 @@ license = "GPL-2.0-or-later"
 name = "zeebx_vita"
 crate-type = ["staticlib"]
 
+[features]
+# El puente Vita nunca activa el SQL del frontend Zeebx.
+default = []
+
 [dependencies]
+# El script de preparación hace optional la dependencia rusqlite de Zeebx.
+# default-features=false evita cargar 'desktop' y 'sqlite' para Vita.
 zeebx = { path = "../../zeebx-emu", default-features = false }
 
 [profile.release]
