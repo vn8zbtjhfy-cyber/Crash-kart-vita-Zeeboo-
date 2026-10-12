@@ -788,6 +788,11 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_gl_bridge PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_gl_bridge PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_gl_bridge COMMAND cnk_test_zeebx_gl_bridge)
+  # Port original IGL Common-Lite state through validated GPU callbacks.
+  add_executable(cnk_test_zeebx_gl_state tests/test_native_zeebx_gl_state.c)
+  target_link_libraries(cnk_test_zeebx_gl_state PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_gl_state PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_gl_state COMMAND cnk_test_zeebx_gl_state)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
