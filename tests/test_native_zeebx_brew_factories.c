@@ -283,10 +283,10 @@ int main(void){
  cpu.regs[15]=CNK_ARM_API_BASE+(9u<<12)+4u*4u;
  assert(!cnk_zeebx_arm_handle_bootstrap_api(&cpu));
  assert(!cnk_zeebx_arm_read_u32(&cpu,CNK_ARM_OBJECT_BASE+0x360u,&slot)&&slot==1u);
- /* Unsupported signal-registration remains an explicit trap.
-  * GetNextButtonEvent slot 9 is now implemented and tested separately. */
+ /* Unported SetExclusiveLevel remains an explicit trap.
+  * RegisterForButtonEvent slot 8 now validates real signal objects. */
  cpu.regs[0]=ptr;
- cpu.regs[15]=CNK_ARM_API_BASE+(9u<<12)+8u*4u;
+ cpu.regs[15]=CNK_ARM_API_BASE+(9u<<12)+15u*4u;
  assert(cnk_zeebx_arm_handle_bootstrap_api(&cpu)==-4);
  cnk_zeebx_arm_destroy(&cpu);
  puts("PASS: Crash-specific Zeebx IHID discovery, device object, joystick UID, status and safe event trap");
