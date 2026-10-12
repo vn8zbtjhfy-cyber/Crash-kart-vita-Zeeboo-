@@ -6,8 +6,22 @@ void cnk_test_gl_reset(uint32_t n){memset(&cnk_test_gl,0,sizeof(cnk_test_gl));cn
 void glViewport(GLint x,GLint y,GLsizei w,GLsizei h){if(!((x==0&&y==0&&w==960&&h==544)||
       (x>=0&&x<=640&&x%320==0&&y==85&&w==320&&h==380)||
       (x>=0&&x<=640&&x%320==0&&(y==105||y==277)&&w==320&&h==174)))cnk_test_gl.invalid++;}
-void glEnable(GLenum v){if(v==GL_TEXTURE_2D)cnk_test_gl.texture_enabled=1;}
-void glDisable(GLenum v){if(v==GL_TEXTURE_2D)cnk_test_gl.texture_enabled=0;}
+void glScissor(GLint x,GLint y,GLsizei w,GLsizei h){
+ if(w<0||h<0)cnk_test_gl.invalid++;
+ cnk_test_gl.scissor_calls++;
+ cnk_test_gl.scissor_rect[0]=x;
+ cnk_test_gl.scissor_rect[1]=y;
+ cnk_test_gl.scissor_rect[2]=w;
+ cnk_test_gl.scissor_rect[3]=h;
+}
+void glEnable(GLenum v){
+ if(v==GL_TEXTURE_2D)cnk_test_gl.texture_enabled=1;
+ if(v==GL_SCISSOR_TEST)cnk_test_gl.scissor_enabled=1;
+}
+void glDisable(GLenum v){
+ if(v==GL_TEXTURE_2D)cnk_test_gl.texture_enabled=0;
+ if(v==GL_SCISSOR_TEST)cnk_test_gl.scissor_enabled=0;
+}
 void glDepthMask(GLboolean v){if(v!=GL_TRUE&&v!=GL_FALSE)cnk_test_gl.invalid++;}
 void glBlendFunc(GLenum src,GLenum dst){if(src!=GL_SRC_ALPHA||dst!=GL_ONE_MINUS_SRC_ALPHA)cnk_test_gl.invalid++;}
 void glDepthFunc(GLenum v){if(v!=GL_LEQUAL)cnk_test_gl.invalid++;}
