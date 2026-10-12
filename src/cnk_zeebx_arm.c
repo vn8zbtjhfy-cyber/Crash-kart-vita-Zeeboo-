@@ -1067,6 +1067,9 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
  case 28u: /* glEnable(capability) */
   if((a0!=0x0b71u&&a0!=0x0be2u&&a0!=0x0b44u&&
       a0!=CNK_GLTEX_TARGET)||
+     (a0==CNK_GLTEX_TARGET && slot==28u &&
+      (!c->gl_host.texture_bind||!c->gl_host.texture_upload||
+       !c->gl_host.draw_textured_triangles))||
      !c->gl_host.set_capability||
      c->gl_host.set_capability(c->gl_host_user,a0,
                                slot==28u?1:0))return -4;
