@@ -2,6 +2,14 @@
 
 Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **Todavía no es un videojuego completo ni se ha verificado su ejecución en consola.**
 
+## Avance 113 (11 de octubre de 2026)
+
+- Selección de `data.vfs` externo con **verificación ligera de la tabla FUFS**: comprueba encabezado, límites, recuento y referencias antes de elegir una ruta. Evita que un archivo corrupto de mayor prioridad bloquee otra copia válida.
+- **132/132 pruebas de PC aprobadas**, incluida la resistencia de carreras; el test FUFS también pasó con ASan/UBSan.
+- **13 pruebas automáticas sin ROM** aprobadas en GitHub: [38187660896](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38187660896).
+- **Compilación y enlace ARM VitaSDK** aprobados: [38187660904](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38187660904).
+- Ver `docs/AVANCE_113_VALIDACION_TABLA_FUFS.md`. **El juego no se ha probado todavía en una PS Vita real, no hay VPK y el porcentaje anterior sigue siendo solo estimado.**
+
 ## Avance 112 (11 de octubre de 2026)
 
 - **132/132 pruebas de PC Release aprobadas** con los materiales originales del usuario conservados fuera del repositorio; test del selector externo de FUFS aprobado también con ASan/UBSan.
