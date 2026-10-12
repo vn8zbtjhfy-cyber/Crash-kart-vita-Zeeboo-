@@ -217,6 +217,75 @@ int main(void){
  assert(cpu.object_cursor==16u+4u*64u);
  cnk_zeebx_arm_destroy(&cpu);
 
+ /* HID discovery and controller device setup through the REAL ARM
+  * synthetic caller. The guest sees one connected joystick (handle 1),
+  * the correct BREW AEEUID, USB descriptor and device-status word. */
+ memset(guest,0,sizeof(guest));
+ wr32(guest+0,0xe1a0400eu);  /* MOV r4,lr */
+ wr32(guest+4,0xe5903000u); /* LDR r3,[r0] */
+ wr32(guest+8,0xe5933008u); /* LDR r3,[r3,#8] Shell CreateInstance */
+ wr32(guest+12,0xe12fff33u);/* BLX r3 */
+ wr32(guest+16,0xe1a0e004u);/* MOV lr,r4 */
+ wr32(guest+20,0xe12fff1eu);/* BX lr */
+ assert(!cnk_zeebx_arm_init(&cpu,guest,sizeof(guest)));
+ cpu.regs[0]=CNK_ARM_OBJECT_BASE;
+ cpu.regs[1]=0x0106c411u; /* IHID class */
+ cpu.regs[2]=CNK_ARM_OBJECT_BASE+0x300u;
+ assert(!cnk_zeebx_arm_bootstrap(&cpu,80u,&outcome,&handled));
+ assert(outcome.reason==CNK_ARM_RETURNED&&handled==1u);
+ assert(!cnk_zeebx_arm_read_u32(&cpu,CNK_ARM_OBJECT_BASE+0x300u,&ptr));
+ const uint32_t hid=ptr;
+ assert(!cnk_zeebx_arm_read_u32(&cpu,hid,&vtbl));
+ assert(vtbl==CNK_ARM_VTABLE_BASE+8u*CNK_ARM_VTABLE_STRIDE);
+ /* Fifth AAPCS parameter comes from the guest stack, NOT r4. */
+ wr32(cpu.stack+CNK_ARM_STACK_BYTES-16u,CNK_ARM_OBJECT_BASE+0x320u);
+ cpu.regs[0]=hid;
+ cpu.regs[1]=0x0106c3fdu; /* Zeebo joystick UID */
+ cpu.regs[2]=CNK_ARM_OBJECT_BASE+0x324u;
+ cpu.regs[3]=2u;
+ cpu.regs[14]=CNK_ARM_RETURN_MAGIC;
+ cpu.regs[15]=CNK_ARM_API_BASE+(8u<<12)+7u*4u;
+ assert(!cnk_zeebx_arm_handle_bootstrap_api(&cpu));
+ assert(cpu.regs[0]==0u);
+ assert(!cnk_zeebx_arm_read_u32(&cpu,CNK_ARM_OBJECT_BASE+0x320u,&slot)&&slot==1u);
+ assert(!cnk_zeebx_arm_read_u32(&cpu,CNK_ARM_OBJECT_BASE+0x324u,&slot)&&slot==1u);
+ /* Unsupported keyboard UID reports no keyboard, does not fabricate one. */
+ cpu.regs[0]=hid;
+ cpu.regs[1]=0x0106c3fcu;
+ cpu.regs[14]=CNK_ARM_RETURN_MAGIC;
+ cpu.regs[15]=CNK_ARM_API_BASE+(8u<<12)+7u*4u;
+ assert(!cnk_zeebx_arm_handle_bootstrap_api(&cpu));
+ assert(!cnk_zeebx_arm_read_u32(&cpu,CNK_ARM_OBJECT_BASE+0x320u,&slot)&&slot==0u);
+ cpu.regs[0]=hid;
+ cpu.regs[1]=1u;
+ cpu.regs[2]=CNK_ARM_OBJECT_BASE+0x340u;
+ cpu.regs[14]=CNK_ARM_RETURN_MAGIC;
+ cpu.regs[15]=CNK_ARM_API_BASE+(8u<<12)+3u*4u;
+ assert(!cnk_zeebx_arm_handle_bootstrap_api(&cpu));
+ assert(!cnk_zeebx_arm_read_u32(&cpu,CNK_ARM_OBJECT_BASE+0x340u,&ptr));
+ assert(!cnk_zeebx_arm_read_u32(&cpu,ptr,&vtbl));
+ assert(vtbl==CNK_ARM_VTABLE_BASE+9u*CNK_ARM_VTABLE_STRIDE);
+ cpu.regs[0]=ptr;
+ cpu.regs[1]=CNK_ARM_OBJECT_BASE+0x350u;
+ cpu.regs[14]=CNK_ARM_RETURN_MAGIC;
+ cpu.regs[15]=CNK_ARM_API_BASE+(9u<<12)+3u*4u;
+ assert(!cnk_zeebx_arm_handle_bootstrap_api(&cpu));
+ assert(!cnk_zeebx_arm_read_u32(&cpu,CNK_ARM_OBJECT_BASE+0x350u,&slot));
+ assert(slot==0x0106c3fdu);
+ assert(cpu.objects[0x354u]==0x35u&&cpu.objects[0x355u]==0x01u);
+ assert(cpu.objects[0x356u]==0xaau&&cpu.objects[0x357u]==0x1eu);
+ cpu.regs[0]=ptr;
+ cpu.regs[1]=CNK_ARM_OBJECT_BASE+0x360u;
+ cpu.regs[14]=CNK_ARM_RETURN_MAGIC;
+ cpu.regs[15]=CNK_ARM_API_BASE+(9u<<12)+4u*4u;
+ assert(!cnk_zeebx_arm_handle_bootstrap_api(&cpu));
+ assert(!cnk_zeebx_arm_read_u32(&cpu,CNK_ARM_OBJECT_BASE+0x360u,&slot)&&slot==1u);
+ /* Button polling remains explicitly unimplemented, not fake input. */
+ cpu.regs[0]=ptr;
+ cpu.regs[15]=CNK_ARM_API_BASE+(9u<<12)+7u*4u;
+ assert(cnk_zeebx_arm_handle_bootstrap_api(&cpu)==-4);
+ cnk_zeebx_arm_destroy(&cpu);
+ puts("PASS: Crash-specific Zeebx IHID discovery, device object, joystick UID, status and safe button trap");
  puts("PASS: Zeebx guest Crash HID/signals/legacy EGL/GL factories and safe unimplemented method traps");
  puts("PASS: Zeebx guest Display/FileMgr/ISound, real DeviceInfo layout, memset, dbgprintf and unknown API stops");
  return 0;
