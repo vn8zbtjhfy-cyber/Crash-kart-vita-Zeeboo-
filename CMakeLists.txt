@@ -62,6 +62,8 @@ add_library(cnk_native_core STATIC
     src/cnk_png.c
     src/cnk_source_ui.c
     src/cnk_zeebx_brew.c
+    src/cnk_zeebx_arm.c
+    src/cnk_zeebx_probe.c
     src/cnk_texture_map.c
     src/cnk_texture_manifest.c
     src/cnk_session.c
@@ -729,6 +731,24 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_brew PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_brew PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_brew COMMAND cnk_test_zeebx_brew)
+  # Isolated Zeebx-derived ARM1176 execution subset. The real CNK module is
+  # never used in CI; synthetic instructions prove guest execution and API
+  # traps without replacing the existing native racing simulation.
+  add_executable(cnk_test_zeebx_arm tests/test_native_zeebx_arm.c)
+  target_link_libraries(cnk_test_zeebx_arm PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_arm PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_arm COMMAND cnk_test_zeebx_arm)
+  add_executable(cnk_probar_arm_zeebx tools/probar_arm_zeebx.c)
+  target_link_libraries(cnk_probar_arm_zeebx PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_probar_arm_zeebx PRIVATE -Wall -Wextra -Werror)
+  add_executable(cnk_test_zeebx_probe tests/test_native_zeebx_probe.c)
+  target_link_libraries(cnk_test_zeebx_probe PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_probe PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_probe COMMAND cnk_test_zeebx_probe)
+  add_executable(cnk_test_zeebx_bootstrap tests/test_native_zeebx_bootstrap.c)
+  target_link_libraries(cnk_test_zeebx_bootstrap PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_bootstrap PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_bootstrap COMMAND cnk_test_zeebx_bootstrap)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)

@@ -1,0 +1,4 @@
+[submodule "third_party/zeebx_emulator"]
+	path = third_party/zeebx_emulator
+	url = https://github.com/ZeebxTeam/zeebx-emu.git
+	branch = development
