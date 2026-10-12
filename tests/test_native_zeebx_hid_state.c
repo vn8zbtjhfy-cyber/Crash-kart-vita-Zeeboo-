@@ -34,7 +34,6 @@ int main(void){
  assert(!cnk_zeebx_arm_init(&c,synthetic_mod,sizeof(synthetic_mod)));
  const uint32_t output=CNK_ARM_OBJECT_BASE+0x300u;
  const uint32_t info=CNK_ARM_OBJECT_BASE+0x380u;
- const uint32_t connected=CNK_ARM_OBJECT_BASE+0x480u;
  for(unsigned i=0;i<CNK_ZEEBX_PAD_AXES;i++)
   assert(c.pad.axes[i]==128u);
  assert(c.pad.buttons==0u);
