@@ -1,4 +1,5 @@
 #include "cnk_audio.h"
+#include "third_party/zeebx_ima.h"
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
@@ -51,15 +52,45 @@ int cnk_wav_open(const uint8_t *data,size_t size,cnk_wav *out){
  *out=tmp;
  return 0;
 }
+/* A decoded sound is owned by the asset and remains valid while active
+ * voices borrow its PCM pointer. Zero outputs atomically on failure. */
+int cnk_wav_asset_open_memory(cnk_wav_asset *out,const uint8_t *data,size_t size){
+ cnk_wav wav={0};
+ if(!out)return -1;
+ memset(out,0,sizeof(*out));
+ if(!data||size<44||size>32u*1024u*1024u)return -2;
+ if(!cnk_wav_open(data,size,&wav)){
+  uint8_t *copy=(uint8_t*)malloc(size);
+  if(!copy)return -3;
+  memcpy(copy,data,size);
+  /* wav.pcm is inside 'data'. Parse copied bytes to avoid dangling ptr. */
+  if(cnk_wav_open(copy,size,&wav)){free(copy);return -4;}
+  out->bytes=copy;out->bytes_length=size;out->wav=wav;
+  return 0;
+ }
+ cnk_zeebx_ima_pcm decoded={0};
+ if(cnk_zeebx_ima_decode_wav(data,size,&decoded))return -5;
+ wav.pcm=decoded.samples;
+ wav.pcm_bytes=decoded.pcm_bytes;
+ wav.frame_count=decoded.frame_count;
+ wav.sample_rate=decoded.sample_rate;
+ wav.channels=decoded.channels;
+ wav.bits_per_sample=16;
+ wav.frame_bytes=(uint16_t)(decoded.channels*2u);
+ out->bytes=decoded.samples;
+ out->bytes_length=decoded.pcm_bytes;
+ out->wav=wav;
+ return 0;
+}
 int cnk_wav_asset_load(cnk_wav_asset *out,const fufs_file *vfs,uint32_t index){
- uint8_t *p=NULL;size_t n=0;cnk_wav wav;
+ uint8_t *p=NULL;size_t n=0;
  if(!out)return -1;
  memset(out,0,sizeof(*out));
  if(!vfs)return -1;
  if(fufs_extract(vfs,index,&p,&n))return -2;
- if(cnk_wav_open(p,n,&wav)) {free(p);return -3;}
- out->bytes=p;out->bytes_length=n;out->wav=wav;
- return 0;
+ int result=cnk_wav_asset_open_memory(out,p,n);
+ free(p);
+ return result?-3:0;
 }
 void cnk_wav_asset_free(cnk_wav_asset *asset){
  if(!asset)return;
