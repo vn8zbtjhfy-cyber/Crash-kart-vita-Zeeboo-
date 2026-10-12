@@ -32,7 +32,7 @@ static void putword(uint8_t *p,uint32_t x){
 }
 void cnk_zeebx_arm_destroy(cnk_zeebx_arm *cpu){
  if(!cpu)return;
- free(cpu->module);free(cpu->stack);free(cpu->objects);
+ free(cpu->module);free(cpu->stack);free(cpu->heap);free(cpu->objects);
  free(cpu->helpers);free(cpu->vtables);
  memset(cpu,0,sizeof(*cpu));
 }
@@ -45,10 +45,11 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
  size_t size=(size_t)CNK_ARM_MOD_PREFIX+bytes+CNK_ARM_BSS_BYTES;
  cpu->module=(uint8_t*)calloc(1,size);
  cpu->stack=(uint8_t*)calloc(1,CNK_ARM_STACK_BYTES);
+ cpu->heap=(uint8_t*)calloc(1,CNK_ARM_HEAP_BYTES);
  cpu->objects=(uint8_t*)calloc(1,OBJECT_BYTES);
  cpu->helpers=(uint8_t*)calloc(1,HELPER_BYTES);
  cpu->vtables=(uint8_t*)calloc(1,VTABLE_BYTES);
- if(!cpu->module||!cpu->stack||!cpu->objects||!cpu->helpers||
+ if(!cpu->module||!cpu->stack||!cpu->heap||!cpu->objects||!cpu->helpers||
     !cpu->vtables){cnk_zeebx_arm_destroy(cpu);return -3;}
  cpu->module_size=size;
  memcpy(cpu->module+CNK_ARM_MOD_PREFIX,mod,bytes);
@@ -69,6 +70,8 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
  cpu->regs[14]=CNK_ARM_RETURN_MAGIC;
  cpu->regs[15]=CNK_ARM_MOD_BASE+info.entry_offset;
  cpu->cpsr=0x10u; /* user mode ARM */
+ cpu->heap_cursor=0u;
+ cpu->shell_refs=1u;
  cpu->initialized=1;
  return 0;
 }
@@ -82,6 +85,9 @@ static uint8_t *map(cnk_zeebx_arm *c,uint32_t addr,size_t n,int write){
  if(addr>=CNK_ARM_STACK_BASE &&
     end<=(uint64_t)CNK_ARM_STACK_BASE+CNK_ARM_STACK_BYTES)
   return c->stack+(addr-CNK_ARM_STACK_BASE);
+ if(addr>=CNK_ARM_HEAP_BASE &&
+    end<=(uint64_t)CNK_ARM_HEAP_BASE+CNK_ARM_HEAP_BYTES)
+  return c->heap+(addr-CNK_ARM_HEAP_BASE);
  if(addr>=CNK_ARM_OBJECT_BASE &&
     end<=(uint64_t)CNK_ARM_OBJECT_BASE+OBJECT_BYTES)
   return c->objects+(addr-CNK_ARM_OBJECT_BASE);
@@ -407,4 +413,75 @@ int cnk_zeebx_arm_return_from_api(cnk_zeebx_arm *c,uint32_t result){
     c->regs[15]>=CNK_ARM_API_BASE+0x01000000u)return -1;
  c->regs[0]=result;
  return bx(c,c->regs[14]);
+}
+
+int cnk_zeebx_arm_read_u32(cnk_zeebx_arm *c,uint32_t addr,uint32_t *out){
+ if(!c||!c->initialized||!out)return -1;
+ return load(c,addr,4,out);
+}
+/* Only these exact Zeebx slots have experimentally verified startup
+ * semantics for this game. All other BREW services remain unresolved. */
+int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
+ if(!c||!c->initialized)return -1;
+ uint32_t pc=c->regs[15];
+ if(pc<CNK_ARM_API_BASE || pc>=CNK_ARM_API_BASE+0x01000000u)
+  return -1;
+ unsigned iface=(pc-CNK_ARM_API_BASE)>>12u;
+ unsigned slot=((pc-CNK_ARM_API_BASE)&0xfffu)/4u;
+ if(iface==6u && slot==26u){ /* AEEStdLib malloc */
+  uint32_t request=c->regs[0];
+  if(request>CNK_ARM_HEAP_BYTES-8u)return -2;
+  uint32_t aligned=(request+7u)&~7u;
+  if(aligned<8u)aligned=8u;
+  if(aligned>CNK_ARM_HEAP_BYTES-c->heap_cursor)return -2;
+  uint32_t result=CNK_ARM_HEAP_BASE+c->heap_cursor;
+  c->heap_cursor+=aligned;
+  return cnk_zeebx_arm_return_from_api(c,result);
+ }
+ if(iface==0u && (slot==0u||slot==1u)){ /* IShell AddRef/Release */
+  if(c->regs[0]!=CNK_ARM_OBJECT_BASE)return -3;
+  if(slot==0u){
+   if(c->shell_refs==UINT32_MAX)return -3;
+   c->shell_refs++;
+  }else{
+   if(!c->shell_refs)return -3;
+   c->shell_refs--;
+  }
+  return cnk_zeebx_arm_return_from_api(c,c->shell_refs);
+ }
+ return -4; /* Unsupported API MUST NOT silently return success. */
+}
+int cnk_zeebx_arm_bootstrap(cnk_zeebx_arm *c,uint32_t budget,
+                            cnk_arm_outcome *out,uint32_t *apis_handled){
+ if(!c||!out||!apis_handled||!c->initialized||!budget||
+    budget>10000000u)return -1;
+ *apis_handled=0;
+ const uint64_t start=c->executed;
+ for(;;){
+  uint64_t used=c->executed-start;
+  if(used>=budget){
+   *out=(cnk_arm_outcome){0};
+   out->reason=CNK_ARM_BUDGET;
+   out->pc=c->regs[15];
+   out->executed=c->executed;
+   return 0;
+  }
+  uint32_t left=(uint32_t)(budget-used);
+  if(left>4096u)left=4096u;
+  cnk_arm_outcome step_out={0};
+  if(cnk_zeebx_arm_run(c,left,&step_out))return -2;
+  if(step_out.reason==CNK_ARM_API){
+   if(cnk_zeebx_arm_handle_bootstrap_api(c)){
+    *out=step_out;return 0; /* real unknown BREW API */
+   }
+   if(*apis_handled==UINT32_MAX)return -3;
+   (*apis_handled)++;
+   /* Zero-instruction API loops are bounded by the requested budget. */
+   if(*apis_handled>10000u){*out=step_out;return 0;}
+   continue;
+  }
+  if(step_out.reason!=CNK_ARM_BUDGET){
+   *out=step_out;return 0;
+  }
+ }
 }
