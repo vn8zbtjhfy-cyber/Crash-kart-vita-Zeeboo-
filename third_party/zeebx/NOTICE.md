@@ -64,3 +64,22 @@ como submódulo Git `third_party/zeebx_emulator`, fijado en el commit
 referencia versionada de implementación completa; **NO** se compila
 automáticamente dentro de VitaSDK ni debe presentarse como emulador funcional
 en la consola. No contiene ni distribuye juego comercial alguno.
+
+## Avance 123: fábricas y datos de dispositivo BREW desde Zeebx
+
+El archivo `src/cnk_zeebx_arm.c` amplió su adaptación C99 de las
+rutinas de Zeebx:
+- `src/machine/shell.rs` (IShell::CreateInstance, GetDeviceInfo);
+- `src/machine/helper.rs` (memset, dbgprintf, reloj virtual);
+- `src/brew/aee_helpers.rs` y `src/brew/aee_slots.rs`
+  (orden de las funciones de stdlib y slots de interfaces);
+- `src/brew/aee.rs` (IDisplay=5, IFileMgr=3, ISound=14);
+- `src/machine/mod.rs` (ClassID del BREW y parámetros de pantalla).
+
+Copyright ZeebxTeam contributors. SPDX GPL-2.0-or-later.
+No código, tabla de constantes, física, textura, sonido o recursos del
+juego comercial se redistribuyen desde la ROM del usuario. Se
+implementaron únicamente los métodos expresamente documentados y
+necesarios en el arranque real: todos los demás siguen siendo paradas
+explícitas, no funciones inventadas. La fuente completa del emulador
+permanece accesible en el submódulo fijado.
