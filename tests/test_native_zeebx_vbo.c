@@ -78,7 +78,11 @@ int main(void){
  assert(!cnk_zeebx_arm_set_gl_host(&cpu,&host,&rec));
  api(&cpu,119u,0x8892u,1u,0u,0u);
  blocked(&cpu,119u); /* EGL context not yet active */
- cpu.regs[0]=1u;cpu.regs[14]=CNK_ARM_RETURN_MAGIC;
+ /* Restore the COMPLETE original EGL AAPCS argument frame. The
+  * intentionally blocked pre-EGL GL call left r1=1; eglInitialize
+  * must receive null optional version pointers, not that stale word. */
+ cpu.regs[0]=1u;cpu.regs[1]=0u;cpu.regs[2]=0u;cpu.regs[3]=0u;
+ cpu.regs[14]=CNK_ARM_RETURN_MAGIC;
  cpu.regs[15]=CNK_ARM_API_BASE+(23u<<12)+5u*4u;
  assert(invoke(&cpu)==1u);
  cpu.regs[0]=1u;cpu.regs[1]=1u;
