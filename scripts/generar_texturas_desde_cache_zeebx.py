@@ -215,7 +215,8 @@ def build_verified(vfs: Fufs, cache: Path):
     rows = []
     for scene_index, scene_id, names in scenes:
         for slot, name in enumerate(names):
-            if (not name or "\\" in name or "\t" in name
+            if (not name or len(name) >= 96 or any(ord(ch) < 32 or ord(ch) > 126 for ch in name)
+                    or "\\" in name or "\t" in name
                     or "\r" in name or "\n" in name or name.startswith("/")
                     or ".." in name.split("/")):
                 continue
