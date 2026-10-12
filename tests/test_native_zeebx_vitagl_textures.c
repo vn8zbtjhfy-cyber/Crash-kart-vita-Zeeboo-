@@ -75,6 +75,10 @@ int main(void){
  assert(host.texture_sub_upload(NULL,2u,0u,1u,1u,
                                 0x1907u,0x8363u,rgb565));
  assert(cnk_test_gl.subimages_uploaded==1u);
+ /* A real GPU GL_INVALID_VALUE is not hidden; this recorder counts
+  * the expected invalid rectangle and clears only the TEST counter. */
+ assert(cnk_test_gl.invalid==1u);
+ cnk_test_gl.invalid=0u;
  cnk_test_gl.fail_next_upload=1;
  assert(host.texture_sub_upload(NULL,0u,0u,1u,1u,
                                 0x1907u,0x8363u,rgb565));
