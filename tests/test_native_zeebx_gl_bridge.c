@@ -276,6 +276,8 @@ int main(void){
   assert(g.triangle[6u+axis]==triangle[3u+axis]);
  }
  /* Typed, aligned, bounded indices must be checked before GPU callback. */
+ api(&cpu,24u,27u,4u,3u,0u,ibase); /* unknown index type */
+ trap(&cpu,24u,27u);
  api(&cpu,24u,27u,4u,3u,0x1405u,ibase); /* uint32 indices not GLES1 */
  trap(&cpu,24u,27u);
  api(&cpu,24u,27u,4u,3u,0x1403u,ibase+1u); /* misaligned */
