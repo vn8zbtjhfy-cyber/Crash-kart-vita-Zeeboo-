@@ -66,6 +66,14 @@ typedef struct {
  int (*translate)(void *user,float x,float y,float z);
  int (*scale)(void *user,float x,float y,float z);
  int (*rotate)(void *user,float degrees,float x,float y,float z);
+ /* Original 16.16 Zeebo matrices and 6-argument projection APIs.
+  * Host receives a temporary validated C float[16]; synchronous only. */
+ int (*load_matrix)(void *user,const float matrix[16]);
+ int (*mult_matrix)(void *user,const float matrix[16]);
+ int (*frustum)(void *user,float left,float right,float bottom,
+                float top,float near_z,float far_z);
+ int (*ortho)(void *user,float left,float right,float bottom,
+              float top,float near_z,float far_z);
  /* Zeebx AEEGL.h fixed-pipeline state, delegated to actual GPU.
   * Each pointer stays optional until host implements it; unknown or
   * unbound state changes must STOP the guest rather than fake success. */
