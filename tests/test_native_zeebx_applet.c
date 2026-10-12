@@ -101,7 +101,7 @@ int main(void){
  char report[1600]={0};
  file=fopen(logfile,"rb");assert(file);
  size_t report_len=fread(report,1,sizeof(report)-1u,file);
- assert(!fclose(file));report[report_len]='\\0';
+ assert(!fclose(file));report[report_len]='\0';
  assert(strstr(report,"module_load_completed=YES"));
  assert(strstr(report,"applet_clsid=0x01081984"));
  assert(strstr(report,"applet_attempted=YES"));
