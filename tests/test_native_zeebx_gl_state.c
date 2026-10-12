@@ -123,14 +123,14 @@ int main(void){
  for(unsigned i=0;i<3u;i++){
   api(&cpu,24u,28u,caps[i],0u,0u,0u);
   assert(call(&cpu)==0u&&g.a==caps[i]&&g.enabled==1);
-  api(&cpu,24u,23u,caps[i],0u,0u,0u);
+  api(&cpu,24u,24u,caps[i],0u,0u,0u);
   assert(call(&cpu)==0u&&g.a==caps[i]&&g.enabled==0);
  }
  assert(g.cap==6u);
  api(&cpu,24u,28u,0x0de1u,0u,0u,0u); /* texture not functional */
  trap(&cpu,28u);
- api(&cpu,24u,23u,0xdeadbeefu,0u,0u,0u);
- trap(&cpu,23u);
+ api(&cpu,24u,24u,0xdeadbeefu,0u,0u,0u);
+ trap(&cpu,24u);
  assert(g.cap==6u);
  /* Alpha blend forward with GLES1 supported factors only. */
  api(&cpu,24u,6u,0x0302u,0x0303u,0u,0u);
@@ -143,18 +143,18 @@ int main(void){
  assert(g.blend==2u);
  /* All eight core depth comparisons are legal; unknown is rejected. */
  for(uint32_t mode=0x0200u;mode<=0x0207u;mode++){
-  api(&cpu,24u,20u,mode,0u,0u,0u);
+  api(&cpu,24u,22u,mode,0u,0u,0u);
   assert(call(&cpu)==0u&&g.a==mode);
  }
  assert(g.depth==8u);
- api(&cpu,24u,20u,0x0302u,0u,0u,0u);
- trap(&cpu,20u);
- api(&cpu,24u,21u,1u,0u,0u,0u);
+ api(&cpu,24u,22u,0x0302u,0u,0u,0u);
+ trap(&cpu,22u);
+ api(&cpu,24u,22u,1u,0u,0u,0u);
  assert(call(&cpu)==0u&&g.mask==1u&&g.enabled==1);
- api(&cpu,24u,21u,0u,0u,0u,0u);
+ api(&cpu,24u,22u,0u,0u,0u,0u);
  assert(call(&cpu)==0u&&g.mask==2u&&g.enabled==0);
- api(&cpu,24u,21u,2u,0u,0u,0u);
- trap(&cpu,21u);
+ api(&cpu,24u,22u,2u,0u,0u,0u);
+ trap(&cpu,22u);
  assert(g.mask==2u);
  /* Both culling side and winding must reach host unchanged. */
  for(uint32_t side=0x0404u;side<=0x0405u;side++){
@@ -196,8 +196,8 @@ int main(void){
  trap(&cpu,6u);
  api(&cpu,24u,12u,65536u,65536u,65536u,65536u);
  trap(&cpu,12u);
- api(&cpu,24u,21u,0u,0u,0u,0u);
- trap(&cpu,21u);
+ api(&cpu,24u,22u,0u,0u,0u,0u);
+ trap(&cpu,22u);
  assert(g.cap==6u&&g.blend==2u&&g.color==1u&&g.mask==2u);
  cnk_zeebx_arm_destroy(&cpu);
  puts("PASS: original Zeebo fixed-pipeline IGL states forwarded to real "
