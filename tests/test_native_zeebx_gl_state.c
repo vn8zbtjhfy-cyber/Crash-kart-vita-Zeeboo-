@@ -9,7 +9,8 @@
 #include <string.h>
 
 typedef struct {
- unsigned cap,blend,depth,mask,cull,face,color,color_mask;
+ unsigned cap,blend,depth,mask,cull,face,color,color_mask,clip;
+ int32_t clip_rect[4];
  uint32_t a,b;
  float rgba[4];
  int flags[4],enabled,reject;
@@ -29,6 +30,14 @@ static int clear_color(void *p,float a,float b,float c,float d){
 static int viewport(void *p,int32_t x,int32_t y,uint32_t w,uint32_t h){
  (void)x;(void)y;(void)w;(void)h;
  return ((gpu_log*)p)->reject?-1:0;
+}
+static int scissor(void *p,int32_t x,int32_t y,uint32_t w,uint32_t h){
+ gpu_log *g=(gpu_log*)p;
+ if(g->reject)return -1;
+ g->clip++;
+ g->clip_rect[0]=x;g->clip_rect[1]=y;
+ g->clip_rect[2]=(int32_t)w;g->clip_rect[3]=(int32_t)h;
+ return 0;
 }
 static int capability(void *p,uint32_t cap,int on){
  gpu_log *g=(gpu_log*)p;
@@ -98,7 +107,7 @@ int main(void){
  gpu_log g={0};
  cnk_zeebx_gl_host gpu={
   .make_current=current,.present=present,.clear=clear,
-  .clear_color=clear_color,.viewport=viewport,
+  .clear_color=clear_color,.viewport=viewport,.scissor=scissor,
   .set_capability=capability,.blend_func=blend,
   .depth_func=depth,.depth_mask=mask,
   .cull_face=cull,.front_face=front,
@@ -127,11 +136,33 @@ int main(void){
   assert(call(&cpu)==0u&&g.a==caps[i]&&g.enabled==0);
  }
  assert(g.cap==6u);
+ /* Common-Lite glScissor is slot 66, in guest 640x480 GL coordinates.
+  * GL_SCISSOR_TEST must be enabled via the original Enable/Disable ABI. */
+ api(&cpu,24u,28u,0x0c11u,0u,0u,0u);
+ assert(call(&cpu)==0u&&g.cap==7u&&g.enabled==1);
+ api(&cpu,24u,66u,160u,120u,320u,240u);
+ assert(call(&cpu)==0u&&g.clip==1u);
+ assert(g.clip_rect[0]==160&&g.clip_rect[1]==120);
+ assert(g.clip_rect[2]==320&&g.clip_rect[3]==240);
+ api(&cpu,24u,66u,0u,0u,0u,0u); /* zero-area is valid in GL */
+ assert(call(&cpu)==0u&&g.clip==2u);
+ api(&cpu,24u,66u,0u,0u,0xffffffffu,10u);
+ trap(&cpu,66u);
+ api(&cpu,24u,66u,0x80000000u,0u,5u,5u);
+ trap(&cpu,66u);
+ assert(g.clip==2u);
+ cnk_zeebx_gl_host before=cpu.gl_host;
+ cpu.gl_host.scissor=NULL;
+ api(&cpu,24u,66u,0u,0u,20u,20u);
+ trap(&cpu,66u);
+ cpu.gl_host=before;
+ api(&cpu,24u,24u,0x0c11u,0u,0u,0u);
+ assert(call(&cpu)==0u&&g.cap==8u&&g.enabled==0);
  api(&cpu,24u,28u,0x0de1u,0u,0u,0u); /* texture not functional */
  trap(&cpu,28u);
  api(&cpu,24u,24u,0xdeadbeefu,0u,0u,0u);
  trap(&cpu,24u);
- assert(g.cap==6u);
+ assert(g.cap==8u);
  /* Alpha blend forward with GLES1 supported factors only. */
  api(&cpu,24u,6u,0x0302u,0x0303u,0u,0u);
  assert(call(&cpu)==0u&&g.blend==1u);
@@ -190,6 +221,9 @@ int main(void){
  cpu.gl_host=saved;
  /* Real host failure is not treated as an accepted GPU state change. */
  g.reject=1;
+ api(&cpu,24u,66u,20u,20u,30u,30u);
+ trap(&cpu,66u);
+ assert(g.clip==2u);
  api(&cpu,24u,28u,0x0b71u,0u,0u,0u);
  trap(&cpu,28u);
  api(&cpu,24u,6u,0x0302u,0x0303u,0u,0u);
@@ -198,7 +232,7 @@ int main(void){
  trap(&cpu,12u);
  api(&cpu,24u,22u,0u,0u,0u,0u);
  trap(&cpu,22u);
- assert(g.cap==6u&&g.blend==2u&&g.color==1u&&g.mask==2u);
+ assert(g.cap==8u&&g.blend==2u&&g.color==1u&&g.mask==2u);
  cnk_zeebx_arm_destroy(&cpu);
  puts("PASS: original Zeebo fixed-pipeline IGL states forwarded to real "
       "GPU callbacks; invalid enum and GPU failure never fake success");

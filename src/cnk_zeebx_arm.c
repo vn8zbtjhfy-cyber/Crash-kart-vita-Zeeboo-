@@ -1304,7 +1304,7 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
  case 24u: /* glDisable(capability) */
  case 28u: /* glEnable(capability) */
   if((a0!=0x0b71u&&a0!=0x0be2u&&a0!=0x0b44u&&
-      a0!=CNK_GLTEX_TARGET)||
+      a0!=0x0c11u&&a0!=CNK_GLTEX_TARGET)||
      (a0==CNK_GLTEX_TARGET && slot==28u &&
       (!c->gl_host.texture_bind||!c->gl_host.texture_upload||
        !c->gl_host.draw_textured_triangles))||
@@ -1433,6 +1433,19 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
   c->gl_vertex_buffer=c->gl_array_buffer;
   c->gl_vertex_stride=a2?a2:3u*width;
   c->gl_vertex_type=a1;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ case 66u:{ /* glScissor, exact Zeebx Common-Lite ABI slot.
+               * Width/height are signed GLsizei and must be nonnegative.
+               * The Vita callback applies the SAME 640x480 letterbox as
+               * glViewport, or reports failure. */
+  if((int32_t)a2<0||(int32_t)a3<0||
+     a2>4096u||a3>4096u||
+     (int32_t)a0<-4096||(int32_t)a0>4096||
+     (int32_t)a1<-4096||(int32_t)a1>4096||
+     !c->gl_host.scissor||
+     c->gl_host.scissor(c->gl_host_user,(int32_t)a0,(int32_t)a1,
+                         a2,a3))return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
  }
  case 79u:{ /* glViewport(x,y,w,h), guest screen 640x480 */

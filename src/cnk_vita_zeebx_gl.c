@@ -53,6 +53,23 @@ static int vita_viewport(void *user,int32_t x,int32_t y,
  glViewport((GLint)vx,(GLint)vy,(GLsizei)vw,(GLsizei)vh);
  return 0;
 }
+/* Original glScissor is 640x480 bottom-left coordinates. Map into
+ * the same pillarboxed rectangle as the viewport, not the full 960x544.
+ * GL accepts zero-area clips; negative dimensions must never hit GPU. */
+static int vita_scissor(void *user,int32_t x,int32_t y,
+                        uint32_t w,uint32_t h){
+ (void)user;
+ if(w>4096u||h>4096u||x>4096||x< -4096||
+    y>4096||y< -4096)return -1;
+ const int64_t sx=CNK_PORT_X+((int64_t)x*CNK_PORT_WIDTH)/640;
+ const int64_t sy=((int64_t)y*CNK_NATIVE_DISPLAY_H)/480;
+ const int64_t sw=((int64_t)w*CNK_PORT_WIDTH)/640;
+ const int64_t sh=((int64_t)h*CNK_NATIVE_DISPLAY_H)/480;
+ if(sx<INT_MIN||sx>INT_MAX||sy<INT_MIN||sy>INT_MAX||
+    sw>INT_MAX||sh>INT_MAX)return -1;
+ glScissor((GLint)sx,(GLint)sy,(GLsizei)sw,(GLsizei)sh);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
 static int vita_present(void *user){
  (void)user;
  vglSwapBuffers(GL_FALSE);
@@ -227,7 +244,7 @@ static int vita_draw_colored_textured_triangles(
 static int vita_set_capability(void *user,uint32_t cap,int enabled){
  (void)user;
  if(cap!=0x0b71u && cap!=0x0be2u && cap!=0x0b44u &&
-    cap!=GL_TEXTURE_2D)return -1;
+    cap!=GL_TEXTURE_2D && cap!=GL_SCISSOR_TEST)return -1;
  if(enabled)glEnable((GLenum)cap);
  else glDisable((GLenum)cap);
  return glGetError()==GL_NO_ERROR?0:-1;
@@ -272,7 +289,8 @@ static int vita_color_mask(void *user,int r,int g,int b,int a){
 cnk_zeebx_gl_host cnk_vita_zeebx_gl_callbacks(void){
  const cnk_zeebx_gl_host host={
   .make_current=vita_begin,.clear_color=vita_clear_color,
-  .clear=vita_clear,.viewport=vita_viewport,.present=vita_present,
+  .clear=vita_clear,.viewport=vita_viewport,.scissor=vita_scissor,
+  .present=vita_present,
   .matrix_mode=vita_matrix_mode,.load_identity=vita_load_identity,
   .push_matrix=vita_push_matrix,.pop_matrix=vita_pop_matrix,
   .translate=vita_translate,.scale=vita_scale,.rotate=vita_rotate,

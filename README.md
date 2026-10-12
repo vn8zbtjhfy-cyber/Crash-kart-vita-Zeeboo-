@@ -123,6 +123,12 @@ pruebas sinteticas y VitaSDK no equivalen a jugabilidad completa.
 [Puente vitaGL](docs/AVANCE_129_ZEEBX_GL_VITA_REAL.md) |
 [Matrices 3D](docs/AVANCE_130_ZEEBX_MATRICES_VITA.md).
 
+## Avance 141: recorte original de Zeebo a la pantalla Vita
+
+El código derivado de Zeebx ahora pasa **glScissor** (slot 66 de la ABI original GL_LEGACY) al renderizador real de PS Vita. `GL_SCISSOR_TEST` se habilita y deshabilita por la ABI del juego. Se convierte el lienzo Zeebo 640×480 al viewport 725×544 centrado de Vita y se validan errores del GPU y límites de recorte. [Pruebas y límites](docs/AVANCE_141_ZEEBX_SCISSOR_VITA.md).
+
+**43/43 pruebas de PC sin ROM aprobadas** en el bloque: [GitHub Actions](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38212299448). Las pruebas de PC y compilar un ELF ARM no demuestran que **Crash Nitro Kart 3D original sea jugable**. Falta ejecución completa de los gráficos, applet, archivos, sonido y validación en consola real; porcentaje histórico sin actualizar hasta tener esa evidencia.
+
 ## Avance 128: negociación EGL original de Zeebo
 
 - Se conserva la rama de señales BREW del avance 127. Se añadió desde

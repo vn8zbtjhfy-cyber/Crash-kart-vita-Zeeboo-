@@ -15,6 +15,7 @@ typedef float GLfloat;
 #define GL_DEPTH_BUFFER_BIT 0x0100u
 #define GL_STENCIL_BUFFER_BIT 0x0400u
 #define GL_BLEND 0x0BE2u
+#define GL_SCISSOR_TEST 0x0C11u
 #define GL_SRC_ALPHA 0x0302u
 #define GL_ONE_MINUS_SRC_ALPHA 0x0303u
 #define GL_TRUE 1
@@ -54,6 +55,7 @@ void glTexImage2D(GLenum target,GLint level,GLint internalformat,GLsizei width,
                   const void *data);
 GLenum glGetError(void);
 void glViewport(GLint x,GLint y,GLsizei width,GLsizei height);
+void glScissor(GLint x,GLint y,GLsizei width,GLsizei height);
 void glEnable(GLenum capability);
 void glDisable(GLenum capability);
 void glDepthFunc(GLenum func);
@@ -85,6 +87,9 @@ typedef struct {
  uint32_t vertex_limit;
  uint64_t drawn_vertices, draw_calls, textured_calls, untextured_calls;
  uint32_t texcoords_emitted;
+ uint32_t scissor_calls;
+ GLint scissor_rect[4];
+ int scissor_enabled;
  uint32_t matrix_loads,matrix_multiplications, matrix_stack_depth;
  float recorded_model_matrices[16 * 16];
  float last_camera_view[16];
