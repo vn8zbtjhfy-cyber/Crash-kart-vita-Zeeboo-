@@ -35,4 +35,8 @@ void vita_video_draw(const uint8_t*r,uint32_t w,uint32_t h){
  }
  vglSwapBuffers(GL_FALSE);
 }
-void vita_video_shutdown(void){if(tex)glDeleteTextures(1,&tex);vglEnd();}
+void vita_video_shutdown(void){
+ if(tex){glDeleteTextures(1,&tex);tex=0;}
+ old_w=0;old_h=0;
+ // vitaGL has no public vglEnd() API. GL allocations are owned by process lifetime.
+}

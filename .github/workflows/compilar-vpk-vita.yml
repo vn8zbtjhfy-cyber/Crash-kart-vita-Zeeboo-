@@ -124,12 +124,14 @@ jobs:
           set -euo pipefail
           export PATH="$VITASDK/bin:$PATH"
           cd ports/zeebx-rust-vita
+          export CARGO_TARGET_DIR="$PWD/rust/zeebx_vita/target"
           cargo +nightly tree --manifest-path rust/zeebx_vita/Cargo.toml --target armv7-sony-vita-newlibeabihf --edges normal,build > /tmp/zeebx_vita_deps.txt
           if grep -E '(^|[[:space:]])(rusqlite|libsqlite3-sys)[[:space:]]' /tmp/zeebx_vita_deps.txt; then
             echo "ERROR: Vita Cargo dependencies still contain SQLite" >&2
             exit 1
           fi
           cargo +nightly build -Z build-std=std,panic_abort --release --target armv7-sony-vita-newlibeabihf --manifest-path rust/zeebx_vita/Cargo.toml
+          test -s "$CARGO_TARGET_DIR/armv7-sony-vita-newlibeabihf/release/libzeebx_vita.a"
       - name: Validar todos los datos comerciales embebidos
         run: |
           set -euo pipefail
@@ -151,7 +153,9 @@ jobs:
             echo "ERROR: Missing Ninja and make" >&2
             exit 1
           fi
-          cmake -S . -B build "${generator[@]}" -DCMAKE_TOOLCHAIN_FILE="$VITASDK/share/vita.toolchain.cmake" -DCMAKE_BUILD_TYPE=Release -DNITRO_EXPERIMENTAL_VPK=ON
+          rust_staticlib="$PWD/rust/zeebx_vita/target/armv7-sony-vita-newlibeabihf/release/libzeebx_vita.a"
+          test -s "$rust_staticlib"
+          cmake -S . -B build "${generator[@]}" -DCMAKE_TOOLCHAIN_FILE="$VITASDK/share/vita.toolchain.cmake" -DCMAKE_BUILD_TYPE=Release -DNITRO_EXPERIMENTAL_VPK=ON -DZEEBX_CORE_LIBRARY="$rust_staticlib"
           cmake --build build --parallel 2
           test -s build/Crash_Nitro_Kart_3D.vpk
       - name: Publicar solo si existe VPK real compilado
