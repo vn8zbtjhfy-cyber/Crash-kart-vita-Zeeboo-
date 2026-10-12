@@ -2181,6 +2181,71 @@ int cnk_zeebx_arm_applet_result(cnk_zeebx_arm *c,
   * will independently validate any attempted function invocation. */
  if(!map(c,vtable,4u,0))return -5;
  c->applet_pending=0;
+ c->applet_instance=applet;
  *applet_ptr=applet;
+ return 0;
+}
+
+/* Zeebx machine/shell.rs::start_applet, AEEEvent.h EVT_APP_START = 0.
+ * This is the missing bridge between successful IModule::CreateInstance
+ * and actual original game initialization. The IApplet vtable is read
+ * from GUEST memory, not synthesized by this host.
+ *
+ * AEEAppStart (24 bytes):
+ *   +0 int32 nError, +4 AEECLSID clsApp, +8 IDisplay* pDisplay,
+ *   +12 rect {x=0,y=0,w=640,h=480} as four little-endian int16,
+ *   +20 pszArgs=NULL.
+ *
+ * Allocate/write only AFTER validating the destination regions, vtable
+ * entry, and exact successfully created applet identity. This routine
+ * never marks the original game playable and never calls host-native
+ * guest code.
+ */
+int cnk_zeebx_arm_prepare_start_event(cnk_zeebx_arm *c,
+                                      uint32_t applet,uint32_t clsid,
+                                      uint32_t *entry,uint32_t *start_ptr){
+ uint32_t vtable=0,func=0;
+ if(!c||!entry||!start_ptr||!c->initialized||
+    c->applet_pending||c->applet_start_dispatched||
+    !applet||applet!=c->applet_instance||!clsid||
+    c->regs[15]!=CNK_ARM_RETURN_MAGIC)return -1;
+ *entry=0u;*start_ptr=0u;
+ if(load(c,applet,4u,&vtable)||(vtable&3u)||
+    load(c,vtable+8u,4u,&func))return -2;
+ const uint32_t code=func&~1u;
+ const uint64_t code_end=(uint64_t)CNK_ARM_MOD_BASE+
+                          c->module_size-CNK_ARM_MOD_PREFIX;
+ /* The portable interpreter remains ARM-only: no pretend Thumb success. */
+ if((func&1u)||(code&3u)||code<CNK_ARM_MOD_BASE||
+    (uint64_t)code+4u>code_end)return -3;
+ if(c->object_cursor>OBJECT_BYTES-64u ||
+    c->heap_cursor>CNK_ARM_HEAP_BYTES-24u ||
+    c->display_objects==UINT32_MAX)return -4;
+ const uint32_t display=CNK_ARM_OBJECT_BASE+c->object_cursor;
+ const uint32_t start=CNK_ARM_HEAP_BASE+c->heap_cursor;
+ uint8_t *display_dst=map(c,display,64u,1);
+ uint8_t *start_dst=map(c,start,24u,1);
+ if(!display_dst||!start_dst)return -5;
+ /* Match upstream Zeebx Shell's separately created IDisplay for START;
+  * this class is already implemented as a guest BREW vtable. */
+ memset(display_dst,0,64u);
+ putword(display_dst,CNK_ARM_VTABLE_BASE+
+                     5u*CNK_ARM_VTABLE_STRIDE);
+ memset(start_dst,0,24u);
+ putword(start_dst+4u,clsid);
+ putword(start_dst+8u,display);
+ putword(start_dst+16u,640u|(480u<<16));
+ c->object_cursor+=64u;
+ c->heap_cursor+=24u;
+ c->display_objects++;
+ c->regs[0]=applet;
+ c->regs[1]=0u; /* EVT_APP_START */
+ c->regs[2]=0u; /* wParam */
+ c->regs[3]=start;
+ c->regs[14]=CNK_ARM_RETURN_MAGIC;
+ c->regs[15]=code;
+ c->applet_start_addr=start;
+ c->applet_start_dispatched=1u;
+ *entry=func;*start_ptr=start;
  return 0;
 }
