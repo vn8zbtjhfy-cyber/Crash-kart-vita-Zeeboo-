@@ -204,12 +204,19 @@ static cnk_arm_reason step(cnk_zeebx_arm *c,uint32_t *bad){
  if(pc==CNK_ARM_RETURN_MAGIC)return CNK_ARM_RETURNED;
  if(pc>=CNK_ARM_API_BASE && pc<CNK_ARM_API_BASE+0x01000000u)
   return CNK_ARM_API;
- if(pc&3u)return CNK_ARM_FAULT;
+ if(c->cpsr&T){
+  *bad=pc;return CNK_ARM_UNSUPPORTED;
+ }
+ /* Zeebx GuestMemory marks only the module executable. In the C bridge
+  * the heap, stack, vtables and API scratch buffers are DATA, never
+  * host/guest executable pages. Report an invalid guest control flow. */
+ uint64_t exec_end=(uint64_t)CNK_ARM_MOD_BASE+
+                        c->module_size-CNK_ARM_MOD_PREFIX;
+ if((pc&3u)||pc<CNK_ARM_MOD_BASE||(uint64_t)pc+4u>exec_end){
+  *bad=pc;return CNK_ARM_FAULT;
+ }
  if(load(c,pc,4,&op)){*bad=pc;return CNK_ARM_FAULT;}
  *bad=op;
- /* Zeebx features ARM and Thumb; Thumb dispatch is deliberately not yet
-  * implemented in this small bridge, so a BX/BLX to Thumb stops honestly. */
- if(c->cpsr&T)return CNK_ARM_UNSUPPORTED;
  unsigned condition=op>>28;
  if(condition==15u){
   /* BLX immediate (Zeebx interpreter, ARMv5+). */
