@@ -68,6 +68,15 @@ typedef struct {
  int (*rotate)(void *user,float degrees,float x,float y,float z);
  /* Real 3D guest vertex stream in XYZ float triplets, owned by caller
   * through return of this synchronous callback. No fake draw success. */
+ /* AEEGL.h fixed-function material and projection state, verified slots.
+  * Unsupported/enumeration-invalid methods never reach these callbacks. */
+ int (*enable_capability)(void *user,uint32_t capability,int enabled);
+ int (*blend_func)(void *user,uint32_t src,uint32_t dst);
+ int (*depth_func)(void *user,uint32_t compare);
+ int (*depth_mask)(void *user,int enabled);
+ int (*current_color)(void *user,float r,float g,float b,float a);
+ int (*load_matrix)(void *user,const float *column_major_16);
+ int (*mult_matrix)(void *user,const float *column_major_16);
  int (*draw_triangles)(void *user,const float *xyz,uint32_t count);
 } cnk_zeebx_gl_host;
 
