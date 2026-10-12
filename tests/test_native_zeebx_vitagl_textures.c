@@ -14,10 +14,10 @@ static unsigned vertices_seen,begin_calls,end_calls;
 void glBegin(GLenum mode){assert(mode==GL_TRIANGLES);begin_calls++;}
 void glEnd(void){end_calls++;}
 void glVertex3f(float x,float y,float z){
- assert(vertices_seen<3u);
- recorded_xyz[3u*vertices_seen]=x;
- recorded_xyz[3u*vertices_seen+1u]=y;
- recorded_xyz[3u*vertices_seen+2u]=z;
+ const unsigned index=vertices_seen%3u;
+ recorded_xyz[3u*index]=x;
+ recorded_xyz[3u*index+1u]=y;
+ recorded_xyz[3u*index+2u]=z;
  vertices_seen++;
 }
 void glLoadIdentity(void){}
