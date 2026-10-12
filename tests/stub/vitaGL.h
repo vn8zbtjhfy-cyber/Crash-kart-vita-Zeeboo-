@@ -72,6 +72,7 @@ void glTexCoord2f(GLfloat u,GLfloat v);
 typedef struct {
  uint32_t vertex_limit;
  uint64_t drawn_vertices, draw_calls, textured_calls, untextured_calls;
+ uint32_t texcoords_emitted;
  uint32_t matrix_loads,matrix_multiplications, matrix_stack_depth;
  float recorded_model_matrices[16 * 16];
  float last_camera_view[16];
