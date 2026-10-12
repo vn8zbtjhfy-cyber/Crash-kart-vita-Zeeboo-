@@ -68,6 +68,19 @@ static int probe_internal(const char *mod_path,const char *mif_path,
  rc=cnk_zeebx_arm_init(&cpu,mod,mod_bytes);
  free(mod);
  if(rc)return -5;
+ /* One private original game root, based on its own .mod directory.
+  * Zeebx guest names never reach arbitrary Vita or PC host paths. */
+ {
+  const char *slash=strrchr(mod_path,'/');
+  char root[CNK_ZEEBX_FILE_ROOT_CHARS]={0};
+  size_t n=slash?(size_t)(slash-mod_path):1u;
+  if(!slash){root[0]='.';}
+  else if(n>0u&&n<sizeof(root))memcpy(root,mod_path,n);
+  else {cnk_zeebx_arm_destroy(&cpu);return -5;}
+  if(cnk_zeebx_arm_set_file_root(&cpu,root)){
+   cnk_zeebx_arm_destroy(&cpu);return -5;
+  }
+ }
  if(pad && cnk_zeebx_arm_set_pad(&cpu,pad)){
   cnk_zeebx_arm_destroy(&cpu);return -5;
  }
@@ -139,6 +152,8 @@ static int probe_internal(const char *mod_path,const char *mif_path,
   "start_event_handled=%s\n"
   "source_display_instances=%u\n"
   "source_filemgr_instances=%u\nguest_dbgprintf_calls=%u\n"
+  "zeebx_guest_files_open=%u\nzeebx_file_reads=%u\n"
+  "zeebx_file_bytes_read=%u\nzeebx_file_path_denials=%u\n"
   "signal_callbacks_attempted=%s\nsignal_callbacks_delivered=%u\n"
   "signal_callbacks_remaining=%u\nsignal_dispatch_code=%d\n"
   "signal_dispatch_reason=%s\n"
@@ -158,6 +173,8 @@ static int probe_internal(const char *mod_path,const char *mif_path,
   start_out.api_interface,start_out.api_slot,start_calls,
   start_completed?"YES":"NO",start_handled?"YES":"NO",
   cpu.display_objects,cpu.filemgr_objects,cpu.debug_calls,
+  cpu.file_open_count,cpu.file_read_calls,cpu.file_bytes_read,
+  cpu.file_path_denials,
   callback_probe_attempted?"YES":"NO",callbacks_delivered,
   cpu.signal_pending_count,callback_probe_rc,
   callback_probe_attempted?reason_name(signal_out.reason):"NOT_RUN",
