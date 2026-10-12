@@ -837,35 +837,54 @@ static float zeebx_gl_fixed(uint32_t raw){
 /* Expand the *guest* index stream into a fully checked, temporary XYZ
  * triangle list. The GPU only sees host-owned floats, never raw ARM
  * pointers. index_type==0 is the non-indexed DrawArrays path. */
-static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t first,
-                                 uint32_t count,uint32_t index_type,
-                                 uint32_t index_pointer){
+/* Expand supported GLES1 primitives into GPU-ready triangles, with exact
+ * GLES strip winding and fan center. Read only verified ARM guest memory.
+ * A malformed index/vertex prevents the WHOLE draw, not partial output. */
+static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t mode,
+                                 uint32_t first,uint32_t count,
+                                 uint32_t index_type,uint32_t index_pointer){
  if(!c->gl_host.draw_triangles||!c->gl_vertex_enabled||
-    !c->gl_vertex_pointer||!count||count%3u||
-    count>CNK_ZEEBX_MAX_DRAW_VERTICES||
-    c->gl_draw_calls==UINT32_MAX||
-    c->gl_drawn_vertices>UINT32_MAX-count)return -4;
+    !c->gl_vertex_pointer||!count||
+    c->gl_draw_calls==UINT32_MAX)return -4;
+ uint32_t triangles=0u;
+ if(mode==4u){ /* GL_TRIANGLES */
+  if(count%3u)return -4;
+  triangles=count/3u;
+ }else if(mode==5u||mode==6u){ /* GL_TRIANGLE_STRIP / FAN */
+  if(count<3u)return -4;
+  triangles=count-2u;
+ }else return -4; /* no unsupported primitive accepted as success */
+ const uint64_t emitted64=(uint64_t)triangles*3u;
+ if(!triangles||emitted64>CNK_ZEEBX_MAX_DRAW_VERTICES)return -4;
+ const uint32_t emitted=(uint32_t)emitted64;
+ if(c->gl_drawn_vertices>UINT32_MAX-emitted)return -4;
  if(index_type==0u){
   if(first>65536u||count>65536u-first)return -4;
- }else{
-  if((index_type!=0x1401u&&index_type!=0x1403u)||
-     !index_pointer || (index_type==0x1403u&&(index_pointer&1u)))
-   return -4;
- }
+ }else if((index_type!=0x1401u&&index_type!=0x1403u)||
+          !index_pointer || (index_type==0x1403u&&(index_pointer&1u)))
+  return -4;
  float xyz[CNK_ZEEBX_MAX_DRAW_VERTICES*3u];
- for(uint32_t i=0;i<count;i++){
-  uint32_t vertex_index=first+i;
+ for(uint32_t i=0;i<emitted;i++){
+  uint32_t source=i;
+  if(mode==5u){ /* Alternating strip winding avoids back-face reversal. */
+   const uint32_t tri=i/3u,part=i%3u;
+   source=tri+((tri&1u)?(part==0u?1u:part==1u?0u:2u):part);
+  }else if(mode==6u){ /* Every triangle uses the original fan center. */
+   const uint32_t tri=i/3u,part=i%3u;
+   source=part==0u?0u:tri+part;
+  }
+  uint32_t vertex_index=first+source;
   if(index_type){
-   uint32_t width=index_type==0x1403u?2u:1u;
-   uint64_t addr=(uint64_t)index_pointer+(uint64_t)i*width;
+   const uint32_t width=index_type==0x1403u?2u:1u;
+   const uint64_t addr=(uint64_t)index_pointer+(uint64_t)source*width;
    if(addr>UINT32_MAX||
       load(c,(uint32_t)addr,width,&vertex_index))return -4;
   }
   if(vertex_index>=65536u)return -4;
-  uint64_t vertex=(uint64_t)c->gl_vertex_pointer+
-                  (uint64_t)vertex_index*c->gl_vertex_stride;
+  const uint64_t vertex=(uint64_t)c->gl_vertex_pointer+
+                        (uint64_t)vertex_index*c->gl_vertex_stride;
   for(unsigned component=0;component<3u;component++){
-   uint64_t address=vertex+4u*component;
+   const uint64_t address=vertex+4u*component;
    uint32_t bits=0;
    if(address>UINT32_MAX || load(c,(uint32_t)address,4u,&bits))
     return -4;
@@ -875,9 +894,9 @@ static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t first,
    xyz[3u*i+component]=v;
   }
  }
- if(c->gl_host.draw_triangles(c->gl_host_user,xyz,count))return -4;
+ if(c->gl_host.draw_triangles(c->gl_host_user,xyz,emitted))return -4;
  c->gl_draw_calls++;
- c->gl_drawn_vertices+=count;
+ c->gl_drawn_vertices+=emitted;
  return cnk_zeebx_arm_return_from_api(c,0u);
 }
 static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
@@ -966,12 +985,11 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
   if(a0!=0x8074u)return -4; /* other client arrays not ported */
   c->gl_vertex_enabled=slot==29u?1u:0u;
   return cnk_zeebx_arm_return_from_api(c,0u);
- case 26u: /* glDrawArrays(GL_TRIANGLES, first, count) */
-  if(a0!=4u)return -4;
-  return zeebx_gl_draw_vertices(c,a1,a2,0u,0u);
- case 27u: /* glDrawElements(GL_TRIANGLES, count, type, guest_indices) */
-  if(a0!=4u || (a2!=0x1401u&&a2!=0x1403u))return -4;
-  return zeebx_gl_draw_vertices(c,0u,a1,a2,a3);
+ case 26u: /* glDrawArrays: triangles, strips and fans */
+  return zeebx_gl_draw_vertices(c,a0,a1,a2,0u,0u);
+ case 27u: /* glDrawElements: bounded guest BYTE/USHORT indices */
+  if(a2!=0x1401u&&a2!=0x1403u)return -4;
+  return zeebx_gl_draw_vertices(c,a0,0u,a1,a2,a3);
  case 37u: /* glGetError: only after supported host calls */
   return cnk_zeebx_arm_return_from_api(c,0u);
  case 35u: /* glFrustumx: 6 signed fixed 16.16 AAPCS arguments */

@@ -1,5 +1,20 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 135: tiras y abanicos 3D del Zeebo
+
+La ejecución gráfica de Zeebx ahora acepta `GL_TRIANGLES`,
+`GL_TRIANGLE_STRIP` y `GL_TRIANGLE_FAN` de `glDrawArrays` y
+`glDrawElements`, con índices reales del juego original en memoria
+ARM virtual. Los triángulos quedan orientados correctamente para
+la GPU de Vita, con límites de memoria y pruebas de errores antes
+de enviar un dibujo.
+
+- [Informe técnico y pruebas del avance 135](docs/AVANCE_135_ZEEBX_GL_TIRAS_ABANICOS.md).
+- CI sin ROM: **37 pruebas**, incluida la conversión de primitivas.
+- **El juego completo sigue sin probarse físicamente** y faltan
+  texturas, UV, ejecución sostenida de applet, audio y archivos.
+
+
 ## Avance 134: matrices y proyecciones originales de Zeebx en vitaGL
 
 - Se adaptaron `glFrustumx`, `glOrthox`, `glLoadMatrixx` y

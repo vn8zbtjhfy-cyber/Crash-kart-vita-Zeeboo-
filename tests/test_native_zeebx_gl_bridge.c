@@ -245,7 +245,7 @@ int main(void){
  trap(&cpu,24u,26u);
  api(&cpu,24u,26u,4u,0xffffffffu,3u,0u);
  trap(&cpu,24u,26u);
- api(&cpu,24u,26u,5u,0u,3u,0u);
+ api(&cpu,24u,26u,1u,0u,3u,0u); /* GL_LINES still unsupported */
  trap(&cpu,24u,26u);
  api(&cpu,24u,25u,0x8074u,0u,0u,0u);
  assert(invoke(&cpu)==0u);
@@ -286,7 +286,7 @@ int main(void){
  trap(&cpu,24u,27u);
  api(&cpu,24u,27u,4u,2u,0x1401u,ibase+16u); /* incomplete tri */
  trap(&cpu,24u,27u);
- api(&cpu,24u,27u,5u,3u,0x1401u,ibase+16u); /* wrong primitive */
+ api(&cpu,24u,27u,1u,3u,0x1401u,ibase+16u); /* GL_LINES unsupported */
  trap(&cpu,24u,27u);
  api(&cpu,24u,27u,4u,CNK_ZEEBX_MAX_DRAW_VERTICES+3u,
      0x1401u,ibase+16u); /* oversized request */
