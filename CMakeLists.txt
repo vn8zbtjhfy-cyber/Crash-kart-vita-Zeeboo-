@@ -828,6 +828,12 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_texture_env PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_texture_env PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_texture_env COMMAND cnk_test_zeebx_texture_env)
+  # Source-backed Zeebx glTexSubImage2D and glPixelStorei guest ABI.
+  # Odd-width row padding and invalid ARM pointers are regression-tested.
+  add_executable(cnk_test_zeebx_subimage tests/test_native_zeebx_subimage.c)
+  target_link_libraries(cnk_test_zeebx_subimage PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_subimage PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_subimage COMMAND cnk_test_zeebx_subimage)
   # Zeebx GL_LEGACY original triangle primitives, indexed & sequential.
   # No ROM assets: synthetic ARM guest bytes and strict GPU recorder.
   add_executable(cnk_test_zeebx_gl_primitives tests/test_native_zeebx_gl_primitives.c)
