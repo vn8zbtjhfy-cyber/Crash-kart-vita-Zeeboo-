@@ -38,6 +38,7 @@ typedef struct {
  uint8_t *module,*stack,*heap,*objects,*helpers,*vtables;
  uint32_t heap_cursor,shell_refs;
  uint32_t object_cursor,display_objects,filemgr_objects,sound_objects,debug_calls;
+ uint32_t hid_objects,signal_factory_objects,egl_legacy_objects,gl_legacy_objects;
  uint32_t screen_bitmap_addr,screen_bitmap_references;
  uint32_t screen_bitmap_pixels; /* RGB565 guest buffer, allocated on first IDIB */
  uint32_t virtual_time_ms;
