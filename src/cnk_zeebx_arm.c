@@ -486,6 +486,45 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   }
   return cnk_zeebx_arm_return_from_api(c,c->shell_refs);
  }
+ /* The original CNK applet reaches this exact diagnostic helper twice.
+  * Zeebx returns AEE_SUCCESS after recording formatted debug text.
+  * Preserve the bounded raw format string without interpreting guest
+  * varargs as a host printf format (unsafe and not the same ABI). */
+ if(iface==6u&&slot==39u){
+  uint32_t ptr=c->regs[0],byte=0;
+  if(!ptr||c->debug_calls==UINT32_MAX)return -3;
+  size_t n=0;
+  memset(c->last_debug_template,0,sizeof(c->last_debug_template));
+  for(;n+1u<sizeof(c->last_debug_template);n++){
+   if(load(c,ptr+(uint32_t)n,1u,&byte))return -3;
+   if(!byte)break;
+   c->last_debug_template[n]=(char)(uint8_t)byte;
+  }
+  c->last_debug_template[n]='\\0';
+  c->debug_calls++;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ /* Zeebx Machine::shell_create_instance: these ClassIDs come from the
+  * BREW 4 SDK and were individually observed when executing the original
+  * user-owned cnk2.mod. No generic success for unknown classes. */
+ if(iface==0u&&slot==2u){
+  const uint32_t clsid=c->regs[1],out_ptr=c->regs[2];
+  uint32_t target_iface=0;
+  if(clsid==0x01001001u)target_iface=5u; /* IDisplay */
+  else if(clsid==0x01001003u)target_iface=3u; /* IFileMgr */
+  else return -4;
+  if(c->regs[0]!=CNK_ARM_OBJECT_BASE||!out_ptr||
+     !map(c,out_ptr,4u,1))return -3;
+  if(c->object_cursor>OBJECT_BYTES-64u)return -2;
+  const uint32_t obj=CNK_ARM_OBJECT_BASE+c->object_cursor;
+  const uint32_t vtable=CNK_ARM_VTABLE_BASE+
+                         target_iface*CNK_ARM_VTABLE_STRIDE;
+  if(store(c,obj,4u,vtable)||store(c,out_ptr,4u,obj))return -3;
+  c->object_cursor+=64u;
+  if(target_iface==5u)c->display_objects++;
+  else c->filemgr_objects++;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
  return -4; /* Unsupported API MUST NOT silently return success. */
 }
 int cnk_zeebx_arm_bootstrap(cnk_zeebx_arm *c,uint32_t budget,
