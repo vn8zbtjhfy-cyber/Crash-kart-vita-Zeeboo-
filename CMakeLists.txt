@@ -851,7 +851,16 @@ else()
       add_executable(cnk_vita_elf_link_check src/vita_main.c)
       target_link_libraries(cnk_vita_elf_link_check PRIVATE
           cnk_vita_backend cnk_native_core ${CNK_VITA_LINK_LIBS})
-      # Deliberately no vita_create_self and no vita_create_vpk calls.
+      # Normally we only link the diagnostic ELF. User-requested PS Vita
+      # hardware test is strictly opt-in and NEVER includes ROM/data.vfs.
+      option(CNK_ENABLE_VITA_DIAGNOSTIC_VPK
+             "Build temporary installable PS Vita hardware test, not a finished game" OFF)
+      if(CNK_ENABLE_VITA_DIAGNOSTIC_VPK)
+        include("$ENV{VITASDK}/share/vita.cmake" REQUIRED)
+        vita_create_self(eboot.bin cnk_vita_elf_link_check UNSAFE)
+        vita_create_vpk(CNK3D-HARDWARE-TEST.vpk CNKT00001 eboot.bin
+                        VERSION "01.00" NAME "CNK3D TEST")
+      endif()
     endif()
   endif()
   # NO declarar un VPK del juego antes de integrar motor, física, audio y escenas.
