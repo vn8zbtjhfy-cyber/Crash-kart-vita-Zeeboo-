@@ -1,5 +1,20 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 134: matrices y proyecciones originales de Zeebx en vitaGL
+
+- Se adaptaron `glFrustumx`, `glOrthox`, `glLoadMatrixx` y
+  `glMultMatrixx` del GL antiguo del Zeebo: la GPU Vita recibe las
+  proyecciones y matrices del juego original con conversión 16.16.
+- Los punteros del ARM invitado y dos argumentos de pila se verifican antes
+  de llamar a la GPU. No se devuelven éxitos imaginarios cuando falla.
+- **36 comprobaciones sin ROM**, incluyendo tanto llamadas del invitado como
+  llamadas al adaptador de GPU usado en Vita.
+- [Implementación, límites y pruebas](docs/AVANCE_134_ZEEBX_GL_PROYECCION_MATRICES.md).
+- **No significa que Crash original sea jugable todavía**: faltan texturas,
+  más geometría y el ciclo continuo del applet; la prueba física es pendiente.
+  No se ha aumentado artificialmente el porcentaje histórico de 45.9 %.
+
+
 ## Avance 133: estados gráficos del OpenGL original en vitaGL
 
 - El puente Zeebx ejecuta ahora las llamadas originales BREW IGL para
