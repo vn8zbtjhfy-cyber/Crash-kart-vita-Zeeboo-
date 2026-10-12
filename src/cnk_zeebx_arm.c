@@ -1117,10 +1117,19 @@ static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t mode,
           (index_type==0x1403u&&(index_pointer&1u)))
   return -4;
  const int texture=c->gl_texturing_enabled!=0u;
- if(texture && (!c->gl_host.draw_textured_triangles||
-     !c->gl_uv_enabled||
+ const int color_array=c->gl_color_enabled!=0u;
+ if(texture && (!c->gl_uv_enabled||
      (!c->gl_uv_pointer&&!c->gl_uv_buffer)||!c->gl_bound_texture||
      c->gl_textured_draw_calls==UINT32_MAX))return -4;
+ if(color_array && (!c->gl_color_pointer&&!c->gl_color_buffer))return -4;
+ if(texture){
+  if(color_array && !c->gl_host.draw_colored_textured_triangles)return -4;
+  if(!color_array && !c->gl_host.draw_textured_triangles)return -4;
+ }else {
+  if(color_array && !c->gl_host.draw_colored_triangles)return -4;
+  if(!color_array && !c->gl_host.draw_triangles)return -4;
+ }
+ float rgba[CNK_ZEEBX_MAX_DRAW_VERTICES*4u];
  float uv[CNK_ZEEBX_MAX_DRAW_VERTICES*2u];
  float xyz[CNK_ZEEBX_MAX_DRAW_VERTICES*3u];
  for(uint32_t i=0;i<emitted;i++){
@@ -1152,6 +1161,15 @@ static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t mode,
                           c->gl_vertex_type,&v))return -4;
    xyz[3u*i+component]=v;
   }
+  if(color_array){
+   if(c->gl_color_type!=0x1401u)return -4; /* GL_UNSIGNED_BYTE RGBA8 */
+   const uint64_t color=(uint64_t)c->gl_color_pointer+
+                        (uint64_t)vertex_index*c->gl_color_stride;
+   uint8_t raw[4]={0};
+   if(zeebx_gpu_read(c,c->gl_color_buffer,color,4u,raw))return -4;
+   for(unsigned channel=0;channel<4u;channel++)
+    rgba[4u*i+channel]=(float)raw[channel]/255.f;
+  }
   if(texture){
    const uint64_t coord=(uint64_t)c->gl_uv_pointer+
                             (uint64_t)vertex_index*c->gl_uv_stride;
@@ -1166,10 +1184,18 @@ static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t mode,
   }
  }
  if(texture){
-  if(c->gl_host.draw_textured_triangles(c->gl_host_user,xyz,uv,emitted))
-   return -4;
+  const int rc=color_array?
+   c->gl_host.draw_colored_textured_triangles(
+      c->gl_host_user,xyz,uv,rgba,emitted):
+   c->gl_host.draw_textured_triangles(c->gl_host_user,xyz,uv,emitted);
+  if(rc)return -4;
   c->gl_textured_draw_calls++;
- }else if(c->gl_host.draw_triangles(c->gl_host_user,xyz,emitted))return -4;
+ }else{
+  const int rc=color_array?
+   c->gl_host.draw_colored_triangles(c->gl_host_user,xyz,rgba,emitted):
+   c->gl_host.draw_triangles(c->gl_host_user,xyz,emitted);
+  if(rc)return -4;
+ }
  c->gl_draw_calls++;
  c->gl_drawn_vertices+=emitted;
  return cnk_zeebx_arm_return_from_api(c,0u);
@@ -1216,6 +1242,16 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
      !c->gl_host.texture_parameter||
      c->gl_host.texture_parameter(c->gl_host_user,a1,a2))return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
+ case 14u:{ /* glColorPointer(size=4,type=UNSIGNED_BYTE,stride,pointer)
+               * Zeebx gl.rs normalizes GL_UNSIGNED_BYTE to 0..1. */
+  if(a0!=4u||a1!=0x1401u||a2>256u||
+     (a2&&a2<4u)||(!a3&&!c->gl_array_buffer))return -4;
+  c->gl_color_pointer=a3;
+  c->gl_color_buffer=c->gl_array_buffer;
+  c->gl_color_stride=a2?a2:4u;
+  c->gl_color_type=a1;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
  case 71u:{ /* glTexCoordPointer: GL_SHORT/FLOAT/FIXED */
   const uint32_t width=a1==CNK_GL_SHORT?2u:4u;
   if(a0!=2u || (a1!=CNK_GL_SHORT&&a1!=0x1406u&&a1!=0x140cu) ||
@@ -1306,6 +1342,7 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
  case 29u: /* glEnableClientState */
   if(a0==0x8074u)c->gl_vertex_enabled=slot==29u?1u:0u;
   else if(a0==0x8078u)c->gl_uv_enabled=slot==29u?1u:0u;
+  else if(a0==0x8076u)c->gl_color_enabled=slot==29u?1u:0u;
   else return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
  case 26u: /* glDrawArrays: triangles, strips and fans */

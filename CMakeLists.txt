@@ -840,6 +840,11 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_gl_short PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_gl_short PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_gl_short COMMAND cnk_test_zeebx_gl_short)
+  # Zeebx GL_COLOR_ARRAY: 8-bit source RGBA channels to vitaGL.
+  add_executable(cnk_test_zeebx_gl_colors tests/test_native_zeebx_gl_colors.c)
+  target_link_libraries(cnk_test_zeebx_gl_colors PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_gl_colors PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_gl_colors COMMAND cnk_test_zeebx_gl_colors)
   # Zeebx source GL_LEGACY VBO/IBO objects, including offset zero and
   # SubData, with guest RAM bounds and host draw regressions (no ROM).
   add_executable(cnk_test_zeebx_vbo tests/test_native_zeebx_vbo.c)
