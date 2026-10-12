@@ -48,9 +48,6 @@ static int draw_tex(void*u,const float*xyz,const float*uv,uint32_t n){
 static void write16(uint8_t *p,int16_t v){
  uint16_t x=(uint16_t)v;p[0]=(uint8_t)x;p[1]=(uint8_t)(x>>8);
 }
-static void write32(uint8_t *p,uint32_t x){
- for(unsigned i=0;i<4;i++)p[i]=(uint8_t)(x>>(i*8));
-}
 static void api(cnk_zeebx_arm*c,unsigned iface,unsigned slot,
                 uint32_t r0,uint32_t r1,uint32_t r2,uint32_t r3){
  c->regs[0]=r0;c->regs[1]=r1;c->regs[2]=r2;c->regs[3]=r3;
