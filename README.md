@@ -2,6 +2,37 @@
 
 Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **Todavía no es un videojuego completo ni se ha verificado su ejecución en consola.**
 
+## Avances 125-126: puente Zeebx HID y entrada física Vita (experimental)
+
+- **Se conserva el motor de carreras nativo.** En el puente de ejecución
+  Zeebx se reconocen las interfaces BREW del juego original: IDisplay,
+  IFileMgr, ISound, IHID, señales y EGL/GL antiguos. Los métodos de GPU
+  y audio no portados siguen deteniendo el intérprete; no hay respuestas
+  de éxito inventadas.
+- El dispositivo IHID informa un control original de Zeebo. La lectura
+  de PS Vita alimenta los 18 índices de botones y cuatro ejes; la
+  interfaz **IHIDDevice** responde a enumeración, estado de botón,
+  posiciones, UIDs, mínimos/máximos y eventos FIFO de pulsar/soltar.
+  Los eventos se entregan por orden y tiempo virtual, y reportan
+  cuando la cola pierde eventos por saturación.
+- El probe original se ejecuta únicamente mediante activación de
+  diagnóstico; todavía NO alimenta una carrera original por cuadro.
+  **Un ELF o VPK diagnóstico NO es un juego comercial recuperado.**
+- **CI sin ROM: 30/30**:
+  [pruebas de entrada y memoria](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38200754553).
+  **VitaSDK ELF**:
+  [enlace ARM](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38200777136).
+- El VPK diagnóstico generado públicamente en GitHub **no incluye**
+  archivos de Crash. Solo una compilación **privada y local**, con
+  `CNK_PRIVATE_GAME_ASSETS_DIR` apuntando a los archivos originales del
+  propietario, permite incorporarlos al mismo paquete. No publicar ni
+  redistribuir esos datos sin permiso.
+
+Pendiente para un verdadero **instalar y jugar**: interfaz gráfica
+original a vitaGL, ejecución y programación continuas del applet,
+entrada viva, archivos, sonido, recursos originales completos, pruebas
+físicas y derechos de distribución.
+
 ## Avances 123-124: CPU ARM/BREW y pantalla virtual original
 
 **Zeebx está siendo adaptado efectivamente al port, sin borrar nuestro

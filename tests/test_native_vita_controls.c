@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
-static SceCtrlData sample={0,128,128};
+static SceCtrlData sample={0,128,128,128,128};
 static int fail_read=0;
 int sceCtrlSetSamplingMode(int mode){return mode==SCE_CTRL_MODE_ANALOG?0:-1;}
 int sceCtrlPeekBufferPositive(int port,SceCtrlData *pad,int count){
@@ -79,6 +79,28 @@ int main(void){
  assert(cnk_vita_controls_read_actions(&input,NULL,&exit_req)<0);
  assert(!cnk_vita_controls_init());
  fail_read=1;assert(!cnk_vita_controls_read_actions(&input,&buttons,&exit_req));
+ /* Physical Vita sample is delivered to Zeebx with the original
+  * Z-Pad index order and four ABSOLUTE axes, not native steering floats. */
+ cnk_zeebx_pad zeebo={0};
+ fail_read=0;
+ sample.buttons=SCE_CTRL_CROSS|SCE_CTRL_CIRCLE|SCE_CTRL_LEFT|
+                SCE_CTRL_UP|SCE_CTRL_START|SCE_CTRL_RTRIGGER;
+ sample.lx=0u;sample.ly=255u;sample.rx=128u;sample.ry=32u;
+ assert(!cnk_vita_controls_read_zeebx(&zeebo));
+ assert(zeebo.buttons==((1u<<0)|(1u<<1)|(1u<<4)|(1u<<11)|
+                        (1u<<12)|(1u<<13)));
+ assert(zeebo.axes[0]==0u && zeebo.axes[1]==255u &&
+        zeebo.axes[2]==128u && zeebo.axes[3]==32u);
+ /* No sample or SDK failure resets ALL guest inputs to neutral;
+  * it must not preserve held acceleration from the previous frame. */
+ fail_read=1;
+ assert(cnk_vita_controls_read_zeebx(&zeebo)==-3);
+ assert(zeebo.buttons==0u);
+ for(unsigned i=0;i<CNK_ZEEBX_PAD_AXES;i++)assert(zeebo.axes[i]==128u);
+ fail_read=-1;
+ assert(cnk_vita_controls_read_zeebx(&zeebo)==-2);
+ assert(zeebo.buttons==0u);
+ assert(cnk_vita_controls_read_zeebx(NULL)==-1);
  puts("VITA INPUT PASS: physical controls, analog, transient missing samples, error path");
  return 0;
 }

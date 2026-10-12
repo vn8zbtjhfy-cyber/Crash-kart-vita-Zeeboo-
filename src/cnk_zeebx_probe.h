@@ -19,4 +19,13 @@ int cnk_zeebx_probe_original_applet(const char *original_mod_path,
                                     const char *report_path,
                                     uint32_t instruction_budget,
                                     cnk_arm_outcome *result);
+/* An opt-in launch-time snapshot of physical controller input for the
+ * original guest bootstrap. This is not yet per-frame HID polling.
+ * The module and applet are still executed only through a bounded probe. */
+int cnk_zeebx_probe_original_applet_with_pad(const char *original_mod_path,
+                                              const char *original_mif_path,
+                                              const char *report_path,
+                                              uint32_t instruction_budget,
+                                              const cnk_zeebx_pad *pad,
+                                              cnk_arm_outcome *result);
 #endif
