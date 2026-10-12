@@ -37,7 +37,7 @@ typedef struct {
  uint8_t *module,*stack,*heap,*objects,*helpers,*vtables;
  uint32_t heap_cursor,shell_refs;
  size_t module_size;
- int initialized;
+ int initialized,applet_pending;
 } cnk_zeebx_arm;
 
 /* initialize exact Zeebx bootstrap address regions; executable MOD is
