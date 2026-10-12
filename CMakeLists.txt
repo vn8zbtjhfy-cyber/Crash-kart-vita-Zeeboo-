@@ -828,6 +828,13 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_gl_primitives PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_gl_primitives PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_gl_primitives COMMAND cnk_test_zeebx_gl_primitives)
+  # Real Zeebo GL_FIXED signed 16.16 vertex and UV streams, including
+  # mixed FLOAT/FIXED types, indexed triangles and invalid pointer stops.
+  add_executable(cnk_test_zeebx_gl_fixed_arrays
+    tests/test_native_zeebx_gl_fixed_arrays.c)
+  target_link_libraries(cnk_test_zeebx_gl_fixed_arrays PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_gl_fixed_arrays PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_gl_fixed_arrays COMMAND cnk_test_zeebx_gl_fixed_arrays)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
