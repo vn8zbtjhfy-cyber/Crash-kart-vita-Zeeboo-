@@ -58,12 +58,12 @@ jobs:
           print("ZIP restaurado y verificado: 12 recursos originales")
           PY
           if [ -d assets-parts ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -f assets-original.zip
-            git rm -r -f assets-parts
-            git commit -m "assets: consolidar ZIP privado original verificado"
-            git push origin HEAD:main
+            git -C "$GITHUB_WORKSPACE" config user.name "github-actions[bot]"
+            git -C "$GITHUB_WORKSPACE" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$GITHUB_WORKSPACE" add -f ports/zeebx-rust-vita/assets-original.zip
+            git -C "$GITHUB_WORKSPACE" rm -r -f ports/zeebx-rust-vita/assets-parts
+            git -C "$GITHUB_WORKSPACE" commit -m "assets: consolidar ZIP privado original verificado"
+            git -C "$GITHUB_WORKSPACE" push origin HEAD:main
           fi
       - name: Extraer los 12 recursos originales antes de compilar
         run: |
