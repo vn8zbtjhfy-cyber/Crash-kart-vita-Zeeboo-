@@ -1054,16 +1054,16 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
      !c->gl_host.cull_face||
      c->gl_host.cull_face(c->gl_host_user,a0))return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
- case 20u: /* glDepthFunc: GL_NEVER .. GL_ALWAYS */
+ case 21u: /* glDepthFunc: GL_NEVER .. GL_ALWAYS */
   if(a0<0x0200u||a0>0x0207u||
      !c->gl_host.depth_func||
      c->gl_host.depth_func(c->gl_host_user,a0))return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
- case 21u: /* glDepthMask */
+ case 22u: /* glDepthMask */
   if(a0>1u||!c->gl_host.depth_mask||
      c->gl_host.depth_mask(c->gl_host_user,(int)a0))return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
- case 23u: /* glDisable(capability) */
+ case 24u: /* glDisable(capability) */
  case 28u: /* glEnable(capability) */
   if((a0!=0x0b71u&&a0!=0x0be2u&&a0!=0x0b44u&&
       a0!=CNK_GLTEX_TARGET)||
