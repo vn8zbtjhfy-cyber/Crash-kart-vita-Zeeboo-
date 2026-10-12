@@ -254,15 +254,69 @@ int main(void){
  assert(g.draws==2u && cpu.gl_draw_calls==2u);
  api(&cpu,24u,29u,0x8074u,0u,0u,0u);
  assert(invoke(&cpu)==0u);
- api(&cpu,24u,27u,0u,0u,0u,0u); /* glDrawElements UNIMPLEMENTED */
+ /* Real indexed triangle support: guest GL_UNSIGNED_SHORT and BYTE.
+  * Indices [2,1,0] must reverse the same triangle, not reorder at GPU. */
+ const uint32_t ibase=CNK_ARM_HEAP_BASE+1024u;
+ uint32_t io=ibase-CNK_ARM_HEAP_BASE;
+ cpu.heap[io]=2u;cpu.heap[io+1u]=0u;
+ cpu.heap[io+2u]=1u;cpu.heap[io+3u]=0u;
+ cpu.heap[io+4u]=0u;cpu.heap[io+5u]=0u;
+ api(&cpu,24u,27u,4u,3u,0x1403u,ibase);
+ assert(invoke(&cpu)==0u && g.draws==3u && g.draw_vertices==9u);
+ for(unsigned v=0;v<3u;v++)
+  for(unsigned axis=0;axis<3u;axis++)
+   assert(g.triangle[v*3u+axis]==triangle[(2u-v)*3u+axis]);
+ assert(cpu.gl_draw_calls==3u&&cpu.gl_drawn_vertices==9u);
+ cpu.heap[io+16u]=0u;cpu.heap[io+17u]=2u;cpu.heap[io+18u]=1u;
+ api(&cpu,24u,27u,4u,3u,0x1401u,ibase+16u);
+ assert(invoke(&cpu)==0u && g.draws==4u && g.draw_vertices==12u);
+ for(unsigned axis=0;axis<3u;axis++){
+  assert(g.triangle[axis]==triangle[axis]);
+  assert(g.triangle[3u+axis]==triangle[6u+axis]);
+  assert(g.triangle[6u+axis]==triangle[3u+axis]);
+ }
+ /* Typed, aligned, bounded indices must be checked before GPU callback. */
+ api(&cpu,24u,27u,4u,3u,0x1405u,ibase); /* uint32 indices not GLES1 */
  trap(&cpu,24u,27u);
+ api(&cpu,24u,27u,4u,3u,0x1403u,ibase+1u); /* misaligned */
+ trap(&cpu,24u,27u);
+ api(&cpu,24u,27u,4u,3u,0x1401u,0u); /* null index pointer */
+ trap(&cpu,24u,27u);
+ api(&cpu,24u,27u,4u,2u,0x1401u,ibase+16u); /* incomplete tri */
+ trap(&cpu,24u,27u);
+ api(&cpu,24u,27u,5u,3u,0x1401u,ibase+16u); /* wrong primitive */
+ trap(&cpu,24u,27u);
+ api(&cpu,24u,27u,4u,CNK_ZEEBX_MAX_DRAW_VERTICES+3u,
+     0x1401u,ibase+16u); /* oversized request */
+ trap(&cpu,24u,27u);
+ api(&cpu,24u,27u,4u,3u,0x1403u,CNK_ARM_HEAP_BASE+
+     CNK_ARM_HEAP_BYTES-4u); /* incomplete guest index buffer */
+ trap(&cpu,24u,27u);
+ cpu.heap[io]=0xffu;cpu.heap[io+1u]=0xffu; /* valid u16, invalid vertex */
+ api(&cpu,24u,27u,4u,3u,0x1403u,ibase);
+ trap(&cpu,24u,27u);
+ cpu.heap[io]=2u;cpu.heap[io+1u]=0u;
+ /* Invalid guest vertex (NaN) must prevent even an indexed draw. */
+ guest_float(&cpu,base+4u,__builtin_nanf(""));
+ api(&cpu,24u,27u,4u,3u,0x1403u,ibase);
+ trap(&cpu,24u,27u);
+ guest_float(&cpu,base+4u,0.f);
+ cnk_zeebx_gl_host saved=cpu.gl_host;
+ cpu.gl_host.draw_triangles=NULL;
+ api(&cpu,24u,27u,4u,3u,0x1403u,ibase);
+ trap(&cpu,24u,27u);
+ cpu.gl_host=saved;
+ assert(g.draws==4u&&cpu.gl_draw_calls==4u);
  api(&cpu,24u,7u,0x80000000u,0u,0u,0u);
  trap(&cpu,24u,7u);
  assert(g.clear==1u);
  g.reject=1;
+ api(&cpu,24u,27u,4u,3u,0x1403u,ibase);
+ trap(&cpu,24u,27u);
+ assert(g.draws==4u&&cpu.gl_draw_calls==4u);
  api(&cpu,24u,26u,4u,0u,3u,0u);
  trap(&cpu,24u,26u);
- assert(g.draws==2u&&cpu.gl_draw_calls==2u);
+ assert(g.draws==4u&&cpu.gl_draw_calls==4u);
  api(&cpu,24u,63u,5898240u,0u,65536u,0u);
  trap(&cpu,24u,63u); /* real GPU rejected transform */
  assert(g.rotate==1u);
@@ -289,7 +343,7 @@ int main(void){
  api(&cpu,23u,17u,1u,1u,0u,0u);
  trap(&cpu,23u,17u);
  cnk_zeebx_arm_destroy(&cpu);
- puts("PASS: Zeebx GL triangle arrays use bounded guest memory and a "
-      "real GPU sink; invalid, nonfinite, disabled and rejected draws trap");
+ puts("PASS: Zeebx indexed and nonindexed triangles read bounded guest "
+      "data; bad index types, buffers, values and GPU failures trap");
  return 0;
 }
