@@ -43,7 +43,7 @@ int main(int argc,char **argv){
  assert(guest_word(&cpu,mgr)==CNK_ARM_VTABLE_BASE+3u*CNK_ARM_VTABLE_STRIDE);
  assert(!cpu.file_open_count);
  /* The probe must not read host files until explicitly bound. */
- memcpy(cpu.heap+32u,"cnk_zeebx_synthetic.dat",25u);
+ strcpy((char*)cpu.heap+32u,"cnk_zeebx_synthetic.dat");
  run_api(&cpu,mgr,3u,2u,HEAP+32u,0u);
  assert(invoke(&cpu)==-4);
  assert(!cnk_zeebx_arm_set_file_root(&cpu,argv[1]));
@@ -100,7 +100,7 @@ int main(int argc,char **argv){
  run_api(&cpu,mgr,3u,2u,HEAP+32u,2u); /* OFM_READWRITE */
  assert(invoke(&cpu)==-4);
  /* No guest directory traversal or absolute host paths. */
- memcpy(cpu.heap+32u,"../cnk_zeebx_synthetic.dat",27u);
+ strcpy((char*)cpu.heap+32u,"../cnk_zeebx_synthetic.dat");
  run_api(&cpu,mgr,3u,2u,HEAP+32u,0u);
  assert(invoke(&cpu)==-4);
  strcpy((char*)cpu.heap+32u,"/etc/passwd");
