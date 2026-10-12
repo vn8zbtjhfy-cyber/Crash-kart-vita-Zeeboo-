@@ -62,10 +62,14 @@ add_executable(${PROJECT_NAME}
  "${GENERATED}/embedded.c" "${GENERATED}/embedded.S")
 target_include_directories(${PROJECT_NAME} PRIVATE src "${GENERATED}")
 target_compile_options(${PROJECT_NAME} PRIVATE -O2 -Wall -Wextra -Werror=implicit-function-declaration)
+# Static link order matters: Rust / vitaGL first, then their dependent archives,
+# then Vita SDK imports. These archives resolve mathneon and ShaRK C symbols.
 target_link_libraries(${PROJECT_NAME} PRIVATE
- zeebx_rust vitaGL
+ zeebx_rust
+ vitaGL vitashark mathneon
+ SceShaccCgExt SceShaccCg_stub SceCommonDialog_stub
  SceCtrl_stub SceGxm_stub SceDisplay_stub SceSysmodule_stub
- SceKernelDmacMgr_stub SceAppMgr_stub SceAudio_stub
+ SceKernelDmacMgr_stub SceAppMgr_stub SceAppUtil_stub SceAudio_stub
  SceIofilemgr_stub SceProcessmgr_stub pthread m z stdc++)
 option(NITRO_EXPERIMENTAL_VPK "Package unverified game VPK" ON)
 if(NITRO_EXPERIMENTAL_VPK)
