@@ -67,6 +67,7 @@ void glTexCoordPointer(GLint size,GLenum type,GLsizei stride,const void *ptr);
 void glBindTexture(GLenum target,GLuint texture);
 void glColor4f(GLfloat r,GLfloat g,GLfloat b,GLfloat a);
 void glDrawArrays(GLenum mode,GLint first,GLsizei count);
+void glTexCoord2f(GLfloat u,GLfloat v);
 
 typedef struct {
  uint32_t vertex_limit;
