@@ -32,16 +32,17 @@ int main(void){
   * Reuse Zeebx's helper trampoline to allocate 20 guest bytes. */
  wr32(code+0x60,0xe1a0400eu); /* MOV r4,lr */
  wr32(code+0x64,0xe1a05003u); /* MOV r5,r3, output IApplet** */
- wr32(code+0x68,0xe59f7018u); /* LDR r7,[pc,#0x18] literal helper at 0x88 */
- wr32(code+0x6c,0xe12fff37u); /* BLX r7 */
- wr32(code+0x70,0xe5850000u); /* STR r0,[r5] guest writes applet pointer */
- wr32(code+0x74,0xe59f3010u); /* LDR r3,[pc,#0x10] applet vtable at 0x8c */
- wr32(code+0x78,0xe5803000u); /* STR r3,[r0] */
- wr32(code+0x7c,0xe3a00000u); /* MOV r0,#0 success */
- wr32(code+0x80,0xe1a0e004u); /* MOV lr,r4 */
- wr32(code+0x84,0xe12fff1eu); /* BX lr */
- wr32(code+0x88,CNK_ARM_API_BASE+(6u<<12)+26u*4u);
- wr32(code+0x8c,CNK_ARM_MOD_BASE+0xd0u);
+ wr32(code+0x68,0xe3a00014u); /* MOV r0,#20 before guest malloc */
+ wr32(code+0x6c,0xe59f701cu); /* LDR r7,[pc,#0x1c] helper at 0x90 */
+ wr32(code+0x70,0xe12fff37u); /* BLX r7 */
+ wr32(code+0x74,0xe5850000u); /* STR r0,[r5] guest writes applet pointer */
+ wr32(code+0x78,0xe59f3014u); /* LDR r3,[pc,#0x14] applet vtable at 0x94 */
+ wr32(code+0x7c,0xe5803000u); /* STR r3,[r0] */
+ wr32(code+0x80,0xe3a00000u); /* MOV r0,#0 success */
+ wr32(code+0x84,0xe1a0e004u); /* MOV lr,r4 */
+ wr32(code+0x88,0xe12fff1eu); /* BX lr */
+ wr32(code+0x90,CNK_ARM_API_BASE+(6u<<12)+26u*4u);
+ wr32(code+0x94,CNK_ARM_MOD_BASE+0xd0u);
  cnk_zeebx_arm cpu={0};
  cnk_arm_outcome out={0};
  uint32_t calls=0,entry=0,applet=0,old=0;
