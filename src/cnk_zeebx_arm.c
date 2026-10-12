@@ -460,6 +460,11 @@ int cnk_zeebx_arm_read_u32(cnk_zeebx_arm *c,uint32_t addr,uint32_t *out){
 }
 /* Only these exact Zeebx slots have experimentally verified startup
  * semantics for this game. All other BREW services remain unresolved. */
+int cnk_zeebx_arm_set_virtual_time(cnk_zeebx_arm *c,uint32_t ms){
+ if(!c||!c->initialized||ms<c->virtual_time_ms)return -1;
+ c->virtual_time_ms=ms;
+ return 0;
+}
 int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
  if(!c||!c->initialized)return -1;
  uint32_t pc=c->regs[15];
@@ -478,6 +483,11 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   }
   return cnk_zeebx_arm_return_from_api(c,addr);
  }
+ /* Zeebx machine/helper.rs: both AEEStdLib clock entries share the
+  * Machine::elapsed_ms virtual time, not host uptime or instruction
+  * count. The host controls time progression between frames. */
+ if(iface==6u && (slot==43u||slot==44u))
+  return cnk_zeebx_arm_return_from_api(c,c->virtual_time_ms);
  if(iface==6u && slot==26u){ /* AEEStdLib malloc */
   uint32_t request=c->regs[0];
   if(request>CNK_ARM_HEAP_BYTES-8u)return -2;
