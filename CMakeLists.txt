@@ -730,6 +730,10 @@ if(NOT DEFINED ENV{VITASDK})
   if(Python3_Interpreter_FOUND)
     add_test(NAME source_zip_safety
       COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_source_zip_checker.py")
+    # Exact asset association from user-owned Zeebx cache and original VFS.
+    # Regression creates synthetic PNG/FUFS fixtures, not game files.
+    add_test(NAME zeebx_cache_texture_manifest
+      COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_zeebx_cache_texture_manifest.py")
     add_test(NAME source_lang_catalog
       COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/verificar_catalogo_lang.py"
       "$<TARGET_FILE:cnk_exportar_lang>" "${CMAKE_CURRENT_SOURCE_DIR}/data.vfs"
