@@ -134,9 +134,9 @@ int main(void){
  assert(rec.draws==3u);
 
  /* An invalid type must NOT replace the previously valid pointer state. */
- call(&c,24u,71u,2u,0x1402u,12u,uv);stopped(&c,71u);
+ call(&c,24u,71u,2u,0x1400u,12u,uv);stopped(&c,71u);
  assert(c.gl_uv_type==0x1406u&&c.gl_uv_stride==12u);
- call(&c,24u,78u,3u,0x1402u,16u,xyz);stopped(&c,78u);
+ call(&c,24u,78u,3u,0x1400u,16u,xyz);stopped(&c,78u);
  assert(c.gl_vertex_type==0x140cu&&c.gl_vertex_stride==16u);
  call(&c,24u,78u,3u,0x140cu,11u,xyz);stopped(&c,78u);
  assert(c.gl_vertex_stride==16u);

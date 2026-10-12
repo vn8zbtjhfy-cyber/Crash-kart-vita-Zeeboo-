@@ -4,7 +4,7 @@
 name: VitaSDK diagnostic ELF
 on:
   push:
-    branches: [main, feature/zeebx-vbo-buffers-138]
+    branches: [main, feature/zeebx-glshort-arrays-139]
     paths:
       - 'src/**'
       - 'CMakeLists.txt'

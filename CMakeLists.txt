@@ -835,6 +835,11 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_gl_fixed_arrays PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_gl_fixed_arrays PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_gl_fixed_arrays COMMAND cnk_test_zeebx_gl_fixed_arrays)
+  # Zeebx gl.rs GL_SHORT signed coordinates: guest RAM, VBO offsets and safety.
+  add_executable(cnk_test_zeebx_gl_short tests/test_native_zeebx_gl_short.c)
+  target_link_libraries(cnk_test_zeebx_gl_short PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_gl_short PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_gl_short COMMAND cnk_test_zeebx_gl_short)
   # Zeebx source GL_LEGACY VBO/IBO objects, including offset zero and
   # SubData, with guest RAM bounds and host draw regressions (no ROM).
   add_executable(cnk_test_zeebx_vbo tests/test_native_zeebx_vbo.c)
