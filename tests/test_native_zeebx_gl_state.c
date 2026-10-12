@@ -143,12 +143,12 @@ int main(void){
  assert(g.blend==2u);
  /* All eight core depth comparisons are legal; unknown is rejected. */
  for(uint32_t mode=0x0200u;mode<=0x0207u;mode++){
-  api(&cpu,24u,22u,mode,0u,0u,0u);
+  api(&cpu,24u,21u,mode,0u,0u,0u);
   assert(call(&cpu)==0u&&g.a==mode);
  }
  assert(g.depth==8u);
- api(&cpu,24u,22u,0x0302u,0u,0u,0u);
- trap(&cpu,22u);
+ api(&cpu,24u,21u,0x0302u,0u,0u,0u);
+ trap(&cpu,21u);
  api(&cpu,24u,22u,1u,0u,0u,0u);
  assert(call(&cpu)==0u&&g.mask==1u&&g.enabled==1);
  api(&cpu,24u,22u,0u,0u,0u,0u);
