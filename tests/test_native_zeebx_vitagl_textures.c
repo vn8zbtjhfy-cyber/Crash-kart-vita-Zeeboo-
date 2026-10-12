@@ -63,6 +63,24 @@ int main(void){
  assert(!host.texture_upload(NULL,1u,1u,0x1907u,0x8363u,rgb565));
  assert(cnk_test_gl.images_uploaded==2u);
  assert(host.texture_upload(NULL,513u,1u,0x1908u,0x1401u,pixels));
+
+ /* The production callback forwards a real bounded atlas patch to
+  * vitaGL, with GPU errors propagated instead of returning fake OK. */
+ assert(host.texture_sub_upload);
+ assert(!host.texture_sub_upload(NULL,0u,0u,1u,1u,
+                                 0x1907u,0x8363u,rgb565));
+ assert(cnk_test_gl.subimages_uploaded==1u);
+ assert(cnk_test_gl.last_subimage[2]==1&&
+        cnk_test_gl.last_subimage[3]==1);
+ assert(host.texture_sub_upload(NULL,2u,0u,1u,1u,
+                                0x1907u,0x8363u,rgb565));
+ assert(cnk_test_gl.subimages_uploaded==1u);
+ cnk_test_gl.fail_next_upload=1;
+ assert(host.texture_sub_upload(NULL,0u,0u,1u,1u,
+                                0x1907u,0x8363u,rgb565));
+ assert(cnk_test_gl.subimages_uploaded==2u);
+ assert(cnk_test_gl.queued_error==GL_NO_ERROR);
+
  assert(cnk_test_gl.images_uploaded==2u);
 
  const float xyz[]={0.f,0.f,0.f,1.f,0.f,0.f,0.f,1.f,0.f};
