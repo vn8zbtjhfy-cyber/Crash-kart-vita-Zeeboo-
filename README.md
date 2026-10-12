@@ -2,6 +2,29 @@
 
 Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **Todavía no es un videojuego completo ni se ha verificado su ejecución en consola.**
 
+## Avance 119: primeros sprites originales visibles en Vita
+
+- **Logo original de Crash Nitro Kart 3D:** al seleccionar circuito,
+  el código GPU intenta mostrar la imagen real del juego que permanece
+  exclusivamente en el `data.vfs` privado del usuario (FUFS 219,
+  ID `89b14497`, 326×158, CRC32 `0c1897b1`).
+- **Icono original Wumpa:** durante la carrera, junto al contador
+  existente del HUD nativo (FUFS 119, ID `43bdcefe`, 32×32,
+  CRC32 `5283e7a0`).
+- Ambas imágenes usan **magenta opaco como fondo**. El port ahora aplica
+  transparencia de clave cromática únicamente a esos PNG comprobados.
+  En ROMs que no coincidan, continúa funcionando la interfaz de texto.
+- **20/20 pruebas sin ROM en GitHub**:
+  [38192490680](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38192490680).
+- **Compilación ARM VitaSDK / ELF de diagnóstico**:
+  [38192490699](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38192490699).
+- Documento: [AVANCE_119_UI_ORIGINAL_PNG_NATIVO](docs/AVANCE_119_UI_ORIGINAL_PNG_NATIVO.md).
+
+Los PNG **no están en GitHub**. Se cargan del FUFS original de la
+persona usuaria; no hay VPK ni SELF. La imagen del juego completo,
+la jugabilidad en hardware y la fidelidad de las pistas NO se
+consideran probadas. La cifra de 45.9 % es solo una estimación histórica.
+
 ## Avances 117-118: reutilización real de Zeebx y preparación de texturas
 
 - **Avance 117 (código integrado):** port a C99 del decodificador IMA ADPCM de
