@@ -12,6 +12,7 @@ fi
 python3 tools/patch_zeebx_interpreter.py zeebx-emu
 python3 tools/patch_zeebx_embedded_fs.py zeebx-emu
 python3 tools/patch_zeebx_sqlite_vita.py zeebx-emu
+python3 tools/patch_zeebx_memory_vita.py zeebx-emu
 python3 tests/validate_assets.py
 python3 tests/fufs_index_smoke.py
 cargo +nightly build -Z build-std=std,panic_abort --release --target armv7-sony-vita-newlibeabihf --manifest-path rust/zeebx_vita/Cargo.toml
