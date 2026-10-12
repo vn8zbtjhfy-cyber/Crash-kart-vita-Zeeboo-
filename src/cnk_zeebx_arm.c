@@ -96,7 +96,7 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
  cpu->cpsr=0x10u; /* user mode ARM */
  for(unsigned i=0;i<CNK_ZEEBX_PAD_AXES;i++)cpu->pad.axes[i]=128u;
  cpu->heap_cursor=0u;
- cpu->egl_error=CNK_EGL_SUCCESS;
+ cpu->egl_error=0x3000u; /* EGL_SUCCESS; defined in guest bridge below */
  cpu->shell_refs=1u;
  cpu->object_cursor=16u; /* Shell, Module**, IApplet** reserved */
  cpu->initialized=1;
