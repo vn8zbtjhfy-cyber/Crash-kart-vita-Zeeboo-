@@ -44,6 +44,20 @@ int main(void){
  wr32(code+0x88,0xe12fff1eu); /* BX lr */
  wr32(code+0x90,CNK_ARM_API_BASE+(6u<<12)+26u*4u);
  wr32(code+0x94,CNK_ARM_MOD_BASE+0xd0u);
+ /* Zeebx upstream Shell::start_applet: actual guest vtable slot 2.
+  * Handler stores CLSID and display pointer to its OWN applet object,
+  * returning AEE TRUE, not through an invented host-side game loop. */
+ wr32(code+0xd8,CNK_ARM_MOD_BASE+0xa0u);
+ wr32(code+0xa0,0xe1a0400eu); /* MOV r4,lr */
+ wr32(code+0xa4,0xe1a05000u); /* MOV r5,r0 */
+ wr32(code+0xa8,0xe1a06001u); /* MOV r6,r1: original EVT_APP_START */
+ wr32(code+0xac,0xe5937004u); /* LDR r7,[r3,#4] guest AEEAppStart cls */
+ wr32(code+0xb0,0xe5857004u); /* STR r7,[r5,#4] guest applet memory */
+ wr32(code+0xb4,0xe5937008u); /* LDR r7,[r3,#8] guest display ptr */
+ wr32(code+0xb8,0xe5857008u); /* STR r7,[r5,#8] */
+ wr32(code+0xbc,0xe3a00001u); /* MOV r0,#1, event handled */
+ wr32(code+0xc0,0xe1a0e004u); /* MOV lr,r4 */
+ wr32(code+0xc4,0xe12fff1eu); /* BX lr */
  cnk_zeebx_arm cpu={0};
  cnk_arm_outcome out={0};
  uint32_t calls=0,entry=0,applet=0,old=0;
@@ -74,6 +88,33 @@ int main(void){
  assert(!cnk_zeebx_arm_read_u32(&cpu,applet,&old));
  assert(old==CNK_ARM_MOD_BASE+0xd0u);
  assert(cnk_zeebx_arm_applet_result(&cpu,&out,&applet)<0);
+ /* Stage 3 really invokes original guest IApplet::HandleEvent. */
+ uint32_t start_entry=0,start_struct=0,mem=0,display=0;
+ assert(!cnk_zeebx_arm_prepare_start_event(
+     &cpu,applet,0x01081984u,&start_entry,&start_struct));
+ assert(start_entry==CNK_ARM_MOD_BASE+0xa0u);
+ assert(start_struct==CNK_ARM_HEAP_BASE+64u);
+ assert(cpu.regs[0]==applet && cpu.regs[1]==0u &&
+        cpu.regs[2]==0u && cpu.regs[3]==start_struct);
+ assert(!cnk_zeebx_arm_read_u32(&cpu,start_struct,&mem)&&mem==0u);
+ assert(!cnk_zeebx_arm_read_u32(&cpu,start_struct+4u,&mem)&&mem==0x01081984u);
+ assert(!cnk_zeebx_arm_read_u32(&cpu,start_struct+8u,&display));
+ assert(display==CNK_ARM_OBJECT_BASE+16u);
+ assert(!cnk_zeebx_arm_read_u32(&cpu,display,&mem) &&
+        mem==CNK_ARM_VTABLE_BASE+5u*CNK_ARM_VTABLE_STRIDE);
+ assert(!cnk_zeebx_arm_read_u32(&cpu,start_struct+12u,&mem)&&mem==0u);
+ assert(!cnk_zeebx_arm_read_u32(&cpu,start_struct+16u,&mem)&&
+        mem==(640u|(480u<<16)));
+ assert(!cnk_zeebx_arm_read_u32(&cpu,start_struct+20u,&mem)&&mem==0u);
+ assert(cpu.heap_cursor==88u&&cpu.object_cursor==80u);
+ assert(cpu.display_objects==1u && cpu.applet_start_dispatched);
+ assert(cnk_zeebx_arm_prepare_start_event(
+     &cpu,applet,0x01081984u,&start_entry,&start_struct)<0);
+ assert(!cnk_zeebx_arm_bootstrap(&cpu,1000u,&out,&calls));
+ assert(out.reason==CNK_ARM_RETURNED && cpu.regs[0]==1u);
+ assert(cpu.regs[6]==0u); /* event number was EVT_APP_START */
+ assert(!cnk_zeebx_arm_read_u32(&cpu,applet+4u,&mem)&&mem==0x01081984u);
+ assert(!cnk_zeebx_arm_read_u32(&cpu,applet+8u,&mem)&&mem==display);
  cnk_zeebx_arm_destroy(&cpu);
 
  /* End-to-end input path: parse a synthetic user-owned MIF, then
@@ -107,6 +148,10 @@ int main(void){
  assert(strstr(report,"applet_attempted=YES"));
  assert(strstr(report,"applet_created=YES"));
  assert(strstr(report,"applet_ptr=0x10000028"));
+ assert(strstr(report,"start_event_attempted=YES"));
+ assert(strstr(report,"start_event_completed=YES"));
+ assert(strstr(report,"start_event_reason=RETURNED"));
+ assert(strstr(report,"start_event_entry=0x000100a0"));
  assert(strstr(report,"genuine_game_playable=NO"));
  assert(!remove(modfile));assert(!remove(miffile));assert(!remove(logfile));
 
