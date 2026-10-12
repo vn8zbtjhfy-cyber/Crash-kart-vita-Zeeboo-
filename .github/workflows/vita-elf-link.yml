@@ -4,7 +4,7 @@
 name: VitaSDK diagnostic ELF
 on:
   push:
-    branches: [main]
+    branches: [main, feature/zeebx-original-file-read-147]
     paths:
       - 'src/**'
       - 'CMakeLists.txt'
