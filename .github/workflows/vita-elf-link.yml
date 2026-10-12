@@ -4,7 +4,7 @@
 name: VitaSDK diagnostic ELF
 on:
   push:
-    branches: [main]
+    branches: [main, feature/zeebx-shell-timers-146]
     paths:
       - 'src/**'
       - 'CMakeLists.txt'
