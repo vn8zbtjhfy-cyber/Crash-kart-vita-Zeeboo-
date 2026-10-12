@@ -773,6 +773,11 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_hid_state PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_hid_state PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_hid_state COMMAND cnk_test_zeebx_hid_state)
+  # Source-backed AEEGL.h IEGL startup with no fake Vita GPU surface.
+  add_executable(cnk_test_zeebx_egl_legacy tests/test_native_zeebx_egl_legacy.c)
+  target_link_libraries(cnk_test_zeebx_egl_legacy PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_egl_legacy PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_egl_legacy COMMAND cnk_test_zeebx_egl_legacy)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
