@@ -676,6 +676,12 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_vita_telemetry PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_vita_telemetry PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME vita_telemetry COMMAND cnk_test_vita_telemetry)
+  # AI rivals may be displaced by weapons/contacts beyond the local
+  # route search window. Recover source-route guidance instead of aborting.
+  add_executable(cnk_test_ai_reacquire tests/test_native_ai_reacquire.c)
+  target_link_libraries(cnk_test_ai_reacquire PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_ai_reacquire PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME ai_reacquire COMMAND cnk_test_ai_reacquire)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
