@@ -10,6 +10,8 @@
 
 typedef struct {
  unsigned cap,blend,depth,mask,cull,face,color,color_mask,clip;
+ unsigned alpha,polygon,shade;
+ float alpha_ref,polygon_factor,polygon_units;
  int32_t clip_rect[4];
  uint32_t a,b;
  float rgba[4];
@@ -58,6 +60,21 @@ static int mask(void *p,int on){
  gpu_log *g=(gpu_log*)p;
  if(g->reject)return -1;
  g->mask++;g->enabled=on;return 0;
+}
+static int alpha_func(void *p,uint32_t comparison,float reference){
+ gpu_log *g=(gpu_log*)p;
+ if(g->reject)return -1;
+ g->alpha++;g->a=comparison;g->alpha_ref=reference;return 0;
+}
+static int polygon_offset(void *p,float factor,float units){
+ gpu_log *g=(gpu_log*)p;
+ if(g->reject)return -1;
+ g->polygon++;g->polygon_factor=factor;g->polygon_units=units;return 0;
+}
+static int shade_model(void *p,uint32_t mode){
+ gpu_log *g=(gpu_log*)p;
+ if(g->reject)return -1;
+ g->shade++;g->a=mode;return 0;
 }
 static int cull(void *p,uint32_t face){
  gpu_log *g=(gpu_log*)p;
@@ -110,6 +127,8 @@ int main(void){
   .clear_color=clear_color,.viewport=viewport,.scissor=scissor,
   .set_capability=capability,.blend_func=blend,
   .depth_func=depth,.depth_mask=mask,
+  .alpha_func=alpha_func,.polygon_offset=polygon_offset,
+  .shade_model=shade_model,
   .cull_face=cull,.front_face=front,
   .color4=color,.color_mask=color_mask
  };
@@ -213,6 +232,50 @@ int main(void){
  api(&cpu,24u,13u,1u,0u,2u,0u);
  trap(&cpu,13u);
  assert(g.color_mask==1u);
+ /* Zeebx GL_LEGACY slots 4,59,67: source alpha, offset, shading. */
+ api(&cpu,24u,28u,0x0bc0u,0u,0u,0u); /* GL_ALPHA_TEST */
+ assert(call(&cpu)==0u && g.a==0x0bc0u && g.enabled==1);
+ api(&cpu,24u,28u,0x8037u,0u,0u,0u); /* GL_POLYGON_OFFSET_FILL */
+ assert(call(&cpu)==0u && g.a==0x8037u && g.enabled==1);
+ api(&cpu,24u,24u,0x8037u,0u,0u,0u);
+ assert(call(&cpu)==0u && g.a==0x8037u && g.enabled==0);
+ api(&cpu,24u,24u,0x0bc0u,0u,0u,0u);
+ assert(call(&cpu)==0u && g.a==0x0bc0u && g.enabled==0);
+ assert(g.cap==12u);
+ api(&cpu,24u,4u,0x0204u,32768u,0u,0u); /* GL_GREATER, 0.5 */
+ assert(call(&cpu)==0u && g.alpha==1u &&
+        g.a==0x0204u && g.alpha_ref==0.5f);
+ api(&cpu,24u,4u,0x0207u,131072u,0u,0u); /* clamp to one */
+ assert(call(&cpu)==0u && g.alpha==2u && g.alpha_ref==1.f);
+ api(&cpu,24u,4u,0x0201u,(uint32_t)-65536,0u,0u); /* clamp 0 */
+ assert(call(&cpu)==0u && g.alpha==3u && g.alpha_ref==0.f);
+ api(&cpu,24u,4u,0x0208u,32768u,0u,0u);
+ trap(&cpu,4u);
+ assert(g.alpha==3u);
+ api(&cpu,24u,59u,32768u,(uint32_t)-131072,0u,0u);
+ assert(call(&cpu)==0u&&g.polygon==1u);
+ assert(g.polygon_factor==0.5f && g.polygon_units==-2.f);
+ api(&cpu,24u,67u,0x1d00u,0u,0u,0u); /* GL_FLAT */
+ assert(call(&cpu)==0u && g.shade==1u && g.a==0x1d00u);
+ api(&cpu,24u,67u,0x1d01u,0u,0u,0u); /* GL_SMOOTH */
+ assert(call(&cpu)==0u && g.shade==2u && g.a==0x1d01u);
+ api(&cpu,24u,67u,0x1d02u,0u,0u,0u);
+ trap(&cpu,67u);
+ assert(g.shade==2u);
+ /* A missing callback is a stop, never a fake graphics state. */
+ cnk_zeebx_gl_host full=cpu.gl_host;
+ cpu.gl_host.alpha_func=NULL;
+ api(&cpu,24u,4u,0x0204u,0u,0u,0u);
+ trap(&cpu,4u);
+ cpu.gl_host=full;
+ cpu.gl_host.polygon_offset=NULL;
+ api(&cpu,24u,59u,0u,0u,0u,0u);
+ trap(&cpu,59u);
+ cpu.gl_host=full;
+ cpu.gl_host.shade_model=NULL;
+ api(&cpu,24u,67u,0x1d01u,0u,0u,0u);
+ trap(&cpu,67u);
+ cpu.gl_host=full;
  /* Missing GPU implementations must stop explicitly without mutation. */
  cnk_zeebx_gl_host saved=cpu.gl_host;
  cpu.gl_host.set_capability=NULL;
@@ -221,6 +284,13 @@ int main(void){
  cpu.gl_host=saved;
  /* Real host failure is not treated as an accepted GPU state change. */
  g.reject=1;
+ api(&cpu,24u,4u,0x0204u,32768u,0u,0u);
+ trap(&cpu,4u);
+ api(&cpu,24u,59u,32768u,65536u,0u,0u);
+ trap(&cpu,59u);
+ api(&cpu,24u,67u,0x1d01u,0u,0u,0u);
+ trap(&cpu,67u);
+ assert(g.alpha==3u&&g.polygon==1u&&g.shade==2u);
  api(&cpu,24u,66u,20u,20u,30u,30u);
  trap(&cpu,66u);
  assert(g.clip==2u);
@@ -232,7 +302,7 @@ int main(void){
  trap(&cpu,12u);
  api(&cpu,24u,22u,0u,0u,0u,0u);
  trap(&cpu,22u);
- assert(g.cap==8u&&g.blend==2u&&g.color==1u&&g.mask==2u);
+ assert(g.cap==12u&&g.blend==2u&&g.color==1u&&g.mask==2u);
  cnk_zeebx_arm_destroy(&cpu);
  puts("PASS: original Zeebo fixed-pipeline IGL states forwarded to real "
       "GPU callbacks; invalid enum and GPU failure never fake success");
