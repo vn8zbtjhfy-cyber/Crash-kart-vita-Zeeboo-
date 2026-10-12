@@ -204,12 +204,19 @@ static cnk_arm_reason step(cnk_zeebx_arm *c,uint32_t *bad){
  if(pc==CNK_ARM_RETURN_MAGIC)return CNK_ARM_RETURNED;
  if(pc>=CNK_ARM_API_BASE && pc<CNK_ARM_API_BASE+0x01000000u)
   return CNK_ARM_API;
- if(pc&3u)return CNK_ARM_FAULT;
+ if(c->cpsr&T){
+  *bad=pc;return CNK_ARM_UNSUPPORTED;
+ }
+ /* Zeebx GuestMemory marks only the module executable. In the C bridge
+  * the heap, stack, vtables and API scratch buffers are DATA, never
+  * host/guest executable pages. Report an invalid guest control flow. */
+ uint64_t exec_end=(uint64_t)CNK_ARM_MOD_BASE+
+                        c->module_size-CNK_ARM_MOD_PREFIX;
+ if((pc&3u)||pc<CNK_ARM_MOD_BASE||(uint64_t)pc+4u>exec_end){
+  *bad=pc;return CNK_ARM_FAULT;
+ }
  if(load(c,pc,4,&op)){*bad=pc;return CNK_ARM_FAULT;}
  *bad=op;
- /* Zeebx features ARM and Thumb; Thumb dispatch is deliberately not yet
-  * implemented in this small bridge, so a BX/BLX to Thumb stops honestly. */
- if(c->cpsr&T)return CNK_ARM_UNSUPPORTED;
  unsigned condition=op>>28;
  if(condition==15u){
   /* BLX immediate (Zeebx interpreter, ARMv5+). */
@@ -484,4 +491,66 @@ int cnk_zeebx_arm_bootstrap(cnk_zeebx_arm *c,uint32_t budget,
    *out=step_out;return 0;
   }
  }
+}
+
+/* Stage 2 reproduced from Zeebx machine/shell.rs::create_applet:
+ * read the guest's actual module pointer and vtable, then call
+ * CreateInstance slot #2 using the ARM AAPCS (r0..r3).
+ * This neither fabricates a class nor calls host-native code. */
+int cnk_zeebx_arm_prepare_applet(cnk_zeebx_arm *c,uint32_t clsid,
+                                  uint32_t *entry){
+ uint32_t module_ptr=0,vtable=0,func=0;
+ if(!c||!entry||!c->initialized||c->applet_pending||
+    c->regs[15]!=CNK_ARM_RETURN_MAGIC || c->regs[0]!=0u||
+    !clsid)return -1;
+ *entry=0;
+ if(load(c,CNK_ARM_OBJECT_BASE+8u,4u,&module_ptr))return -2;
+ /* The Zeebx bootstrap malloc is the only source of a valid
+  * allocated guest module object at this point. */
+ if(module_ptr<CNK_ARM_HEAP_BASE || (module_ptr&3u) ||
+    (uint64_t)module_ptr+4u>
+      (uint64_t)CNK_ARM_HEAP_BASE+c->heap_cursor)return -3;
+ if(load(c,module_ptr,4u,&vtable) || (vtable&3u) ||
+    load(c,vtable+8u,4u,&func))return -4;
+ /* Only source-backed module code can be executed by this subset;
+  * don't silently treat an API marker or random heap as applet code. */
+ uint32_t aligned=func&~1u;
+ uint64_t code_end=(uint64_t)CNK_ARM_MOD_BASE+c->module_size-
+                       CNK_ARM_MOD_PREFIX;
+ if(aligned<CNK_ARM_MOD_BASE || (uint64_t)aligned+4u>code_end ||
+    (aligned&3u))return -5;
+ /* Clear the out IApplet** as Zeebx does, not module output. */
+ if(store(c,CNK_ARM_OBJECT_BASE+12u,4u,0u))return -6;
+ c->regs[0]=module_ptr;
+ c->regs[1]=CNK_ARM_OBJECT_BASE;
+ c->regs[2]=clsid;
+ c->regs[3]=CNK_ARM_OBJECT_BASE+12u;
+ c->regs[14]=CNK_ARM_RETURN_MAGIC;
+ if(func&1u)c->cpsr|=T;
+ else c->cpsr&=~T;
+ c->regs[15]=aligned;
+ c->applet_pending=1;
+ *entry=func;
+ return 0;
+}
+int cnk_zeebx_arm_applet_result(cnk_zeebx_arm *c,
+                                const cnk_arm_outcome *stop,
+                                uint32_t *applet_ptr){
+ uint32_t applet=0,vtable=0;
+ if(!c||!c->initialized||!c->applet_pending||
+    !stop||!applet_ptr)return -1;
+ *applet_ptr=0;
+ if(stop->reason!=CNK_ARM_RETURNED ||
+    c->regs[15]!=CNK_ARM_RETURN_MAGIC || c->regs[0]!=0u)
+  return -2;
+ if(load(c,CNK_ARM_OBJECT_BASE+12u,4u,&applet) || !applet)
+  return -3;
+ if(load(c,applet,4u,&vtable) || !vtable)
+  return -4;
+ /* The pointer must refer to guest memory. The normal ARM fetch path
+  * will independently validate any attempted function invocation. */
+ if(!map(c,vtable,4u,0))return -5;
+ c->applet_pending=0;
+ *applet_ptr=applet;
+ return 0;
 }

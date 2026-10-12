@@ -1,4 +1,4 @@
-# Avance 121: código ARM original, ejecución BREW y fuente completa de Zeebx
+# Avance 121-122: código ARM real, ejecución BREW, creación de applet y fuente de Zeebx
 
 ## Qué se recuperó y qué NO se destruyó
 
@@ -37,7 +37,8 @@ El submódulo conserva toda la referencia sin rehacer el motor nativo.
 - `src/cnk_zeebx_probe.[ch]`: carga un `cnk2.mod` original que
   el usuario guarda localmente, ejecuta hasta el primer límite
   comprobable y genera una traza sin exportar el binario.
-- `src/vita_main.c`: prueba **opt-in** con un archivo marcador.
+- `src/vita_main.c`: prueba **opt-in** con un archivo marcador y
+  módulo/MIF originales, conservados exclusivamente por el usuario.
   El programa continúa después con el juego C nativo de siempre.
   No cambia física, pistas ni el flujo de carrera.
 
@@ -66,26 +67,39 @@ se compile la aplicación nativa en una futura versión verificable.
 Debes tener tus archivos **privados**:
 - `ux0:data/cnk3d/data.vfs` (ya usado por el port).
 - `ux0:data/cnk3d/cnk2.mod` (nuevo, solo en tu consola).
+- `ux0:data/cnk3d/274214.mif` (identifica el ClassID original del applet).
 - `ux0:data/cnk3d/zeebx_probe.flag` (archivo vacío activa la traza).
 
 Cuando exista una versión instalable probada, el proceso escribirá
 `ux0:data/cnk3d/zeebx_probe.txt` con:
 número de instrucciones guest, PC, opcode no soportado, primera API
-no implementada, puntero IModule y resultado de `AEEMod_Load`.
+no implementada, puntero IModule y resultado de `AEEMod_Load`,
+ClassID del MIF, entrada ARM de `IModule::CreateInstance` y puntero
+IApplet solo si el módulo original logra crearlo.
 Si NO hay marcador, **no usa el intérprete** y corre el port normal.
 No se genera SELF ni VPK en esta fase.
 
 ## Pruebas, próximos obstáculos y límites
 
-- Las pruebas `zeebx_arm`, `zeebx_probe` y `zeebx_bootstrap` usan
+- Las pruebas `zeebx_arm`, `zeebx_probe`, `zeebx_bootstrap` y
+  `zeebx_applet` usan
   instrucciones **sintéticas**. CI valida CPU, Saltos, flags,
   pila, límites de ejecución, llamada helper, creación de módulo
   guest, y freno ante API desconocida. El resto de las pruebas del
   port siguen intactas.
-- Al pasar `AEEMod_Load` todavía falta
-  `IModule::CreateInstance`, eventos de applet, llamadas BREW
-  de sistema/archivos, EGL/GLES, mando y audio. El intérprete C
-  todavía **NO incluye Thumb completo ni Dynarmic**.
+- **Segunda etapa implementada:** cuando `AEEMod_Load` termina con
+  éxito real, leemos la vtable `IModule` creada por el módulo ARM y
+  llamamos su slot 2 `CreateInstance(IModule*, IShell*, ClassID, IApplet**)`.
+  Leemos el ClassID del `274214.mif` privado, y solo llamamos al
+  código guest si el puntero y la función son válidos.
+  La prueba con módulo/MIF **sintéticos** confirma carga de módulo,
+  ejecución de `CreateInstance` y `IApplet*` creado por instrucciones
+  ARM (no fabricado en C).
+- **Sin promesas de jugabilidad:** que un applet de prueba se cree
+  correctamente NO significa que el `cnk2.mod` original complete
+  `CreateInstance`. Eso todavía requiere su traza real. Siguen
+  pendientes eventos del applet, servicios BREW de sistema/archivos,
+  EGL/GLES, mando y audio, además de Thumb completo/Dynarmic.
 - CPU de invitado y memoria virtual son solo una parte de Zeebx;
   **cargar el árbol completo de código** no equivale a tener un
   emulador completo funcional compilado para Vita.

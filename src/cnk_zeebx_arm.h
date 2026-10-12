@@ -37,7 +37,7 @@ typedef struct {
  uint8_t *module,*stack,*heap,*objects,*helpers,*vtables;
  uint32_t heap_cursor,shell_refs;
  size_t module_size;
- int initialized;
+ int initialized,applet_pending;
 } cnk_zeebx_arm;
 
 /* initialize exact Zeebx bootstrap address regions; executable MOD is
@@ -61,4 +61,18 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *cpu);
 int cnk_zeebx_arm_bootstrap(cnk_zeebx_arm *cpu,uint32_t budget,
                             cnk_arm_outcome *out,uint32_t *apis_handled);
 int cnk_zeebx_arm_read_u32(cnk_zeebx_arm *cpu,uint32_t addr,uint32_t *out);
+/* Stage 2 of Zeebx Machine::create_applet: after a confirmed successful
+ * AEEMod_Load, read the REAL guest IModule vtable and invoke slot 2
+ * CreateInstance(IModule*, IShell*, AEECLSID, IApplet**).
+ * Returns <0 if guest pointers, bootstrap state, or code are invalid.
+ * Zero indicates only that guest registers are ready, not that the applet
+ * was created. The caller MUST run cnk_zeebx_arm_bootstrap again. */
+int cnk_zeebx_arm_prepare_applet(cnk_zeebx_arm *cpu,uint32_t clsid,
+                                  uint32_t *entry);
+/* After the stage-2 interpreter returns, read its real output pointer;
+ * success requires BREW result r0==0 AND nonzero IApplet*.
+ * Returns <0 or 0, never allocates/fabricates an applet. */
+int cnk_zeebx_arm_applet_result(cnk_zeebx_arm *cpu,
+                                const cnk_arm_outcome *stop,
+                                uint32_t *applet_ptr);
 #endif
