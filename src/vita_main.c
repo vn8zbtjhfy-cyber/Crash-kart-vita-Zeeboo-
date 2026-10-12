@@ -6,6 +6,7 @@
 #include "cnk_vita_native_app.h"
 #include "cnk_vita_source_path.h"
 #include "cnk_zeebx_probe.h"
+#include "cnk_vita_controls.h"
 #include <stdio.h>
 #include <psp2/kernel/processmgr.h>
 #include <psp2/io/stat.h>
@@ -41,10 +42,17 @@ int main(void){
     if(zeebx_flag){
         fclose(zeebx_flag);
         cnk_arm_outcome probe={0};
-        int probe_rc=cnk_zeebx_probe_original_applet(
+        /* One real controller snapshot enters guest memory; the probe is
+         * still bounded, and live per-frame guest input needs further work.
+         * No sample means neutral, never a held phantom button. */
+        cnk_zeebx_pad guest_pad={0};
+        for(unsigned i=0;i<CNK_ZEEBX_PAD_AXES;i++)guest_pad.axes[i]=128u;
+        if(cnk_vita_controls_init()==0)
+            (void)cnk_vita_controls_read_zeebx(&guest_pad);
+        int probe_rc=cnk_zeebx_probe_original_applet_with_pad(
             "ux0:data/cnk3d/cnk2.mod",
             "ux0:data/cnk3d/274214.mif",
-            "ux0:data/cnk3d/zeebx_probe.txt",200000u,&probe);
+            "ux0:data/cnk3d/zeebx_probe.txt",200000u,&guest_pad,&probe);
         fprintf(stderr,"CNK: Zeebx guest ARM probe status %d, "
                        "steps=%llu stop=%u\\n",
                 probe_rc,(unsigned long long)probe.executed,
