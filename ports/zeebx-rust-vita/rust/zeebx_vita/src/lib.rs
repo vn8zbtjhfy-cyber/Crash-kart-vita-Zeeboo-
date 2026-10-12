@@ -23,8 +23,12 @@ const BOOT_BUDGET:u64=20_000_000;
 // hundreds of millions of interpreted guest instructions in a single frame.
 const FRAME_BUDGET:u64=1_000_000;
 const FRAME_PASSES:usize=4;
+// CreateInstance is no longer a 24*20M-instruction blocking call.
+const CREATE_SLICE:u64=250_000;
+const MAX_CREATE_POLLS:u32=2048;
 struct Running{
  machine:Machine<Interpretador>,applet:Option<(u32,u32)>,pad_before:Pad,
+ clsid:u32,creation_started:bool,creation_finished:bool,creation_polls:u32,
  frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,_fufs:FufsView
 }
 struct State{running:Option<Running>,error:Option<CString>}
@@ -70,14 +74,10 @@ fn boot(lookup:EmbeddedLookup)->Result<Running,String>{
  let result=machine.run(BOOT_BUDGET).map_err(|e|e.to_string())?;
  log_stage(c"R.boot.run.returned");
  if !matches!(result,Outcome::Returned{code:0}){return Err(format!("AEEMod_Load: {result:?}"));}
- log_stage(c"R.boot.applet.create.enter");
- let applet=match machine.create_applet(clsid,BOOT_BUDGET){
-  Ok(AppletResult::Called{code:0,applet}) if applet!=0=>applet,
-  Ok(x)=>return Err(format!("CreateInstance: {x:?}")),
-  Err(e)=>return Err(e.to_string())
- };
- log_stage(c"R.boot.applet.create.ok");
- Ok(Running{machine,applet:Some((applet,clsid)),pad_before:Pad::default(),frame:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,_fufs:fufs})
+ log_stage(c"R.boot.applet.create.deferred");
+ Ok(Running{machine,applet:None,pad_before:Pad::default(),
+  clsid,creation_started:false,creation_finished:false,creation_polls:0,
+  frame:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,_fufs:fufs})
 }
 fn check(outcomes:&[Outcome])->Result<(),String>{
  for x in outcomes{if !matches!(x,Outcome::Returned{..}|Outcome::Budget){return Err(format!("Guest stopped: {x:?}"));}}
@@ -98,6 +98,36 @@ impl Running{
   let first_step=!self.logged_first_tick;
   self.logged_first_tick=true;
   if first_step { log_stage(c"R.tick.enter"); }
+  // Vita: execute only one bounded slice of CreateInstance per main-loop
+  // iteration. The PC/regs and output pointer remain intact between polls.
+  if !self.creation_finished {
+   if self.creation_polls >= MAX_CREATE_POLLS {
+    return Err(format!("CreateInstance exceeded {MAX_CREATE_POLLS} bounded polls"));
+   }
+   let outcome=if !self.creation_started {
+    self.creation_started=true;
+    log_stage(c"R.create.begin");
+    self.machine.create_applet(self.clsid,CREATE_SLICE)
+   }else{
+    self.machine.resume_create_applet(CREATE_SLICE)
+   }.map_err(|e|e.to_string())?;
+   self.creation_polls+=1;
+   match outcome {
+    AppletResult::Called{code:0,applet} if applet!=0 => {
+     log_stage(c"R.create.completed");
+     self.applet=Some((applet,self.clsid));
+     self.creation_finished=true;
+    },
+    AppletResult::Stopped(Outcome::Budget) => {
+     if self.creation_polls==1 {log_stage(c"R.create.budget.first");}
+     if self.creation_polls==64 {log_stage(c"R.create.budget.64");}
+     if self.creation_polls==256 {log_stage(c"R.create.budget.256");}
+     if self.creation_polls==1024 {log_stage(c"R.create.budget.1024");}
+     return Ok(false);
+    },
+    other => return Err(format!("CreateInstance: {other:?}"))
+   }
+  }
   let next=Pad{buttons:input.buttons & ((1<<zeebx::input::BUTTONS)-1),axes:input.axes.map(|a|a.clamp(-128,127))};
   self.machine.set_port_pad(0,next);
   for (key,down) in zeebx::input::teclas_do_controle(&self.pad_before,&next){self.machine.set_key(key,down);}
