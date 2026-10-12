@@ -26,6 +26,32 @@ jobs:
     steps:
       - name: Checkout repo privado
         uses: actions/checkout@v4
+      - name: Extraer recursos privados desde ZIP cuando exista
+        run: |
+          set -euo pipefail
+          cd ports/zeebx-rust-vita
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, hashlib, zipfile
+          root=Path('assets')
+          manifest=json.loads((root/'manifest.json').read_text())
+          bundle=Path('assets-original.zip')
+          if bundle.is_file():
+              with zipfile.ZipFile(bundle) as z:
+                  expected={'assets/'+item['path'] for item in manifest['files']}
+                  if set(z.namelist())!=expected:
+                      raise SystemExit("ERROR: ZIP distinto a los 12 recursos originales")
+                  for item in manifest['files']:
+                      content=z.read('assets/'+item['path'])
+                      if len(content)!=item['size'] or hashlib.sha256(content).hexdigest()!=item['sha256']:
+                          raise SystemExit("ERROR: hash/size invalido: "+item['path'])
+                      dest=root/item['path']
+                      dest.parent.mkdir(parents=True,exist_ok=True)
+                      dest.write_bytes(content)
+              print("12 recursos originales extraidos y comprobados")
+          else:
+              print("No hay assets-original.zip: Cargo se puede probar; el VPK requiere subir los recursos")
+          PY
       - name: Preparar Rust nightly dentro del contenedor VitaSDK
         shell: bash
         run: |
