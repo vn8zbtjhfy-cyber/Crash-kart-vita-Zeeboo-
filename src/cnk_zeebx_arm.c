@@ -1886,6 +1886,35 @@ static cnk_zeebx_guest_file *zeebx_opened_file(cnk_zeebx_arm *c,
    return &c->files[i];
  return NULL;
 }
+/* Ported from Zeebx machine/file.rs::write_file_info.
+ * BREW AEEFileInfo is 76 bytes: attributes, reserved, size, name[64].
+ * IFile::GetInfoEx is a different, 16-byte structure. */
+static int zeebx_write_file_info(cnk_zeebx_arm *c,uint32_t output,
+                                  uint32_t size,const char *guest_name){
+ if(!output)return 0; /* status-only callers */
+ if((output&3u)||!guest_name)return -3;
+ uint8_t *dst=map(c,output,76u,1);
+ if(!dst)return -3;
+ uint8_t record[76]={0};
+ putword(record+0u,0u); /* FA_NORMAL */
+ putword(record+4u,0u);
+ putword(record+8u,size);
+ size_t n=strlen(guest_name);
+ if(n>63u)n=63u;
+ memcpy(record+12u,guest_name,n);
+ memcpy(dst,record,sizeof(record));
+ return 0;
+}
+static int zeebx_file_length(FILE *f,uint32_t *size){
+ long saved=ftell(f);
+ if(saved<0||fseek(f,0,SEEK_END))return -1;
+ long length=ftell(f);
+ const int restored=fseek(f,saved,SEEK_SET);
+ if(restored||length<0||(unsigned long)length>UINT32_MAX)return -1;
+ *size=(uint32_t)length;
+ return 0;
+}
+
 static int zeebx_file_call(cnk_zeebx_arm *c,unsigned iface,unsigned slot){
  /* No root means no simulated filesystem: break on exact BREW call. */
  if(!c->file_root[0])return -4;
@@ -1895,12 +1924,24 @@ static int zeebx_file_call(cnk_zeebx_arm *c,unsigned iface,unsigned slot){
     vt!=CNK_ARM_VTABLE_BASE+iface*CNK_ARM_VTABLE_STRIDE)
   return -3;
  if(iface==3u){
-  if(slot==2u||slot==7u){ /* IFileMgr::OpenFile / Test */
+  if(slot==2u||slot==3u||slot==7u){ /* OpenFile, GetInfo, Test */
    char relative[192],full[CNK_ZEEBX_FILE_ROOT_CHARS+192u];
    if(zeebx_guest_relative(c,c->regs[1],relative,sizeof(relative))||
       zeebx_join_root(c->file_root,relative,full,sizeof(full))){
     c->file_path_denials++;
     return -4;
+   }
+   if(slot==3u){ /* IFileMgr::GetInfo(name, AEEFileInfo*) */
+    const uint32_t dest=c->regs[2];
+    if(dest&&((dest&3u)||!map(c,dest,76u,1)))return -3;
+    FILE *probe=fopen(full,"rb");
+    if(!probe)return cnk_zeebx_arm_return_from_api(c,1u);
+    uint32_t size=0;
+    const int valid=zeebx_file_length(probe,&size);
+    fclose(probe);
+    if(valid)return -4;
+    if(zeebx_write_file_info(c,dest,size,relative))return -3;
+    return cnk_zeebx_arm_return_from_api(c,0u);
    }
    if(slot==7u){ /* BREW Test returns SUCCESS=0 when the file exists. */
     FILE *probe=fopen(full,"rb");
@@ -1928,6 +1969,7 @@ static int zeebx_file_call(cnk_zeebx_arm *c,unsigned iface,unsigned slot){
    c->files[index].object=handle;
    c->files[index].stream=stream;
    c->files[index].refs=1u;
+   memcpy(c->files[index].guest_name,relative,strlen(relative)+1u);
    c->file_open_count++;
    return cnk_zeebx_arm_return_from_api(c,handle);
   }
@@ -1949,9 +1991,18 @@ static int zeebx_file_call(cnk_zeebx_arm *c,unsigned iface,unsigned slot){
    fclose(entry->stream);
    entry->stream=NULL;
    entry->object=0u;
+   entry->guest_name[0]='\0';
    c->file_open_count--;
   }
   return cnk_zeebx_arm_return_from_api(c,refs);
+ }
+ if(slot==6u){ /* IFile::GetInfo(AEEFileInfo*) */
+  const uint32_t dest=c->regs[1];
+  if(dest&&((dest&3u)||!map(c,dest,76u,1)))return -3;
+  uint32_t size=0;
+  if(zeebx_file_length(entry->stream,&size))return -4;
+  if(zeebx_write_file_info(c,dest,size,entry->guest_name))return -3;
+  return cnk_zeebx_arm_return_from_api(c,0u);
  }
  if(slot==3u){ /* IFile::Read(buffer, count), returns number read */
   uint32_t guest=c->regs[1],n=c->regs[2];
