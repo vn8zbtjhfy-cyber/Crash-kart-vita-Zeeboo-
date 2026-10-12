@@ -14,6 +14,7 @@ int cnk_zeebx_probe_original(const char *mod_path,const char *report_path,
  uint8_t *data=NULL;
  size_t size=0;
  int status=-1;
+ uint32_t handled=0,module_ptr=0;
  if(!result)return -1;
  memset(result,0,sizeof(*result));
  if(!mod_path||!report_path||!budget||budget>10000000u)return -1;
@@ -36,9 +37,15 @@ int cnk_zeebx_probe_original(const char *mod_path,const char *report_path,
  status=cnk_zeebx_arm_init(&cpu,data,size);
  free(data);
  if(status)return -6;
- status=cnk_zeebx_arm_run(&cpu,budget,&outcome);
+ status=cnk_zeebx_arm_bootstrap(&cpu,budget,&outcome,&handled);
  if(status){cnk_zeebx_arm_destroy(&cpu);return -7;}
- /* The outcome is the exact stopping point, not a guessed API result. */
+ /* Zeebx's AEEMod_Load writes an IModule* to object memory +8.
+  * A successful return alone does not imply a usable module. */
+ if(cnk_zeebx_arm_read_u32(&cpu,CNK_ARM_OBJECT_BASE+8u,&module_ptr))
+  module_ptr=0;
+ int module_created=outcome.reason==CNK_ARM_RETURNED &&
+      cpu.regs[0]==0u && module_ptr>=CNK_ARM_HEAP_BASE &&
+      module_ptr<CNK_ARM_HEAP_BASE+cpu.heap_cursor;
  FILE *report=fopen(report_path,"wb");
  if(!report){cnk_zeebx_arm_destroy(&cpu);return -8;}
  const char *reason=outcome.reason==CNK_ARM_API?"BREW_API":
@@ -49,10 +56,11 @@ int cnk_zeebx_probe_original(const char *mod_path,const char *report_path,
  int written=fprintf(report,
   "original_mod_size=%lu\nreason=%s\nsteps=%llu\npc=0x%08x\n"
   "api_interface=%u\napi_slot=%u\nopcode=0x%08x\naddress=0x%08x\n"
-  "genuine_game_playable=NO\n",
+  "bootstrap_apis_handled=%u\nmodule_ptr=0x%08x\n"
+  "module_load_completed=%s\ngenuine_game_playable=NO\n",
   (unsigned long)size,reason,(unsigned long long)outcome.executed,
   outcome.pc,outcome.api_interface,outcome.api_slot,outcome.opcode,
-  outcome.address);
+  outcome.address,handled,module_ptr,module_created?"YES":"NO");
  int close_result=fclose(report);
  *result=outcome;
  cnk_zeebx_arm_destroy(&cpu);
