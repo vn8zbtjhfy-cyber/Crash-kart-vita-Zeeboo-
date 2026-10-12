@@ -96,7 +96,9 @@ static int probe_internal(const char *mod_path,const char *mif_path,
   "applet_entry=0x%08x\napplet_reason=%s\napplet_steps=%llu\n"
   "applet_api_interface=%u\napplet_api_slot=%u\n"
   "applet_apis_handled=%u\napplet_ptr=0x%08x\n"
-  "applet_created=%s\nsource_display_instances=%u\n"\n  "source_filemgr_instances=%u\nguest_dbgprintf_calls=%u\n"\n  "genuine_game_playable=NO\n",
+  "applet_created=%s\nsource_display_instances=%u\n"
+  "source_filemgr_instances=%u\nguest_dbgprintf_calls=%u\n"
+  "genuine_game_playable=NO\n",
   (unsigned long)mod_bytes,reason_name(load_out.reason),
   (unsigned long long)load_out.executed,load_out.pc,
   load_out.api_interface,load_out.api_slot,load_out.opcode,
