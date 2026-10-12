@@ -828,8 +828,9 @@ static int zeebx_egl_intern(cnk_zeebx_arm *c,uint32_t *cache,
 /* Zeebx AEEGL.h IGL: OLD Common-Lite slots with NO "this" pointer.
  * Unlike synthetic GL success flags, each supported GPU operation calls a
  * bound Vita renderer; no sink or inactive EGL context = explicit API stop.
- * Basic triangles support both bounded DrawArrays and indexed DrawElements.
- * Textures and other unported operations still stop explicitly.
+ * Bounded DrawArrays/DrawElements expand triangles, strips and fans.
+ * Only validated uncompressed RGBA8/RGB565 texture uploads and UV arrays
+ * reach the real vitaGL host. Unimplemented GL modes still stop explicitly.
  */
 static float zeebx_gl_fixed(uint32_t raw){
  return (float)(int32_t)raw/65536.0f;
