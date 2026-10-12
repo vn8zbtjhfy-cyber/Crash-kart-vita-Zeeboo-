@@ -1102,6 +1102,13 @@ int cnk_zeebx_arm_deliver_signals(cnk_zeebx_arm *c,uint32_t budget,
   uint32_t apis_handled=0u;
   int rc=cnk_zeebx_arm_bootstrap(
    c,(uint32_t)(budget-(c->executed-start)),&call_out,&apis_handled);
+  /* When BX LR is the last budgeted guest ARM instruction, bootstrap
+   * reports BUDGET before performing another sentinel check. The
+   * instruction HAS reached the return sentinel, so count this callback
+   * as completed instead of losing its event or replaying it next time. */
+  if(!rc && call_out.reason==CNK_ARM_BUDGET &&
+     c->regs[15]==CNK_ARM_RETURN_MAGIC)
+    call_out.reason=CNK_ARM_RETURNED;
   /* Host-owned saved ARM registers remain untouched even on faults.
    * Any guest-memory writes persist, just like real callback execution. */
   memcpy(c->regs,saved_regs,sizeof(saved_regs));
