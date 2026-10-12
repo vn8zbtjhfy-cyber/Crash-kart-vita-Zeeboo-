@@ -25,6 +25,8 @@
 /* Zeebo original controller: 18 enumerated buttons, 4 absolute axes. */
 #define CNK_ZEEBX_PAD_BUTTONS 18u
 #define CNK_ZEEBX_PAD_AXES 4u
+/* Maximum verified, bounded guest vertices submitted by one draw call. */
+#define CNK_ZEEBX_MAX_DRAW_VERTICES 384u
 typedef struct {
  uint32_t buttons; /* bit per Zeebx input/mod.rs BUTTON_UIDS entry */
  uint8_t axes[CNK_ZEEBX_PAD_AXES]; /* absolute [0..255], neutral=128 */
@@ -64,6 +66,9 @@ typedef struct {
  int (*translate)(void *user,float x,float y,float z);
  int (*scale)(void *user,float x,float y,float z);
  int (*rotate)(void *user,float degrees,float x,float y,float z);
+ /* Real 3D guest vertex stream in XYZ float triplets, owned by caller
+  * through return of this synchronous callback. No fake draw success. */
+ int (*draw_triangles)(void *user,const float *xyz,uint32_t count);
 } cnk_zeebx_gl_host;
 
 typedef enum {
@@ -90,6 +95,8 @@ typedef struct {
  uint32_t egl_error,egl_initialized,egl_queries;
  uint32_t egl_surface,egl_context,egl_current_surface,egl_current_context;
  uint32_t gl_clear_calls,gl_presents,gl_viewport_calls;
+ uint32_t gl_vertex_pointer,gl_vertex_stride,gl_draw_calls,gl_drawn_vertices;
+ uint8_t gl_vertex_enabled;
  cnk_zeebx_gl_host gl_host;
  void *gl_host_user;
  uint32_t egl_string_vendor,egl_string_version,egl_string_extensions;

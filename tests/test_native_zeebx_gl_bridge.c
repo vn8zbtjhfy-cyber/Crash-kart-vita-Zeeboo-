@@ -11,6 +11,8 @@
 typedef struct {
  unsigned begin,clear_color,clear,viewport,present;
  unsigned matrix_mode,load_identity,push_matrix,pop_matrix,translate,scale,rotate;
+ unsigned draws,draw_vertices;
+ float triangle[9];
  uint32_t mode;
  float xyz[3],angle;
  uint32_t clear_mask;
@@ -85,6 +87,22 @@ static int rotate(void *p,float angle,float x,float y,float z){
  g->xyz[0]=x;g->xyz[1]=y;g->xyz[2]=z;
  return 0;
 }
+static int draw_triangles(void *p,const float *xyz,uint32_t count){
+ recorded_gpu *g=(recorded_gpu*)p;
+ if(g->reject)return -1;
+ if(!xyz||count>CNK_ZEEBX_MAX_DRAW_VERTICES||count%3u)return -1;
+ g->draws++;g->draw_vertices+=count;
+ memcpy(g->triangle,xyz,sizeof(g->triangle));
+ return 0;
+}
+static void guest_float(cnk_zeebx_arm *c,uint32_t address,float v){
+ assert(address>=CNK_ARM_HEAP_BASE);
+ uint32_t offset=address-CNK_ARM_HEAP_BASE;
+ assert(offset+4u<=CNK_ARM_HEAP_BYTES);
+ uint32_t bits=0;
+ memcpy(&bits,&v,sizeof(bits));
+ for(unsigned k=0;k<4u;k++)c->heap[offset+k]=(uint8_t)(bits>>(8u*k));
+}
 static void api(cnk_zeebx_arm *c,unsigned iface,unsigned slot,
                 uint32_t a0,uint32_t a1,uint32_t a2,uint32_t a3){
  c->regs[0]=a0;c->regs[1]=a1;c->regs[2]=a2;c->regs[3]=a3;
@@ -111,7 +129,8 @@ int main(void){
   .make_current=begin,.clear_color=clear_color,.clear=clear,
   .viewport=viewport,.present=present,.matrix_mode=matrix_mode,
   .load_identity=load_identity,.push_matrix=push_matrix,
-  .pop_matrix=pop_matrix,.translate=translate,.scale=scale,.rotate=rotate
+  .pop_matrix=pop_matrix,.translate=translate,.scale=scale,.rotate=rotate,
+  .draw_triangles=draw_triangles
  };
  assert(!cnk_zeebx_arm_init(&cpu,guest,sizeof(guest)));
  api(&cpu,23u,5u,1u,0u,0u,0u); /* original EGL initialize */
@@ -177,12 +196,73 @@ int main(void){
  api(&cpu,24u,51u,0xdeadbeefu,0u,0u,0u);
  trap(&cpu,24u,51u); /* unexpected matrix enum is never accepted */
  assert(g.matrix_mode==2u);
+ /* Deliver REAL triangles from bounded guest ARM heap via glVertexPointer.
+  * Vertex arrays are read at draw time, not decoded as host pointers. */
+ const uint32_t base=CNK_ARM_HEAP_BASE+64u;
+ const float triangle[9]={0.f,0.f,0.f, 1.f,0.f,0.f, 0.f,1.f,0.f};
+ for(unsigned k=0;k<9u;k++)guest_float(&cpu,base+4u*k,triangle[k]);
+ api(&cpu,24u,26u,4u,0u,3u,0u);
+ trap(&cpu,24u,26u); /* nothing enabled or registered */
+ api(&cpu,24u,78u,3u,0x1406u,0u,base);
+ assert(invoke(&cpu)==0u);
+ api(&cpu,24u,26u,4u,0u,3u,0u);
+ trap(&cpu,24u,26u); /* vertex client array still disabled */
+ api(&cpu,24u,29u,0x8074u,0u,0u,0u);
+ assert(invoke(&cpu)==0u);
+ api(&cpu,24u,26u,4u,0u,3u,0u);
+ assert(invoke(&cpu)==0u&&g.draws==1u&&g.draw_vertices==3u);
+ assert(memcmp(g.triangle,triangle,sizeof(triangle))==0);
+ assert(cpu.gl_draw_calls==1u&&cpu.gl_drawn_vertices==3u);
+ /* Proper GL_FIXED vertex pointer remains unsupported, not misdecoded. */
+ api(&cpu,24u,78u,3u,0x140cu,0u,base);
+ trap(&cpu,24u,78u);
+ api(&cpu,24u,78u,3u,0x1406u,11u,base);
+ trap(&cpu,24u,78u);
+ api(&cpu,24u,78u,3u,0x1406u,0u,0xffffffffu);
+ trap(&cpu,24u,78u);
+ /* Valid interleaved layout with 4-byte padding and starting offset. */
+ const uint32_t padded=CNK_ARM_HEAP_BASE+256u;
+ for(unsigned k=0;k<4u;k++)for(unsigned axis=0;axis<3u;axis++)
+  guest_float(&cpu,padded+16u*k+4u*axis,k?triangle[(k-1u)*3u+axis]:99.f);
+ api(&cpu,24u,78u,3u,0x1406u,16u,padded);
+ assert(invoke(&cpu)==0u);
+ api(&cpu,24u,26u,4u,1u,3u,0u);
+ assert(invoke(&cpu)==0u&&g.draws==2u&&g.draw_vertices==6u);
+ assert(memcmp(g.triangle,triangle,sizeof(triangle))==0);
+ /* Guest buffer must have room for ALL requested vertices. */
+ api(&cpu,24u,78u,3u,0x1406u,0u,CNK_ARM_HEAP_BASE+CNK_ARM_HEAP_BYTES-8u);
+ assert(invoke(&cpu)==0u);
+ api(&cpu,24u,26u,4u,0u,3u,0u);
+ trap(&cpu,24u,26u);
+ /* Nonfinite positions are always rejected before GPU sees them. */
+ guest_float(&cpu,base+4u, __builtin_nanf(""));
+ api(&cpu,24u,78u,3u,0x1406u,0u,base);
+ assert(invoke(&cpu)==0u);
+ api(&cpu,24u,26u,4u,0u,3u,0u);
+ trap(&cpu,24u,26u);
+ guest_float(&cpu,base+4u,0.f);
+ api(&cpu,24u,26u,4u,0u,CNK_ZEEBX_MAX_DRAW_VERTICES+3u,0u);
+ trap(&cpu,24u,26u);
+ api(&cpu,24u,26u,4u,0xffffffffu,3u,0u);
+ trap(&cpu,24u,26u);
+ api(&cpu,24u,26u,5u,0u,3u,0u);
+ trap(&cpu,24u,26u);
+ api(&cpu,24u,25u,0x8074u,0u,0u,0u);
+ assert(invoke(&cpu)==0u);
+ api(&cpu,24u,26u,4u,0u,3u,0u);
+ trap(&cpu,24u,26u);
+ assert(g.draws==2u && cpu.gl_draw_calls==2u);
+ api(&cpu,24u,29u,0x8074u,0u,0u,0u);
+ assert(invoke(&cpu)==0u);
  api(&cpu,24u,27u,0u,0u,0u,0u); /* glDrawElements UNIMPLEMENTED */
  trap(&cpu,24u,27u);
  api(&cpu,24u,7u,0x80000000u,0u,0u,0u);
  trap(&cpu,24u,7u);
  assert(g.clear==1u);
  g.reject=1;
+ api(&cpu,24u,26u,4u,0u,3u,0u);
+ trap(&cpu,24u,26u);
+ assert(g.draws==2u&&cpu.gl_draw_calls==2u);
  api(&cpu,24u,63u,5898240u,0u,65536u,0u);
  trap(&cpu,24u,63u); /* real GPU rejected transform */
  assert(g.rotate==1u);
@@ -209,7 +289,7 @@ int main(void){
  api(&cpu,23u,17u,1u,1u,0u,0u);
  trap(&cpu,23u,17u);
  cnk_zeebx_arm_destroy(&cpu);
- puts("PASS: Zeebx EGL/GL fixed-point rendering and matrix commands "
-      "require real GPU success; invalid enums and missing context trap");
+ puts("PASS: Zeebx GL triangle arrays use bounded guest memory and a "
+      "real GPU sink; invalid, nonfinite, disabled and rejected draws trap");
  return 0;
 }
