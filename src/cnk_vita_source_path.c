@@ -50,7 +50,9 @@ const char *cnk_vita_source_select(const char *const *candidates,size_t count){
 }
 
 const char *cnk_vita_source_find(void){
- /* Source assets belong to the user and must never be included in the VPK. */
+ /* User-owned resources stay outside GitHub. A locally built PRIVATE
+  * diagnostic VPK may include data.vfs as app0:/data.vfs, making the
+  * console installation self-contained. Public CI VPKs never do. */
  static const char *const candidates[]={
   "ux0:data/cnk3d/data.vfs",
   "ux0:data/data.vfs",
