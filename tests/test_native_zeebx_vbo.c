@@ -51,7 +51,13 @@ static void api(cnk_zeebx_arm*c,unsigned slot,uint32_t r0,uint32_t r1,
 }
 static uint32_t invoke(cnk_zeebx_arm*c){
  cnk_arm_outcome o={0};uint32_t handled=0;
+ const uint32_t previous=c->regs[15];
  assert(!cnk_zeebx_arm_bootstrap(c,24u,&o,&handled));
+ if(o.reason!=CNK_ARM_RETURNED||handled!=1u)
+  fprintf(stderr,"Zeebx VBO failure iface=%u slot=%u reason=%u handled=%u r0=%08x\n",
+          (unsigned)((previous-CNK_ARM_API_BASE)>>12),
+          (unsigned)(((previous-CNK_ARM_API_BASE)&0xfffu)/4u),
+          (unsigned)o.reason,handled,c->regs[0]);
  assert(o.reason==CNK_ARM_RETURNED&&handled==1u);
  return c->regs[0];
 }
