@@ -2,6 +2,28 @@
 
 Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **Todavía no es un videojuego completo ni se ha verificado su ejecución en consola.**
 
+## Avance 120: lectura del ejecutable BREW gracias a Zeebx
+
+- **Todo el port nativo C existente se conserva.** No se reemplazan
+  el motor de carreras, la física, los circuitos ni el renderizador.
+- Se adaptaron los lectores de `.mod` y `.mif` de
+  [Zeebx](https://github.com/ZeebxTeam/zeebx-emu) a C99,
+  con atribución GPL-2.0-or-later en `third_party/zeebx/NOTICE.md`.
+- Datos de la copia original privada del usuario: `cnk2.mod` es un
+  módulo ARM RAW con salto inicial a `0x14`; `274214.mif` declara
+  ClassID `0x01081984`. Los binarios **no** se suben a GitHub.
+- Lector independiente `cnk_inspeccionar_mod_zeebx` para explorar
+  los archivos originales fuera del repositorio.
+- **21/21 pruebas portátiles sin ROM aprobadas**:
+  [38193191582](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38193191582).
+- **Compilación y enlace ARM VitaSDK aprobados**:
+  [38193191572](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38193191572).
+- Ver [detalle de desarrollo](docs/AVANCE_120_ZEEBX_BREW_FORMATO_EJECUTABLE.md).
+
+**Importante:** conocer un módulo ARM y su ClassID no significa que
+el juego original ya corra en PS Vita. Sigue siendo un port nativo en
+desarrollo, sin validación de carrera completa en hardware y sin SELF/VPK.
+
 ## Avance 119: primeros sprites originales visibles en Vita
 
 - **Logo original de Crash Nitro Kart 3D:** al seleccionar circuito,
