@@ -22,7 +22,7 @@
 #define MOD_MAX (16u*1024u*1024u)
 #define OBJECT_BYTES 0x1000u
 #define HELPER_BYTES 0x1000u
-#define VTABLE_BYTES 0x1000u
+#define VTABLE_BYTES 0x10000u
 static uint32_t word(const uint8_t *p){
  return (uint32_t)p[0]|((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|
         ((uint32_t)p[3]<<24);
@@ -61,6 +61,17 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
  putword(cpu->objects,CNK_ARM_VTABLE_BASE);
  for(unsigned i=0;i<256;i++){
   putword(cpu->vtables+4u*i,CNK_ARM_API_BASE+i*4u); /* IShell */
+  /* Zeebx's vtables are 256 slots each. The next applet classes
+   * observed in genuine cnk2.mod are IDisplay (5) and IFileMgr (3).
+   * Vtable slots lead to diagnostic API traps, not fake methods. */
+  putword(cpu->vtables+3u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(3u<<12)+i*4u);
+  putword(cpu->vtables+5u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(5u<<12)+i*4u);
+  putword(cpu->vtables+7u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(7u<<12)+i*4u);
+  putword(cpu->vtables+14u*CNK_ARM_VTABLE_STRIDE+4u*i,
+          CNK_ARM_API_BASE+(14u<<12)+i*4u);
   putword(cpu->helpers+4u*i,CNK_ARM_API_BASE+(6u<<12)+i*4u);
  }
  cpu->regs[0]=CNK_ARM_OBJECT_BASE;
@@ -72,6 +83,7 @@ int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
  cpu->cpsr=0x10u; /* user mode ARM */
  cpu->heap_cursor=0u;
  cpu->shell_refs=1u;
+ cpu->object_cursor=16u; /* Shell, Module**, IApplet** reserved */
  cpu->initialized=1;
  return 0;
 }
@@ -450,6 +462,11 @@ int cnk_zeebx_arm_read_u32(cnk_zeebx_arm *c,uint32_t addr,uint32_t *out){
 }
 /* Only these exact Zeebx slots have experimentally verified startup
  * semantics for this game. All other BREW services remain unresolved. */
+int cnk_zeebx_arm_set_virtual_time(cnk_zeebx_arm *c,uint32_t ms){
+ if(!c||!c->initialized||ms<c->virtual_time_ms)return -1;
+ c->virtual_time_ms=ms;
+ return 0;
+}
 int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
  if(!c||!c->initialized)return -1;
  uint32_t pc=c->regs[15];
@@ -457,6 +474,22 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
   return -1;
  unsigned iface=(pc-CNK_ARM_API_BASE)>>12u;
  unsigned slot=((pc-CNK_ARM_API_BASE)&0xfffu)/4u;
+ /* Zeebx AEEStdLib::memset at helper index 1, as used by the
+  * original cnk2.mod while constructing its applet state. Validate
+  * writable guest bounds before modifying ANY bytes. */
+ if(iface==6u && slot==1u){
+  const uint32_t addr=c->regs[0],value=c->regs[1],length=c->regs[2];
+  if(length){
+   if(length>CNK_ARM_HEAP_BYTES || !map(c,addr,length,1))return -3;
+   memset(map(c,addr,length,1),(int)(uint8_t)value,length);
+  }
+  return cnk_zeebx_arm_return_from_api(c,addr);
+ }
+ /* Zeebx machine/helper.rs: both AEEStdLib clock entries share the
+  * Machine::elapsed_ms virtual time, not host uptime or instruction
+  * count. The host controls time progression between frames. */
+ if(iface==6u && (slot==43u||slot==44u))
+  return cnk_zeebx_arm_return_from_api(c,c->virtual_time_ms);
  if(iface==6u && slot==26u){ /* AEEStdLib malloc */
   uint32_t request=c->regs[0];
   if(request>CNK_ARM_HEAP_BYTES-8u)return -2;
@@ -477,6 +510,98 @@ int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *c){
    c->shell_refs--;
   }
   return cnk_zeebx_arm_return_from_api(c,c->shell_refs);
+ }
+ /* Zeebx's ISHELL_GetDeviceInfo (Shell slot 4), ABI from
+  * machine/shell.rs. Unlike a guessed "success", this writes the genuine
+  * 640x480, 16-bit Zeebo device structure into GUEST memory.
+  * Only fields with proven offsets are initialized; extended members
+  * require the guest to request the full 64-byte structure at +44. */
+ if(iface==0u && slot==4u){
+  const uint32_t info=c->regs[1];
+  if(c->regs[0]!=CNK_ARM_OBJECT_BASE)return -3;
+  if(!info)return cnk_zeebx_arm_return_from_api(c,0u);
+  uint32_t requested=0;
+  if(load(c,info+44u,2u,&requested))return -3;
+  const size_t len=requested>=64u?64u:44u;
+  uint8_t *dst=map(c,info,len,1);
+  if(!dst)return -3;
+  memset(dst,0,len);
+  /* First eight uint16 entries of AEEDeviceInfo. */
+  putword(dst,640u|(480u<<16));
+  dst[8]=8u; /* cxScrollBar */
+  dst[10]=3u; /* AEE_ENC_ISOLATIN1 */
+  dst[14]=16u; /* COLOR_DEPTH */
+  putword(dst+24u,64u*1024u*1024u); /* Zeebx virtual device RAM */
+  if(requested>=64u){
+   dst[44]=64u; /* wStructSize */
+   dst[56]=64u; /* wMaxPath (AEE_MAX_FILE_NAME) */
+  }
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ /* Zeebx machine/display.rs: IDISPLAY_GetDeviceBitmap returns an
+  * AEE error code (0 for success) and writes IBitmap** to R1.
+  * The device bitmap is persistent, not a newly allocated surface on
+  * every request. Its drawing methods remain separate API traps.
+  * No graphics are fabricated here: the guest interface exists, while
+  * GPU output still requires a later Vita display bridge. */
+ if(iface==5u && slot==16u){
+  uint32_t disp=c->regs[0],out_ptr=c->regs[1],vtbl=0;
+  if(!out_ptr || load(c,disp,4u,&vtbl) ||
+     vtbl!=CNK_ARM_VTABLE_BASE+5u*CNK_ARM_VTABLE_STRIDE ||
+     !map(c,out_ptr,4u,1))return -3;
+  if(!c->screen_bitmap_addr){
+   if(c->object_cursor>OBJECT_BYTES-64u)return -2;
+   c->screen_bitmap_addr=CNK_ARM_OBJECT_BASE+c->object_cursor;
+   if(store(c,c->screen_bitmap_addr,4u,
+            CNK_ARM_VTABLE_BASE+7u*CNK_ARM_VTABLE_STRIDE))return -3;
+   c->object_cursor+=64u;
+   c->screen_bitmap_references=1u; /* Zeebx display retains ownership */
+  }
+  if(c->screen_bitmap_references==UINT32_MAX)return -2;
+  if(store(c,out_ptr,4u,c->screen_bitmap_addr))return -3;
+  c->screen_bitmap_references++;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ /* The original CNK applet reaches this exact diagnostic helper twice.
+  * Zeebx returns AEE_SUCCESS after recording formatted debug text.
+  * Preserve the bounded raw format string without interpreting guest
+  * varargs as a host printf format (unsafe and not the same ABI). */
+ if(iface==6u&&slot==39u){
+  uint32_t ptr=c->regs[0],byte=0;
+  if(!ptr||c->debug_calls==UINT32_MAX)return -3;
+  size_t n=0;
+  memset(c->last_debug_template,0,sizeof(c->last_debug_template));
+  for(;n+1u<sizeof(c->last_debug_template);n++){
+   if(load(c,ptr+(uint32_t)n,1u,&byte))return -3;
+   if(!byte)break;
+   c->last_debug_template[n]=(char)(uint8_t)byte;
+  }
+  c->last_debug_template[n]='\0';
+  c->debug_calls++;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ /* Zeebx Machine::shell_create_instance: these ClassIDs come from the
+  * BREW 4 SDK and were individually observed when executing the original
+  * user-owned cnk2.mod. No generic success for unknown classes. */
+ if(iface==0u&&slot==2u){
+  const uint32_t clsid=c->regs[1],out_ptr=c->regs[2];
+  uint32_t target_iface=0;
+  if(clsid==0x01001001u)target_iface=5u; /* IDisplay */
+  else if(clsid==0x01001003u)target_iface=3u; /* IFileMgr */
+  else if(clsid==0x01001056u)target_iface=14u; /* ISound */
+  else return -4;
+  if(c->regs[0]!=CNK_ARM_OBJECT_BASE||!out_ptr||
+     !map(c,out_ptr,4u,1))return -3;
+  if(c->object_cursor>OBJECT_BYTES-64u)return -2;
+  const uint32_t obj=CNK_ARM_OBJECT_BASE+c->object_cursor;
+  const uint32_t vtable=CNK_ARM_VTABLE_BASE+
+                         target_iface*CNK_ARM_VTABLE_STRIDE;
+  if(store(c,obj,4u,vtable)||store(c,out_ptr,4u,obj))return -3;
+  c->object_cursor+=64u;
+  if(target_iface==5u)c->display_objects++;
+  else if(target_iface==3u)c->filemgr_objects++;
+  else c->sound_objects++;
+  return cnk_zeebx_arm_return_from_api(c,0u);
  }
  return -4; /* Unsupported API MUST NOT silently return success. */
 }
