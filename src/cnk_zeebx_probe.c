@@ -43,11 +43,13 @@ static int probe_internal(const char *mod_path,const char *mif_path,
  size_t mod_bytes=0,mif_bytes=0;
  cnk_brew_mif_info manifest={0};
  cnk_zeebx_arm cpu={0};
- cnk_arm_outcome load_out={0},applet_out={0},signal_out={0};
- uint32_t module_calls=0,applet_calls=0,callbacks_delivered=0u;
+ cnk_arm_outcome load_out={0},applet_out={0},signal_out={0},start_out={0};
+ uint32_t module_calls=0,applet_calls=0,start_calls=0,callbacks_delivered=0u;
  int callback_probe_rc=0,callback_probe_attempted=0;
  uint32_t modptr=0,apptr=0,guest_entry=0,clsid=0;
+ uint32_t start_entry=0,start_ptr=0;
  int started=0,module_ok=0,applet_ok=0,prep=-1;
+ int start_prep=-1,start_attempted=0,start_completed=0,start_handled=0;
  if(!result)return -1;
  memset(result,0,sizeof(*result));
  if(!mod_path||!report_path||!budget||budget>10000000u)return -1;
@@ -94,11 +96,26 @@ static int probe_internal(const char *mod_path,const char *mif_path,
    *result=applet_out;
   }
  }
- /* Only at the original applet's verified guest return boundary.
-  * Pending BREW HID notifications are deferred and executed as guest ARM,
-  * not host-native function pointers. A failed callback is reported,
-  * never silently treated as a playable successful launch. */
- if(applet_ok && cpu.signal_pending_count){
+ /* Stage 3 of upstream Zeebx Machine::start_applet. The genuine guest
+  * IApplet HandleEvent(slot 2) receives EVT_APP_START=0 and its 24-byte
+  * AEEAppStart. Only a RETURNED result completes this stage. Graphics,
+  * audio and BREW APIs not yet implemented remain explicit traps. */
+ if(applet_ok){
+  start_prep=cnk_zeebx_arm_prepare_start_event(
+   &cpu,apptr,clsid,&start_entry,&start_ptr);
+  if(!start_prep){
+   start_attempted=1;
+   rc=cnk_zeebx_arm_bootstrap(&cpu,budget,&start_out,&start_calls);
+   if(rc){cnk_zeebx_arm_destroy(&cpu);return -10;}
+   start_completed=start_out.reason==CNK_ARM_RETURNED &&
+                   cpu.regs[15]==CNK_ARM_RETURN_MAGIC;
+   start_handled=start_completed && cpu.regs[0]!=0u;
+   *result=start_out;
+  }
+ }
+ /* Only at a verified, completed original guest return boundary.
+  * Never dispatch signals inside an unresolved START guest API trap. */
+ if(start_completed && cpu.signal_pending_count){
   callback_probe_attempted=1;
   callback_probe_rc=cnk_zeebx_arm_deliver_signals(
    &cpu,budget,&signal_out,&callbacks_delivered);
@@ -114,7 +131,13 @@ static int probe_internal(const char *mod_path,const char *mif_path,
   "applet_entry=0x%08x\napplet_reason=%s\napplet_steps=%llu\n"
   "applet_api_interface=%u\napplet_api_slot=%u\n"
   "applet_apis_handled=%u\napplet_ptr=0x%08x\n"
-  "applet_created=%s\nsource_display_instances=%u\n"
+  "applet_created=%s\nstart_event_attempted=%s\n"
+  "start_event_prepare_code=%d\nstart_event_entry=0x%08x\n"
+  "start_event_data=0x%08x\nstart_event_reason=%s\n"
+  "start_event_api_interface=%u\nstart_event_api_slot=%u\n"
+  "start_event_apis_handled=%u\nstart_event_completed=%s\n"
+  "start_event_handled=%s\n"
+  "source_display_instances=%u\n"
   "source_filemgr_instances=%u\nguest_dbgprintf_calls=%u\n"
   "signal_callbacks_attempted=%s\nsignal_callbacks_delivered=%u\n"
   "signal_callbacks_remaining=%u\nsignal_dispatch_code=%d\n"
@@ -130,6 +153,10 @@ static int probe_internal(const char *mod_path,const char *mif_path,
   (started&&!prep)?reason_name(applet_out.reason):"NOT_RUN",
   (unsigned long long)applet_out.executed,applet_out.api_interface,
   applet_out.api_slot,applet_calls,apptr,applet_ok?"YES":"NO",
+  start_attempted?"YES":"NO",start_prep,start_entry,start_ptr,
+  start_attempted?reason_name(start_out.reason):"NOT_RUN",
+  start_out.api_interface,start_out.api_slot,start_calls,
+  start_completed?"YES":"NO",start_handled?"YES":"NO",
   cpu.display_objects,cpu.filemgr_objects,cpu.debug_calls,
   callback_probe_attempted?"YES":"NO",callbacks_delivered,
   cpu.signal_pending_count,callback_probe_rc,

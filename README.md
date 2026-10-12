@@ -1,5 +1,25 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 145: el juego original recibe su evento de inicio BREW
+
+Se incorporó al intérprete Zeebx el tercer paso del arranque de Crash:
+después del verdadero `AEEMod_Load` y `IModule::CreateInstance`, se
+invoca **`IApplet::HandleEvent(EVT_APP_START)`** del propio módulo ARM,
+con la estructura original `AEEAppStart` de 24 bytes, clase del
+juego y pantalla 640×480. El diagnóstico opcional informa el punto exacto
+donde la ejecución se detiene, además de diferenciar evento devuelto
+de evento realmente atendido. No se inventa una carrera ni se
+declaran exitosos servicios BREW pendientes.
+
+Las pruebas sin ROM comprueban el recorrido de tres etapas con ARM
+sintético y la protección frente a vtables inválidas. **El juego
+comercial todavía no está demostrado como jugable en PS Vita**;
+persisten integración de archivos, servicios temporizados, audio,
+gráficos restantes y pruebas en consola. No se publicó ningún
+archivo comercial ni VPK final.
+[Detalles de avance 145](docs/AVANCE_145_EVENTO_INICIO_APPLET_ZEEBX.md).
+
+
 ## Avance 143: glTexSubImage2D y alineación real de atlas Zeebo → PS Vita
 
 - Se adapta **Zeebx** (`machine/gl.rs` + vtable `GL_LEGACY`) para
