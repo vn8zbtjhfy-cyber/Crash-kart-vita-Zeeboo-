@@ -76,8 +76,10 @@ static int untextured(void *u,const float *xyz,uint32_t n){
  if(g->failure||!xyz||n!=3u)return -1;
  g->plain++;return 0;
 }
+static unsigned latest_iface,latest_slot;
 static void api(cnk_zeebx_arm *c,unsigned iface,unsigned slot,
                 uint32_t a,uint32_t b,uint32_t d,uint32_t e){
+ latest_iface=iface;latest_slot=slot;
  c->regs[0]=a;c->regs[1]=b;c->regs[2]=d;c->regs[3]=e;
  c->regs[14]=CNK_ARM_RETURN_MAGIC;
  c->regs[15]=CNK_ARM_API_BASE+(iface<<12)+slot*4u;
@@ -85,6 +87,10 @@ static void api(cnk_zeebx_arm *c,unsigned iface,unsigned slot,
 static uint32_t success(cnk_zeebx_arm *c){
  cnk_arm_outcome o={0};uint32_t handled=0;
  assert(!cnk_zeebx_arm_bootstrap(c,24u,&o,&handled));
+ if(o.reason!=CNK_ARM_RETURNED || handled!=1u)
+  fprintf(stderr,"Zeebx GL call iface=%u slot=%u reason=%u pc=%08x "
+          "handled=%u r0=%08x\n",latest_iface,latest_slot,
+          (unsigned)o.reason,o.pc,handled,c->regs[0]);
  assert(o.reason==CNK_ARM_RETURNED && handled==1u);
  return c->regs[0];
 }
