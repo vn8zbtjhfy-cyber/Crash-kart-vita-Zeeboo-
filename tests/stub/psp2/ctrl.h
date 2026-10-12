@@ -12,7 +12,9 @@
 #define SCE_CTRL_TRIANGLE 0x0080u
 #define SCE_CTRL_RTRIGGER 0x0100u
 #define SCE_CTRL_LTRIGGER 0x0200u
-typedef struct {uint32_t buttons;uint8_t lx,ly;} SceCtrlData;
+#define SCE_CTRL_UP 0x0400u
+#define SCE_CTRL_DOWN 0x0800u
+typedef struct {uint32_t buttons;uint8_t lx,ly,rx,ry;} SceCtrlData;
 int sceCtrlSetSamplingMode(int mode);
 int sceCtrlPeekBufferPositive(int port,SceCtrlData *pad,int count);
 #endif
