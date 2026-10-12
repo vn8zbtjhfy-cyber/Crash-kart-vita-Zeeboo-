@@ -1,0 +1,72 @@
+# Compilacion prealfa del puente Rust Zeebx. El port C anterior permanece intacto.
+name: Crash Nitro Kart Rust/Vita (experimental)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ports/zeebx-rust-vita/**'
+      - '.github/workflows/compilar-vpk-vita.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-vpk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      VITASDK: /opt/vitasdk
+      CARGO_TARGET_ARMV7_SONY_VITA_NEWLIBEABIHF_LINKER: arm-vita-eabi-gcc
+      CC_armv7_sony_vita_newlibeabihf: arm-vita-eabi-gcc
+      AR_armv7_sony_vita_newlibeabihf: arm-vita-eabi-ar
+    steps:
+      - name: Checkout repo privado
+        uses: actions/checkout@v4
+      - name: Instalar herramientas
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake ninja-build build-essential pkg-config python3 git curl unzip zip libclang-dev
+          rustup toolchain install nightly --profile minimal --component rust-src
+          git clone --depth 1 https://github.com/vitasdk/vdpm.git "$RUNNER_TEMP/vdpm"
+          "$RUNNER_TEMP/vdpm/bootstrap-vitasdk.sh" --install-dir "$VITASDK"
+          export PATH="$VITASDK/bin:$PATH"
+          "$RUNNER_TEMP/vdpm/vdpm" install vitaGL
+          echo "$VITASDK/bin" >> "$GITHUB_PATH"
+      - name: Preparar Zeebx e integrar CPU y IFILE de memoria
+        run: |
+          set -euo pipefail
+          cd ports/zeebx-rust-vita
+          test -f rust/zeebx_vita/Cargo.toml
+          test -f rust/zeebx_vita/src/lib.rs
+          test -f tools/patch_zeebx_interpreter.py
+          test -f tools/patch_zeebx_embedded_fs.py
+          git clone --depth 1 --branch development https://github.com/ZeebxTeam/zeebx-emu.git zeebx-emu
+          python3 tools/patch_zeebx_interpreter.py zeebx-emu
+          python3 tools/patch_zeebx_embedded_fs.py zeebx-emu
+      - name: Compilar puente Rust con Cargo ANTES de CMake
+        run: |
+          set -euo pipefail
+          export PATH="$VITASDK/bin:$PATH"
+          cd ports/zeebx-rust-vita
+          cargo +nightly build -Z build-std=std,panic_abort --release --target armv7-sony-vita-newlibeabihf --manifest-path rust/zeebx_vita/Cargo.toml
+      - name: Validar todos los datos comerciales embebidos
+        run: |
+          set -euo pipefail
+          cd ports/zeebx-rust-vita
+          python3 tests/validate_assets.py
+          python3 tests/fufs_index_smoke.py
+      - name: CMake VitaSDK y VPK experimental
+        run: |
+          set -euo pipefail
+          export PATH="$VITASDK/bin:$PATH"
+          cd ports/zeebx-rust-vita
+          cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$VITASDK/share/vita.toolchain.cmake" -DCMAKE_BUILD_TYPE=Release -DNITRO_EXPERIMENTAL_VPK=ON
+          cmake --build build --parallel 2
+          test -s build/Crash_Nitro_Kart_3D.vpk
+      - name: Publicar solo si existe VPK real compilado
+        uses: actions/upload-artifact@v4
+        with:
+          name: Crash_Nitro_Kart_3D_EXPERIMENTAL
+          path: ports/zeebx-rust-vita/build/Crash_Nitro_Kart_3D.vpk
+          if-no-files-found: error
+          retention-days: 7

@@ -1,0 +1,23 @@
+[package]
+name = "zeebx_vita"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "GPL-2.0-or-later"
+
+[lib]
+name = "zeebx_vita"
+crate-type = ["staticlib"]
+
+[dependencies]
+zeebx = { path = "../../zeebx-emu", default-features = false }
+
+[profile.release]
+panic = "abort"
+lto = "thin"
+codegen-units = 1
+opt-level = "s"
+
+[package.metadata.vita]
+title_id = "CNKVITA01"
+title_name = "Crash Nitro Kart 3D"

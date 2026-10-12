@@ -1,0 +1,69 @@
+{
+  "source_file": "Crash Bandicoot Nitro Kart 3D Zeebo.3dsx",
+  "source_sha256": "ff5ecc2286232990cc68d43543b88e7893b1e03c622c12808a5c898103a01b1d",
+  "romfs_offset": 467796,
+  "file_count": 12,
+  "total_bytes": 13886670,
+  "files": [
+    {
+      "path": "brew/mif/274214.mif",
+      "size": 5919,
+      "sha256": "2b0aabc7b29442c40cc4933db2236ae0996140a61a320d738742d49981a17d0a"
+    },
+    {
+      "path": "brew/mod/274214/cnk2.mod",
+      "size": 649452,
+      "sha256": "ccfd648b2d2a30e5abaed582f3b8d26454c59ed0ee34626c14a71ff98337c144"
+    },
+    {
+      "path": "brew/mod/274214/data.vfs",
+      "size": 7921229,
+      "sha256": "863cdb2f04067ca2ece4ebc9a229321c68696c3f84707e1a3d339ead69d0cfa5"
+    },
+    {
+      "path": "brew/mod/274214/data/gfx/game/effects.png",
+      "size": 818,
+      "sha256": "2f83cbe94840669a65d3215303c0ecd0d0c0f1f9d4c71dbd2b2a5d7923549ce8"
+    },
+    {
+      "path": "crash_audio/mp3_0.pcm",
+      "size": 1237824,
+      "sha256": "53a1da22732894adc73449485bf6cfd057ab7e292b0a8414bfb990186379ec4d"
+    },
+    {
+      "path": "crash_audio/mp3_1.pcm",
+      "size": 1179648,
+      "sha256": "86505fe146f45b52c3b42a08c55773ee9dcc5130142158006d68d6aa8baf2e46"
+    },
+    {
+      "path": "crash_audio/mp3_2.pcm",
+      "size": 637056,
+      "sha256": "ef7ac1af5ae613d5da763ada7550bf3019fee5c4087ecec349aa0943d2c96a0a"
+    },
+    {
+      "path": "crash_audio/mp3_3.pcm",
+      "size": 1357056,
+      "sha256": "c0b07f32db1d6e69fd06a4eb69b28905300ca8a520aa1350898577c15ebd2ba6"
+    },
+    {
+      "path": "crash_audio/mp3_4.pcm",
+      "size": 84672,
+      "sha256": "a536fe1593376bb7e4b1d092bb63a224a72e3a9fb9fc01c1ac266f9b906d5f7b"
+    },
+    {
+      "path": "crash_audio/mp3_5.pcm",
+      "size": 707904,
+      "sha256": "a8a45a2fccca523e41fff04f8773de61905914b197da2e672185b8d897bb84e1"
+    },
+    {
+      "path": "crash_audio/mp3_6.pcm",
+      "size": 104832,
+      "sha256": "24bc83a2fa3b4eb005845f4452df6e311ee0016013520b912899412f5125e298"
+    },
+    {
+      "path": "zeebo_vshader.shbin",
+      "size": 260,
+      "sha256": "25092de03a98c4a8a1f1750c34c2bbd793611b2edecb03a0977c830d2aba2b5b"
+    }
+  ]
+}
