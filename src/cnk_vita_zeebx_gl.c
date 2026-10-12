@@ -95,13 +95,27 @@ static int vita_rotate(void *user,float degrees,float x,float y,float z){
  glRotatef(degrees,x,y,z);
  return glGetError()==GL_NO_ERROR?0:-1;
 }
+/* Each vertex is immediately submitted as part of a real vitaGL triangle
+ * stream. No transient guest pointer can outlive this call; GPU errors
+ * stop original guest execution rather than claim a successful frame. */
+static int vita_draw_triangles(void *user,const float *xyz,uint32_t count){
+ (void)user;
+ if(!xyz||!count||count>CNK_ZEEBX_MAX_DRAW_VERTICES||count%3u)
+  return -1;
+ glBegin(GL_TRIANGLES);
+ for(uint32_t i=0;i<count;i++)
+  glVertex3f(xyz[3u*i],xyz[3u*i+1u],xyz[3u*i+2u]);
+ glEnd();
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
 cnk_zeebx_gl_host cnk_vita_zeebx_gl_callbacks(void){
  const cnk_zeebx_gl_host host={
   .make_current=vita_begin,.clear_color=vita_clear_color,
   .clear=vita_clear,.viewport=vita_viewport,.present=vita_present,
   .matrix_mode=vita_matrix_mode,.load_identity=vita_load_identity,
   .push_matrix=vita_push_matrix,.pop_matrix=vita_pop_matrix,
-  .translate=vita_translate,.scale=vita_scale,.rotate=vita_rotate
+  .translate=vita_translate,.scale=vita_scale,.rotate=vita_rotate,
+  .draw_triangles=vita_draw_triangles
  };
  return host;
 }
