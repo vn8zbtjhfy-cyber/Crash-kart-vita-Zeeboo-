@@ -44,6 +44,19 @@ jobs:
           cd ports/zeebx-rust-vita
           git clone --depth 1 --branch development https://github.com/ZeebxTeam/zeebx-emu.git zeebx-emu
           python3 tools/patch_zeebx_embedded_fs.py zeebx-emu
+          # Zeebx normally gates its interpreter to Vita/iOS/WASM/tests.
+          # Expose that CPU implementation in this Linux-only probe, so we
+          # measure the same ARM backend instead of desktop Dynarmic.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('zeebx-emu/src/cpu/mod.rs')
+          t = p.read_text()
+          anchor = '#[cfg(any(test, target_arch = "wasm32", target_os = "ios"))]\\npub mod interpretador;'
+          assert t.count(anchor) == 1, 'Zeebx CPU cfg changed'
+          t = t.replace(anchor, 'pub mod interpretador;')
+          p.write_text(t)
+          print('Host ARM interpreter enabled for probe')
+          PY
       - name: Comparar arranque ARM y presupuesto CreateInstance
         env:
           CNK_ASSETS: ../assets
