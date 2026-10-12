@@ -909,6 +909,7 @@ static int zeebx_vbo_bind(cnk_zeebx_arm *c,uint32_t target,uint32_t name){
   if(!slot)return -4;
   slot->name=name;
  }
+ if(name)zeebx_vbo(c,name)->ever_bound=1u;
  *binding=name;
  return cnk_zeebx_arm_return_from_api(c,0u);
 }
@@ -952,7 +953,7 @@ static int zeebx_vbo_sub_data(cnk_zeebx_arm *c,uint32_t target,
 }
 static int zeebx_vbo_gen(cnk_zeebx_arm *c,uint32_t count,uint32_t output){
  if(!count||count>CNK_ZEEBX_MAX_GL_BUFFERS||!output||
-    (output&3u)||c->gl_next_buffer_name>UINT32_MAX-count)return -4;
+    (output&3u))return -4;
  uint8_t *guest=map(c,output,4u*count,1);
  if(!guest)return -4;
  unsigned free_count=0u;
@@ -960,12 +961,22 @@ static int zeebx_vbo_gen(cnk_zeebx_arm *c,uint32_t count,uint32_t output){
   if(!c->gl_buffers[i].name)free_count++;
  if(free_count<count)return -4;
  uint32_t names[CNK_ZEEBX_MAX_GL_BUFFERS]={0};
+ uint32_t next=c->gl_next_buffer_name;
+ /* A game may bind name #1 BEFORE ever calling glGenBuffers. Skip
+  * existing names, preflight every generated value before mutation. */
+ for(uint32_t i=0;i<count;i++){
+  do {
+   if(next==UINT32_MAX)return -4;
+   next++;
+  }while(zeebx_vbo(c,next));
+  names[i]=next;
+ }
  for(uint32_t i=0;i<count;i++){
   cnk_zeebx_gl_buffer *slot=zeebx_vbo_empty(c);
-  if(!slot)return -4; /* preflight ensures this cannot happen */
-  slot->name=++c->gl_next_buffer_name;
-  names[i]=slot->name;
+  if(!slot)return -4; /* preflight guarantees free slots */
+  slot->name=names[i];
  }
+ c->gl_next_buffer_name=next;
  for(uint32_t i=0;i<count;i++)putword(guest+4u*i,names[i]);
  return cnk_zeebx_arm_return_from_api(c,0u);
 }
@@ -1170,8 +1181,10 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
   return zeebx_vbo_delete(c,a0,a1);
  case 128u: /* glGenBuffers(count,guest GLuint*) */
   return zeebx_vbo_gen(c,a0,a1);
- case 137u: /* glIsBuffer(name) */
-  return cnk_zeebx_arm_return_from_api(c,zeebx_vbo(c,a0)?1u:0u);
+ case 137u:{ /* glIsBuffer(name): generated-only names are not yet buffers */
+  const cnk_zeebx_gl_buffer *b=zeebx_vbo(c,a0);
+  return cnk_zeebx_arm_return_from_api(c,b&&b->ever_bound?1u:0u);
+ }
  case 5u: /* glBindTexture(GL_TEXTURE_2D, GLuint) */
   if(a0!=CNK_GLTEX_TARGET||!c->gl_host.texture_bind||
      c->gl_host.texture_bind(c->gl_host_user,a1))return -4;
