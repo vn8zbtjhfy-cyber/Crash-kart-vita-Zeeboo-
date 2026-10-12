@@ -1,5 +1,25 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 143: glTexSubImage2D y alineación real de atlas Zeebo → PS Vita
+
+- Se adapta **Zeebx** (`machine/gl.rs` + vtable `GL_LEGACY`) para
+  `glPixelStorei(GL_UNPACK_ALIGNMENT)` y `glTexSubImage2D`. Las
+  texturas originales pueden actualizar un rectángulo sin volver a subir
+  la imagen entera, conservando la alineación de filas 1/2/4/8.
+- Cada fila RGB565/RGBA8 se lee con límites estrictos de memoria ARM,
+  se empaqueta en una copia temporal y se envía al verdadero backend
+  `glTexSubImage2D` de vitaGL. No hay respuestas falsas de éxito
+  cuando falla el puntero, las dimensiones o la GPU.
+- **45/45 pruebas sin ROM aprobadas**:
+  [GitHub Actions](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38215495496).
+  **VitaSDK enlaza el ELF ARM**:
+  [enlace](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38215381520).
+  [Documentación](docs/AVANCE_143_ZEEBX_GL_TEXSUBIMAGE.md).
+- **No hay aún una carrera original jugable demostrada**. Faltan
+  servicios del applet original, gráficos sin portar, archivos, sonido
+  y una prueba física en Vita. Porcentaje 45.9 % sigue siendo
+  una estimación histórica no validada por una carrera real.
+
 ## Avance 142: color original de texturas GL_REPLACE (Zeebx → vitaGL)
 
 El código original de Crash pide el modo `GL_REPLACE` por medio de
