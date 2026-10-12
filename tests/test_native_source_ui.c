@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
 
@@ -47,7 +48,7 @@ int main(int argc,char **argv){
  assert(rgba[4]==24 && rgba[5]==128 && rgba[6]==40 && rgba[7]==200);
  assert(rgba[8]==255&&rgba[9]==0&&rgba[10]==254&&rgba[11]==127);
  assert(cnk_source_ui_key_magenta(rgba,3,SIZE_MAX,&removed)<0);
- unsigned char *buffer=(unsigned char*)0x1;size_t len=9;
+ unsigned char sentinel=0;unsigned char *buffer=&sentinel;size_t len=9;
  assert(cnk_source_ui_extract(NULL,CNK_SOURCE_UI_TITLE,&buffer,&len)<0);
  assert(buffer==NULL&&len==0);
  if(argc>1){
