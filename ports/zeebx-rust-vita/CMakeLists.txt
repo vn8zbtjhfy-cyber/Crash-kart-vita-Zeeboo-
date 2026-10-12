@@ -67,7 +67,7 @@ target_compile_options(${PROJECT_NAME} PRIVATE -O2 -Wall -Wextra -Werror=implici
 target_link_libraries(${PROJECT_NAME} PRIVATE
  zeebx_rust
  vitaGL vitashark mathneon
- SceShaccCgExt SceShaccCg_stub SceCommonDialog_stub
+ SceShaccCgExt SceShaccCg_stub SceCommonDialog_stub taihen_stub
  SceCtrl_stub SceGxm_stub SceDisplay_stub SceSysmodule_stub
  SceKernelDmacMgr_stub SceAppMgr_stub SceAppUtil_stub SceAudio_stub
  SceIofilemgr_stub SceProcessmgr_stub pthread m z stdc++)
