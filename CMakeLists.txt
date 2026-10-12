@@ -63,6 +63,7 @@ add_library(cnk_native_core STATIC
     src/cnk_source_ui.c
     src/cnk_zeebx_brew.c
     src/cnk_zeebx_arm.c
+    src/cnk_zeebx_probe.c
     src/cnk_texture_map.c
     src/cnk_texture_manifest.c
     src/cnk_session.c
@@ -740,6 +741,10 @@ if(NOT DEFINED ENV{VITASDK})
   add_executable(cnk_probar_arm_zeebx tools/probar_arm_zeebx.c)
   target_link_libraries(cnk_probar_arm_zeebx PRIVATE cnk_native_core z m)
   target_compile_options(cnk_probar_arm_zeebx PRIVATE -Wall -Wextra -Werror)
+  add_executable(cnk_test_zeebx_probe tests/test_native_zeebx_probe.c)
+  target_link_libraries(cnk_test_zeebx_probe PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_probe PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_probe COMMAND cnk_test_zeebx_probe)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
