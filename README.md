@@ -1,5 +1,21 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 131: triangulos originales de memoria guest a vitaGL
+
+El puente experimental original de Zeebx reconoce glVertexPointer,
+glEnableClientState, glDisableClientState y glDrawArrays para
+GL_FLOAT XYZ con triangulos y limites estrictos de memoria guest.
+No usa geometria inventada ni convierte punteros guest en
+direcciones directas de PS Vita. Las coordenadas validadas pasan a
+llamadas reales de dibujo de vitaGL. Se conservan todos los controles
+y el motor nativo previamente comprobados.
+
+[Detalles y limitaciones](docs/AVANCE_131_GEOMETRIA_TRIANGULOS_ZEEBX.md).
+
+**Importante:** no se ha probado un modelo, una pista ni una carrera
+original en la consola. Sigue sin existir VPK final instalable; las
+pruebas sinteticas y VitaSDK no equivalen a jugabilidad completa.
+
 ## Avances 129-130: GPU real y matrices del Zeebo
 
 - Se enlazo la primera salida GL original a vitaGL con EGL, glClear,
