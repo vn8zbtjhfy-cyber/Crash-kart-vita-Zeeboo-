@@ -974,6 +974,45 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
   return zeebx_gl_draw_vertices(c,0u,a1,a2,a3);
  case 37u: /* glGetError: only after supported host calls */
   return cnk_zeebx_arm_return_from_api(c,0u);
+ case 35u: /* glFrustumx: 6 signed fixed 16.16 AAPCS arguments */
+ case 56u:{ /* glOrthox: two trailing args at guest SP and SP+4 */
+  if(!c->gl_host.frustum && slot==35u)return -4;
+  if(!c->gl_host.ortho && slot==56u)return -4;
+  const uint32_t sp=c->regs[13];
+  uint32_t raw_near=0,raw_far=0;
+  if((sp&3u)||sp>UINT32_MAX-8u||
+     load(c,sp,4u,&raw_near)||
+     load(c,sp+4u,4u,&raw_far))return -4;
+  const float left=zeebx_gl_fixed(a0),right=zeebx_gl_fixed(a1);
+  const float bottom=zeebx_gl_fixed(a2),top=zeebx_gl_fixed(a3);
+  const float near_z=zeebx_gl_fixed(raw_near);
+  const float far_z=zeebx_gl_fixed(raw_far);
+  if(left==right||bottom==top||near_z==far_z)return -4;
+  if(slot==35u){ /* GLES glFrustum: near and far must be positive */
+   if(near_z<=0.f||far_z<=0.f||
+      c->gl_host.frustum(c->gl_host_user,left,right,bottom,top,
+                         near_z,far_z))return -4;
+  }else if(c->gl_host.ortho(c->gl_host_user,left,right,bottom,
+                            top,near_z,far_z))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
+ case 47u: /* glLoadMatrixx: column-major array of sixteen GLfixed */
+ case 52u:{ /* glMultMatrixx: fully bounded guest pointer */
+  const int load_matrix=slot==47u;
+  if((load_matrix&&!c->gl_host.load_matrix)||
+     (!load_matrix&&!c->gl_host.mult_matrix)||
+     !a0||(a0&3u))return -4;
+  const uint8_t *guest=map(c,a0,16u*4u,0);
+  if(!guest)return -4;
+  float matrix[16];
+  for(unsigned i=0;i<16u;i++)
+   matrix[i]=zeebx_gl_fixed(word(guest+4u*i));
+  const int result=load_matrix?
+   c->gl_host.load_matrix(c->gl_host_user,matrix):
+   c->gl_host.mult_matrix(c->gl_host_user,matrix);
+  if(result)return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
  case 46u: /* glLoadIdentity */
   if(!c->gl_host.load_identity ||
      c->gl_host.load_identity(c->gl_host_user))return -4;
