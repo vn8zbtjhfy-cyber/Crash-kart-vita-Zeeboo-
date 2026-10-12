@@ -108,6 +108,52 @@ static int vita_draw_triangles(void *user,const float *xyz,uint32_t count){
  glEnd();
  return glGetError()==GL_NO_ERROR?0:-1;
 }
+/* Explicit GLES 1.x state from the Zeebo original. No silent success:
+ * report a Vita GPU error to the guest interpreter immediately. */
+static int vita_set_capability(void *user,uint32_t cap,int enabled){
+ (void)user;
+ if(cap!=0x0b71u && cap!=0x0be2u && cap!=0x0b44u)return -1;
+ if(enabled)glEnable((GLenum)cap);
+ else glDisable((GLenum)cap);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_blend_func(void *user,uint32_t src,uint32_t dst){
+ (void)user;
+ glBlendFunc((GLenum)src,(GLenum)dst);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_depth_func(void *user,uint32_t func){
+ (void)user;
+ glDepthFunc((GLenum)func);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_depth_mask(void *user,int enable){
+ (void)user;
+ glDepthMask(enable?GL_TRUE:GL_FALSE);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_cull_face(void *user,uint32_t face){
+ (void)user;
+ glCullFace((GLenum)face);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_front_face(void *user,uint32_t orientation){
+ (void)user;
+ glFrontFace((GLenum)orientation);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_color4(void *user,float r,float g,float b,float a){
+ (void)user;
+ glColor4f(r,g,b,a);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_color_mask(void *user,int r,int g,int b,int a){
+ (void)user;
+ glColorMask(r?GL_TRUE:GL_FALSE,g?GL_TRUE:GL_FALSE,
+             b?GL_TRUE:GL_FALSE,a?GL_TRUE:GL_FALSE);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+
 cnk_zeebx_gl_host cnk_vita_zeebx_gl_callbacks(void){
  const cnk_zeebx_gl_host host={
   .make_current=vita_begin,.clear_color=vita_clear_color,
@@ -115,7 +161,11 @@ cnk_zeebx_gl_host cnk_vita_zeebx_gl_callbacks(void){
   .matrix_mode=vita_matrix_mode,.load_identity=vita_load_identity,
   .push_matrix=vita_push_matrix,.pop_matrix=vita_pop_matrix,
   .translate=vita_translate,.scale=vita_scale,.rotate=vita_rotate,
-  .draw_triangles=vita_draw_triangles
+  .draw_triangles=vita_draw_triangles,
+  .set_capability=vita_set_capability,.blend_func=vita_blend_func,
+  .depth_func=vita_depth_func,.depth_mask=vita_depth_mask,
+  .cull_face=vita_cull_face,.front_face=vita_front_face,
+  .color4=vita_color4,.color_mask=vita_color_mask
  };
  return host;
 }
