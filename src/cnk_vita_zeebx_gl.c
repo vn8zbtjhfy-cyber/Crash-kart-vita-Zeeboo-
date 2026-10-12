@@ -201,6 +201,22 @@ static int vita_texture_upload(void *u,uint32_t w,uint32_t h,
               0,(GLenum)format,(GLenum)type,pixels);
  return glGetError()==GL_NO_ERROR?0:-1;
 }
+/* GLES texture atlas patches use the already bound real VitaGL texture.
+ * The guest was validated and packed before this synchronous callback.
+ * Reject GL errors from texture size, missing mip-level, or GPU memory. */
+static int vita_texture_sub_upload(void *u,uint32_t x,uint32_t y,
+                                   uint32_t w,uint32_t h,uint32_t format,
+                                   uint32_t type,const uint8_t *pixels){
+ (void)u;
+ if(!pixels||!w||!h||w>512u||h>512u||
+    x>512u||y>512u||x+w>512u||y+h>512u)return -1;
+ glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+ if(glGetError()!=GL_NO_ERROR)return -1;
+ glTexSubImage2D(GL_TEXTURE_2D,0,(GLint)x,(GLint)y,
+                 (GLsizei)w,(GLsizei)h,(GLenum)format,
+                 (GLenum)type,pixels);
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
 static int vita_draw_textured_triangles(void *u,const float *xyz,
                                        const float *uv,uint32_t count){
  (void)u;
@@ -313,6 +329,7 @@ cnk_zeebx_gl_host cnk_vita_zeebx_gl_callbacks(void){
   .texture_bind=vita_texture_bind,.texture_parameter=vita_texture_parameter,
   .texture_env_mode=vita_texture_env_mode,
   .texture_upload=vita_texture_upload,
+  .texture_sub_upload=vita_texture_sub_upload,
   .draw_textured_triangles=vita_draw_textured_triangles,
   .draw_colored_textured_triangles=vita_draw_colored_textured_triangles
  };
