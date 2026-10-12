@@ -75,6 +75,8 @@ typedef struct {
  float recorded_model_matrices[16 * 16];
  float last_camera_view[16];
  uint32_t projection_loads,modelview_loads, invalid;
+ uint32_t frustum_calls,ortho_calls;
+ float last_projection[6];
  uint32_t texture_callbacks;
  uint32_t images_uploaded,handles_created,handles_deleted;
  uint64_t pixels_uploaded, nonzero_texels;
