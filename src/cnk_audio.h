@@ -43,7 +43,11 @@ typedef struct {
 
 /* Parses uncompressed RIFF PCM, 8/16 bit, 1/2 channels. Returns 0 on success. */
 int cnk_wav_open(const uint8_t *data,size_t size,cnk_wav *out);
-/* Owns original extracted PCM data; keep loaded until voices stop. */
+/* Copies a RIFF PCM source or decodes IMA ADPCM (WAVE tag 17) to PCM16.
+ * Always owns the bytes, so the caller may release the input afterward.
+ * The IMA decoder is adapted from Zeebx (GPL-2.0-or-later). */
+int cnk_wav_asset_open_memory(cnk_wav_asset *out,const uint8_t *data,size_t size);
+/* Owns extracted audio; keep loaded until all mixer voices stop. */
 int cnk_wav_asset_load(cnk_wav_asset *out,const fufs_file *vfs,uint32_t index);
 void cnk_wav_asset_free(cnk_wav_asset *asset);
 int cnk_audio_init(cnk_audio_mixer *m,uint32_t sample_rate);

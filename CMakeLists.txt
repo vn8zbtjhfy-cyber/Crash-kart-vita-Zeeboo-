@@ -63,6 +63,7 @@ add_library(cnk_native_core STATIC
     src/cnk_texture_map.c
     src/cnk_texture_manifest.c
     src/cnk_session.c
+    src/third_party/zeebx_ima.c
     src/cnk_audio.c
     src/cnk_music.c
     src/cnk_music_cues.c
@@ -705,6 +706,12 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_vita_motion PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_vita_motion PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME vita_motion COMMAND cnk_test_vita_motion)
+  # Zeebx GPL-2.0+ IMA ADPCM adapted into portable C native audio,
+  # exercised with synthetic WAV bytes (not original game assets).
+  add_executable(cnk_test_zeebx_ima tests/test_native_zeebx_ima.c)
+  target_link_libraries(cnk_test_zeebx_ima PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_ima PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_ima COMMAND cnk_test_zeebx_ima)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
