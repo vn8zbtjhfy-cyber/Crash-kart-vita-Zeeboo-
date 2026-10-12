@@ -93,6 +93,11 @@ typedef struct {
  int (*blend_func)(void *user,uint32_t source,uint32_t destination);
  int (*depth_func)(void *user,uint32_t comparison);
  int (*depth_mask)(void *user,int enabled);
+ /* Source GL_LEGACY slots 4, 59, 67: alpha-test, polygon depth
+  * offset and shading mode. Never accept success without real GPU. */
+ int (*alpha_func)(void *user,uint32_t compare,float reference);
+ int (*polygon_offset)(void *user,float factor,float units);
+ int (*shade_model)(void *user,uint32_t mode);
  int (*cull_face)(void *user,uint32_t face);
  int (*front_face)(void *user,uint32_t orientation);
  int (*color4)(void *user,float red,float green,float blue,float alpha);
