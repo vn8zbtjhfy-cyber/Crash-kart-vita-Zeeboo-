@@ -132,15 +132,15 @@ impl<C: CpuBackend> Machine<C> {
         self.cpu.write_mem(addr+12,&b)
     }
     pub(super) fn write_file_info(''','metadata')
-    stream=repl(stream,'        // Um \`IFile\` aberto também é um \`IAStream\`, e é assim que o Double Dragon entrega o\n',
+    stream=repl(stream,'        // Um `IFile` aberto também é um `IAStream`, e é assim que o Double Dragon entrega o\n',
     '''        // ZEEBX_VITA_MEMORY_IFILE_V1
         if let Some(f)=self.embedded_open_files.get_mut(&source){
             let pos=f.pos.min(f.bytes.len());
             let bytes=f.bytes[pos..].to_vec();f.pos=f.bytes.len();
             return Some(Ok(bytes));
         }
-        // Um \`IFile\` aberto também é um \`IAStream\`, e é assim que o Double Dragon entrega o
-'''.replace('\\\`','\`'),'read stream')
+        // Um `IFile` aberto também é um `IAStream`, e é assim que o Double Dragon entrega o
+'''.replace('\\`','`'),'read stream')
     for path,updated in zip(files,(mod,src,stream)):
         path.write_text(updated);print("Patched",path)
 if __name__=="__main__":main(sys.argv[1])
