@@ -6,8 +6,10 @@
 
 /* Independently C99-adapted subset of ZeebxTeam ARM1176 interpreter and
  * Zeebx BREW memory/trampoline bootstrap; GPL-2.0-or-later.
- * Isolated supplementary research path. It NEVER replaces native gameplay,
- * draws frames, or executes guest ARM as PS Vita native instructions.
+ * Isolated supplementary research path. It NEVER replaces native gameplay
+ * or executes guest ARM as PS Vita native instructions. Original guest GL
+ * calls can render only when a real, initialized host GPU is explicitly
+ * attached; default gameplay remains the separate native racing engine.
  */
 #define CNK_ARM_MOD_BASE 0x00010000u
 #define CNK_ARM_STACK_BASE 0x20000000u
