@@ -870,8 +870,31 @@ else()
       if(CNK_ENABLE_VITA_DIAGNOSTIC_VPK)
         include("$ENV{VITASDK}/share/vita.cmake" REQUIRED)
         vita_create_self(eboot.bin cnk_vita_elf_link_check UNSAFE)
+        # The public/source-only CI test intentionally ships no assets.
+        # A developer making a PRIVATE build from their own original
+        # Zeebo copy can bundle every required resource into ONE installable
+        # diagnostic package. Never upload that binary to GitHub or release it.
+        set(CNK_PRIVATE_GAME_ASSETS_DIR "" CACHE PATH
+            "User-owned Zeebo original assets for a local private test VPK")
+        set(_cnk_private_vpk_files)
+        if(CNK_PRIVATE_GAME_ASSETS_DIR)
+          foreach(_asset IN ITEMS data.vfs cnk2.mod 274214.mif)
+            set(_source "${CNK_PRIVATE_GAME_ASSETS_DIR}/${_asset}")
+            if(NOT EXISTS "${_source}" OR IS_DIRECTORY "${_source}")
+              message(FATAL_ERROR "Original asset missing for PRIVATE Vita build: ${_asset}")
+            endif()
+            file(SIZE "${_source}" _size)
+            if(_size EQUAL 0)
+              message(FATAL_ERROR "Original asset is empty: ${_asset}")
+            endif()
+            list(APPEND _cnk_private_vpk_files "${_source}" "${_asset}")
+          endforeach()
+          list(PREPEND _cnk_private_vpk_files FILE)
+          message(STATUS "Building PRIVATE single-install diagnostic (do not redistribute)")
+        endif()
         vita_create_vpk(CNK3D-HARDWARE-TEST.vpk CNKT00001 eboot.bin
-                        VERSION "01.00" NAME "CNK3D TEST")
+                        VERSION "01.00" NAME "CNK3D TEST"
+                        ${_cnk_private_vpk_files})
       endif()
     endif()
   endif()
