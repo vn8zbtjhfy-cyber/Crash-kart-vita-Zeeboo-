@@ -96,7 +96,7 @@ static int probe_internal(const char *mod_path,const char *mif_path,
   "applet_entry=0x%08x\napplet_reason=%s\napplet_steps=%llu\n"
   "applet_api_interface=%u\napplet_api_slot=%u\n"
   "applet_apis_handled=%u\napplet_ptr=0x%08x\n"
-  "applet_created=%s\ngenuine_game_playable=NO\n",
+  "applet_created=%s\nsource_display_instances=%u\n"\n  "source_filemgr_instances=%u\nguest_dbgprintf_calls=%u\n"\n  "genuine_game_playable=NO\n",
   (unsigned long)mod_bytes,reason_name(load_out.reason),
   (unsigned long long)load_out.executed,load_out.pc,
   load_out.api_interface,load_out.api_slot,load_out.opcode,
@@ -104,7 +104,8 @@ static int probe_internal(const char *mod_path,const char *mif_path,
   clsid,started?"YES":"NO",prep,guest_entry,
   (started&&!prep)?reason_name(applet_out.reason):"NOT_RUN",
   (unsigned long long)applet_out.executed,applet_out.api_interface,
-  applet_out.api_slot,applet_calls,apptr,applet_ok?"YES":"NO");
+  applet_out.api_slot,applet_calls,apptr,applet_ok?"YES":"NO",
+  cpu.display_objects,cpu.filemgr_objects,cpu.debug_calls);
  int closed=fclose(report);
  cnk_zeebx_arm_destroy(&cpu);
  return (length<0||closed)?-9:0;
