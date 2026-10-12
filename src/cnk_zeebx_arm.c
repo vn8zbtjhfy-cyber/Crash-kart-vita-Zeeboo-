@@ -35,6 +35,8 @@ void cnk_zeebx_arm_destroy(cnk_zeebx_arm *cpu){
  if(!cpu)return;
  free(cpu->module);free(cpu->stack);free(cpu->heap);free(cpu->objects);
  free(cpu->helpers);free(cpu->vtables);
+ for(unsigned i=0;i<CNK_ZEEBX_MAX_GL_BUFFERS;i++)
+  free(cpu->gl_buffers[i].data);
  memset(cpu,0,sizeof(*cpu));
 }
 int cnk_zeebx_arm_init(cnk_zeebx_arm *cpu,const uint8_t *mod,size_t bytes){
@@ -860,6 +862,133 @@ static int zeebx_gl_tex_parameter_valid(uint32_t pname,uint32_t value){
   return value==0x2901u||value==0x812fu;
  return 0;
 }
+/* Zeebx gl.rs: GL_ARRAY_BUFFER/GL_ELEMENT_ARRAY_BUFFER store guest bytes.
+ * Buffer targets, null BufferData and pointer=0 (VBO offset zero) follow
+ * the source's OpenGL binding semantics. Buffer bytes never execute as host
+ * code; the guest draw is expanded into bounded host-owned triangles.
+ */
+#define CNK_GL_ARRAY_BUFFER 0x8892u
+#define CNK_GL_ELEMENT_BUFFER 0x8893u
+static cnk_zeebx_gl_buffer *zeebx_vbo(cnk_zeebx_arm *c,uint32_t name){
+ if(!name)return NULL;
+ for(unsigned i=0;i<CNK_ZEEBX_MAX_GL_BUFFERS;i++)
+  if(c->gl_buffers[i].name==name)return &c->gl_buffers[i];
+ return NULL;
+}
+static cnk_zeebx_gl_buffer *zeebx_vbo_empty(cnk_zeebx_arm *c){
+ for(unsigned i=0;i<CNK_ZEEBX_MAX_GL_BUFFERS;i++)
+  if(!c->gl_buffers[i].name)return &c->gl_buffers[i];
+ return NULL;
+}
+static uint32_t *zeebx_vbo_binding(cnk_zeebx_arm *c,uint32_t target){
+ if(target==CNK_GL_ARRAY_BUFFER)return &c->gl_array_buffer;
+ if(target==CNK_GL_ELEMENT_BUFFER)return &c->gl_element_buffer;
+ return NULL;
+}
+/* Fetch is source-buffer-relative for VBOs and absolute-guest-addressed
+ * otherwise. The address/length check is done without uint32 wraparound. */
+static int zeebx_gpu_read(cnk_zeebx_arm *c,uint32_t buffer,
+                           uint64_t address,uint32_t count,uint8_t *out){
+ if(address>UINT32_MAX||!out||!count)return -1;
+ if(buffer){
+  const cnk_zeebx_gl_buffer *b=zeebx_vbo(c,buffer);
+  if(!b||!b->data||address>b->size||count>b->size-address)return -1;
+  memcpy(out,b->data+(size_t)address,count);
+ }else{
+  const uint8_t *p=map(c,(uint32_t)address,count,0);
+  if(!p)return -1;
+  memcpy(out,p,count);
+ }
+ return 0;
+}
+static int zeebx_vbo_bind(cnk_zeebx_arm *c,uint32_t target,uint32_t name){
+ uint32_t *binding=zeebx_vbo_binding(c,target);
+ if(!binding)return -4;
+ if(name&&!zeebx_vbo(c,name)){
+  cnk_zeebx_gl_buffer *slot=zeebx_vbo_empty(c);
+  if(!slot)return -4;
+  slot->name=name;
+ }
+ *binding=name;
+ return cnk_zeebx_arm_return_from_api(c,0u);
+}
+static int zeebx_vbo_data(cnk_zeebx_arm *c,uint32_t target,
+                          uint32_t size,uint32_t address,uint32_t usage){
+ uint32_t *binding=zeebx_vbo_binding(c,target);
+ if(!binding||!*binding||size>CNK_ZEEBX_MAX_GL_BUFFER_BYTES||
+    (usage!=0x88e0u&&usage!=0x88e4u&&usage!=0x88e8u))return -4;
+ cnk_zeebx_gl_buffer *b=zeebx_vbo(c,*binding);
+ if(!b||c->gl_total_buffer_bytes<b->size ||
+    size>CNK_ZEEBX_MAX_GL_BUFFER_TOTAL-
+      (c->gl_total_buffer_bytes-b->size))return -4;
+ const uint8_t *src=NULL;
+ if(size&&address){
+  src=map(c,address,size,0);
+  if(!src)return -4;
+ }
+ uint8_t *bytes=NULL;
+ if(size){
+  bytes=(uint8_t*)calloc(1,size);
+  if(!bytes)return -4;
+  if(src)memcpy(bytes,src,size);
+ }
+ free(b->data);
+ c->gl_total_buffer_bytes=c->gl_total_buffer_bytes-b->size+size;
+ b->data=bytes;b->size=size;
+ return cnk_zeebx_arm_return_from_api(c,0u);
+}
+static int zeebx_vbo_sub_data(cnk_zeebx_arm *c,uint32_t target,
+                              uint32_t start,uint32_t size,uint32_t address){
+ uint32_t *binding=zeebx_vbo_binding(c,target);
+ if(!binding||!*binding)return -4;
+ cnk_zeebx_gl_buffer *b=zeebx_vbo(c,*binding);
+ if(!b||start>b->size||size>b->size-start)return -4;
+ if(size){
+  const uint8_t *src=map(c,address,size,0);
+  if(!src||!b->data)return -4;
+  memcpy(b->data+start,src,size);
+ }
+ return cnk_zeebx_arm_return_from_api(c,0u);
+}
+static int zeebx_vbo_gen(cnk_zeebx_arm *c,uint32_t count,uint32_t output){
+ if(!count||count>CNK_ZEEBX_MAX_GL_BUFFERS||!output||
+    (output&3u)||c->gl_next_buffer_name>UINT32_MAX-count)return -4;
+ uint8_t *guest=map(c,output,4u*count,1);
+ if(!guest)return -4;
+ unsigned free_count=0u;
+ for(unsigned i=0;i<CNK_ZEEBX_MAX_GL_BUFFERS;i++)
+  if(!c->gl_buffers[i].name)free_count++;
+ if(free_count<count)return -4;
+ uint32_t names[CNK_ZEEBX_MAX_GL_BUFFERS]={0};
+ for(uint32_t i=0;i<count;i++){
+  cnk_zeebx_gl_buffer *slot=zeebx_vbo_empty(c);
+  if(!slot)return -4; /* preflight ensures this cannot happen */
+  slot->name=++c->gl_next_buffer_name;
+  names[i]=slot->name;
+ }
+ for(uint32_t i=0;i<count;i++)putword(guest+4u*i,names[i]);
+ return cnk_zeebx_arm_return_from_api(c,0u);
+}
+static int zeebx_vbo_delete(cnk_zeebx_arm *c,uint32_t count,uint32_t guestptr){
+ if(count>CNK_ZEEBX_MAX_GL_BUFFERS)return -4;
+ if(!count)return cnk_zeebx_arm_return_from_api(c,0u);
+ if(!guestptr||(guestptr&3u))return -4;
+ const uint8_t *input=map(c,guestptr,count*4u,0);
+ if(!input)return -4;
+ uint32_t names[CNK_ZEEBX_MAX_GL_BUFFERS]={0};
+ for(uint32_t i=0;i<count;i++)names[i]=word(input+4u*i);
+ for(uint32_t i=0;i<count;i++){
+  cnk_zeebx_gl_buffer *b=zeebx_vbo(c,names[i]);
+  if(!b)continue;
+  if(c->gl_total_buffer_bytes<b->size)return -4;
+  c->gl_total_buffer_bytes-=b->size;
+  free(b->data);memset(b,0,sizeof(*b));
+  if(c->gl_array_buffer==names[i])c->gl_array_buffer=0u;
+  if(c->gl_element_buffer==names[i])c->gl_element_buffer=0u;
+ }
+ return cnk_zeebx_arm_return_from_api(c,0u);
+}
+
 static int zeebx_gl_gen_textures(cnk_zeebx_arm *c,uint32_t count,
                                  uint32_t output){
  if(!c->gl_host.texture_gen||!count||count>32u||
