@@ -11,6 +11,8 @@
  */
 #define CNK_ARM_MOD_BASE 0x00010000u
 #define CNK_ARM_STACK_BASE 0x20000000u
+#define CNK_ARM_HEAP_BASE 0x10000000u
+#define CNK_ARM_HEAP_BYTES 0x1000000u
 #define CNK_ARM_OBJECT_BASE 0x30000000u
 #define CNK_ARM_HELPERS_BASE 0x31000000u
 #define CNK_ARM_VTABLE_BASE 0xe0000000u
@@ -32,7 +34,8 @@ typedef struct {
 typedef struct {
  uint32_t regs[16],cpsr;
  uint64_t executed;
- uint8_t *module,*stack,*objects,*helpers,*vtables;
+ uint8_t *module,*stack,*heap,*objects,*helpers,*vtables;
+ uint32_t heap_cursor,shell_refs;
  size_t module_size;
  int initialized;
 } cnk_zeebx_arm;
@@ -49,4 +52,13 @@ int cnk_zeebx_arm_run(cnk_zeebx_arm *cpu,uint32_t budget,cnk_arm_outcome *out);
 /* Caller-provided, explicitly verified result of last intercepted BREW
  * invocation; proceed at LR. Use only after CNK_ARM_API, never implicitly. */
 int cnk_zeebx_arm_return_from_api(cnk_zeebx_arm *cpu,uint32_t result);
+/* Bootstrap only: faithfully modeled Zeebx helper malloc (interface 6,
+ * slot 26), IShell AddRef (interface 0, slot 0) and Release (slot 1).
+ * Any unknown call remains an explicit BREW_API stop, NOT a dummy success. */
+int cnk_zeebx_arm_handle_bootstrap_api(cnk_zeebx_arm *cpu);
+/* Runs up to budget true ARM instructions, allowing only verified
+ * bootstrap APIs to resume guest code. Unknown API or CPU opcode stops. */
+int cnk_zeebx_arm_bootstrap(cnk_zeebx_arm *cpu,uint32_t budget,
+                            cnk_arm_outcome *out,uint32_t *apis_handled);
+int cnk_zeebx_arm_read_u32(cnk_zeebx_arm *cpu,uint32_t addr,uint32_t *out);
 #endif
