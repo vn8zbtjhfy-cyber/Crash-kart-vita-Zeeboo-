@@ -1,0 +1,52 @@
+name: Crash Nitro Kart - probar Zeebx ARM en host
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ports/zeebx-rust-vita/probe_host/**'
+      - '.github/workflows/probar-cnk-host.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preparar recursos originales privados
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ports/zeebx-rust-vita
+          python3 - <<'PY'
+          import hashlib, json, zipfile
+          from pathlib import Path
+          manifest=json.loads(Path('assets/manifest.json').read_text())
+          fragments=sorted(Path('assets-parts').glob('part-*.bin'))
+          zpath=Path('assets-original.zip')
+          if not zpath.exists():
+              assert len(fragments)==34, f"Expected 34 parts, got {len(fragments)}"
+              zpath.write_bytes(b''.join(x.read_bytes() for x in fragments))
+          assert hashlib.sha256(zpath.read_bytes()).hexdigest()=='e47b2d5ba0940259792e5658502e6a8705fc09d7bfef13758025a6fab32852f8'
+          with zipfile.ZipFile(zpath) as z:
+              for item in manifest['files']:
+                  content=z.read('assets/'+item['path'])
+                  assert hashlib.sha256(content).hexdigest()==item['sha256']
+                  dst=Path('assets')/item['path']
+                  dst.parent.mkdir(parents=True,exist_ok=True)
+                  dst.write_bytes(content)
+          print('12 verified game resources available for host probe')
+          PY
+      - name: Clonar motor Zeebx y aplicar adaptador de datos
+        run: |
+          set -euo pipefail
+          cd ports/zeebx-rust-vita
+          git clone --depth 1 --branch development https://github.com/ZeebxTeam/zeebx-emu.git zeebx-emu
+          python3 tools/patch_zeebx_embedded_fs.py zeebx-emu
+      - name: Comparar arranque ARM y presupuesto CreateInstance
+        env:
+          CNK_ASSETS: ../assets
+        run: |
+          cd ports/zeebx-rust-vita/probe_host
+          cargo run --release --quiet

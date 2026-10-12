@@ -1,0 +1,8 @@
+[package]
+name = "cnk-zeebx-host-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+zeebx = { path = "../zeebx-emu", default-features = false }
