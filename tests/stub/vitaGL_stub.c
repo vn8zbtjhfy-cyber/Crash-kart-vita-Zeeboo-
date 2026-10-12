@@ -17,12 +17,34 @@ void glScissor(GLint x,GLint y,GLsizei w,GLsizei h){
 void glEnable(GLenum v){
  if(v==GL_TEXTURE_2D)cnk_test_gl.texture_enabled=1;
  if(v==GL_SCISSOR_TEST)cnk_test_gl.scissor_enabled=1;
+ if(v==GL_ALPHA_TEST)cnk_test_gl.alpha_test_enabled=1;
+ if(v==GL_POLYGON_OFFSET_FILL)cnk_test_gl.polygon_offset_enabled=1;
 }
 void glDisable(GLenum v){
  if(v==GL_TEXTURE_2D)cnk_test_gl.texture_enabled=0;
  if(v==GL_SCISSOR_TEST)cnk_test_gl.scissor_enabled=0;
+ if(v==GL_ALPHA_TEST)cnk_test_gl.alpha_test_enabled=0;
+ if(v==GL_POLYGON_OFFSET_FILL)cnk_test_gl.polygon_offset_enabled=0;
 }
 void glDepthMask(GLboolean v){if(v!=GL_TRUE&&v!=GL_FALSE)cnk_test_gl.invalid++;}
+void glAlphaFunc(GLenum comparison,GLfloat reference){
+ if(comparison<0x0200u||comparison>0x0207u||!isfinite(reference)||
+    reference<0.f||reference>1.f)cnk_test_gl.invalid++;
+ cnk_test_gl.alpha_calls++;
+ cnk_test_gl.last_alpha_comparison=comparison;
+ cnk_test_gl.last_alpha_reference=reference;
+}
+void glPolygonOffset(GLfloat factor,GLfloat units){
+ if(!isfinite(factor)||!isfinite(units))cnk_test_gl.invalid++;
+ cnk_test_gl.polygon_offset_calls++;
+ cnk_test_gl.last_polygon_factor=factor;
+ cnk_test_gl.last_polygon_units=units;
+}
+void glShadeModel(GLenum mode){
+ if(mode!=GL_FLAT&&mode!=GL_SMOOTH)cnk_test_gl.invalid++;
+ cnk_test_gl.shade_calls++;
+ cnk_test_gl.last_shade=mode;
+}
 void glBlendFunc(GLenum src,GLenum dst){if(src!=GL_SRC_ALPHA||dst!=GL_ONE_MINUS_SRC_ALPHA)cnk_test_gl.invalid++;}
 void glDepthFunc(GLenum v){if(v!=GL_LEQUAL)cnk_test_gl.invalid++;}
 void glCullFace(GLenum v){
