@@ -18,6 +18,11 @@ static int plain(void*u,const float*xyz,uint32_t n){
  recorder*r=(recorder*)u;if(r->reject||!xyz||n!=3u)return -1;
  r->plain++;return 0;
 }
+static int textured(void*u,const float*xyz,const float*uv,uint32_t n){
+ recorder*r=(recorder*)u;
+ if(r->reject||!xyz||!uv||n!=3u)return -1;
+ return 0;
+}
 static int colored(void*u,const float*xyz,const float*rgba,uint32_t n){
  recorder*r=(recorder*)u;if(r->reject||!xyz||!rgba||n!=3u)return -1;
  memcpy(r->colors,rgba,sizeof(r->colors));r->colored++;return 0;
@@ -60,7 +65,8 @@ int main(void){
   .make_current=begin,.clear_color=noop_color,.clear=noop_clear,
   .viewport=noop_view,.present=noop_present,.set_capability=cap,
   .texture_bind=bind_tex,.texture_upload=upload,
-  .draw_triangles=plain,.draw_colored_triangles=colored,
+  .draw_triangles=plain,.draw_textured_triangles=textured,
+  .draw_colored_triangles=colored,
   .draw_colored_textured_triangles=colored_tex
  };
  assert(!cnk_zeebx_arm_init(&c,mod,sizeof(mod)));
