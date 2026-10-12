@@ -773,6 +773,12 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_hid_state PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_hid_state PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_hid_state COMMAND cnk_test_zeebx_hid_state)
+  # Actual BREW ISignal AAPCS factory -> deferred game callback execution
+  # over synthetic guest ARM, with no private executable in CI.
+  add_executable(cnk_test_zeebx_signals tests/test_native_zeebx_signals.c)
+  target_link_libraries(cnk_test_zeebx_signals PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_signals PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_signals COMMAND cnk_test_zeebx_signals)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
