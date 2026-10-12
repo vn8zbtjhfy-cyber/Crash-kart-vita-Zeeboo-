@@ -984,7 +984,9 @@ static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t mode,
    if(address>UINT32_MAX || load(c,(uint32_t)address,4u,&bits))
     return -4;
    float v=0.f;
-   memcpy(&v,&bits,sizeof(v));
+   if(c->gl_vertex_type==0x140cu) v=zeebx_gl_fixed(bits);
+   else if(c->gl_vertex_type==0x1406u) memcpy(&v,&bits,sizeof(v));
+   else return -4;
    if(!isfinite(v))return -4;
    xyz[3u*i+component]=v;
   }
@@ -996,7 +998,9 @@ static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t mode,
     uint32_t bits=0;
     if(address>UINT32_MAX||load(c,(uint32_t)address,4u,&bits))return -4;
     float v=0.f;
-    memcpy(&v,&bits,sizeof(v));
+    if(c->gl_uv_type==0x140cu) v=zeebx_gl_fixed(bits);
+    else if(c->gl_uv_type==0x1406u) memcpy(&v,&bits,sizeof(v));
+    else return -4;
     if(!isfinite(v))return -4;
     uv[2u*i+component]=v;
    }
@@ -1039,11 +1043,12 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
      !c->gl_host.texture_parameter||
      c->gl_host.texture_parameter(c->gl_host_user,a1,a2))return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
- case 71u: /* glTexCoordPointer(size,type,stride,pointer) */
-  if(a0!=2u || a1!=0x1406u || a2>256u ||
+ case 71u: /* glTexCoordPointer: GL_FLOAT or GL_FIXED (16.16) */
+  if(a0!=2u || (a1!=0x1406u&&a1!=0x140cu) || a2>256u ||
      (a2&&(a2<8u||(a2&3u))) || !a3 || (a3&3u))return -4;
   c->gl_uv_pointer=a3;
   c->gl_uv_stride=a2?a2:8u;
+  c->gl_uv_type=a1;
   return cnk_zeebx_arm_return_from_api(c,0u);
  case 6u: /* glBlendFunc(GLenum src, GLenum dst) */
   if((a0!=0u&&a0!=1u&&a0!=0x0302u&&a0!=0x0303u)||
@@ -1205,12 +1210,13 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
      c->gl_host.translate(c->gl_host_user,zeebx_gl_fixed(a0),
                           zeebx_gl_fixed(a1),zeebx_gl_fixed(a2)))return -4;
   return cnk_zeebx_arm_return_from_api(c,0u);
- case 78u: /* glVertexPointer(size,type,stride,pointer) */
-  if(a0!=3u || a1!=0x1406u || a2>256u ||
+ case 78u: /* glVertexPointer: GL_FLOAT or GL_FIXED (16.16) */
+  if(a0!=3u || (a1!=0x1406u&&a1!=0x140cu) || a2>256u ||
      (a2 && (a2<12u || (a2&3u))) ||
      !a3 || (a3&3u))return -4;
   c->gl_vertex_pointer=a3;
   c->gl_vertex_stride=a2?a2:12u;
+  c->gl_vertex_type=a1;
   return cnk_zeebx_arm_return_from_api(c,0u);
  case 79u:{ /* glViewport(x,y,w,h), guest screen 640x480 */
   if((int32_t)a2<0||(int32_t)a3<0||a2>4096u||a3>4096u)
