@@ -18,7 +18,7 @@ static void cnk_launch_report(const char *mode,const char *phase,int result){
     FILE *out=fopen("ux0:data/cnk3d/launch_status.txt",mode);
     if(!out)out=fopen("ux0:data/cnk3d_launch_status.txt",mode);
     if(!out)return;
-    fprintf(out,"%s code=%d\\n",phase,result);
+    fprintf(out,"%s code=%d\n",phase,result);
     fclose(out);
 }
 
