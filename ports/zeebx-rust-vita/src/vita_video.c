@@ -18,7 +18,15 @@ int vita_video_init(void){
  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
  glMatrixMode(GL_PROJECTION);glLoadIdentity();glOrtho(-1,1,-1,1,-1,1);
- glMatrixMode(GL_MODELVIEW);glLoadIdentity();return 0;
+ glMatrixMode(GL_MODELVIEW);glLoadIdentity();
+ // Force the first real GPU scene and swap immediately after vitaGL init.
+ // vitaGL terminates its animated splash on the first draw; do not leave
+ // that splash on-screen while Zeebx initializes the game.
+ glViewport(0,0,W,H);
+ glClearColor(0,0,0,1);
+ glClear(GL_COLOR_BUFFER_BIT);
+ vglSwapBuffers(GL_FALSE);
+ return 0;
 }
 void vita_video_draw(const uint8_t*r,uint32_t w,uint32_t h){
  glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
