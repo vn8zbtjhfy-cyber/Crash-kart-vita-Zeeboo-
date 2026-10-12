@@ -117,6 +117,7 @@ jobs:
           python3 tools/patch_zeebx_interpreter.py zeebx-emu
           python3 tools/patch_zeebx_embedded_fs.py zeebx-emu
           python3 tools/patch_zeebx_sqlite_vita.py zeebx-emu
+          python3 tools/patch_zeebx_boot_trace_vita.py zeebx-emu
           grep -F 'sqlite = ["dep:rusqlite"]' zeebx-emu/Cargo.toml
           grep -F 'rusqlite = { version = "0.37", optional = true' zeebx-emu/Cargo.toml
       - name: Compilar puente Rust con Cargo ANTES de CMake
