@@ -29,6 +29,14 @@
 #define CNK_ZEEBX_PAD_AXES 4u
 /* Maximum verified, bounded guest vertices submitted by one draw call. */
 #define CNK_ZEEBX_MAX_DRAW_VERTICES 384u
+#define CNK_ZEEBX_MAX_GL_BUFFERS 32u
+#define CNK_ZEEBX_MAX_GL_BUFFER_BYTES (512u*1024u)
+#define CNK_ZEEBX_MAX_GL_BUFFER_TOTAL (2u*1024u*1024u)
+typedef struct {
+ uint32_t name,size,ever_bound;
+ uint8_t *data; /* source guest bytes, never executable host memory */
+} cnk_zeebx_gl_buffer;
+
 typedef struct {
  uint32_t buttons; /* bit per Zeebx input/mod.rs BUTTON_UIDS entry */
  uint8_t axes[CNK_ZEEBX_PAD_AXES]; /* absolute [0..255], neutral=128 */
@@ -130,6 +138,9 @@ typedef struct {
  uint32_t gl_draw_calls,gl_drawn_vertices;
  uint8_t gl_vertex_enabled;
  uint32_t gl_uv_pointer,gl_uv_stride,gl_uv_type,gl_bound_texture;
+ uint32_t gl_array_buffer,gl_element_buffer,gl_vertex_buffer,gl_uv_buffer;
+ uint32_t gl_next_buffer_name,gl_total_buffer_bytes;
+ cnk_zeebx_gl_buffer gl_buffers[CNK_ZEEBX_MAX_GL_BUFFERS];
  uint32_t gl_texture_uploads,gl_textured_draw_calls;
  uint8_t gl_uv_enabled,gl_texturing_enabled;
  cnk_zeebx_gl_host gl_host;

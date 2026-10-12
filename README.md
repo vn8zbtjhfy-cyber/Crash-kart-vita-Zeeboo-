@@ -1,5 +1,13 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 138: vertex buffers Zeebx para el original
+
+- Soporte original BREW `glGenBuffers`, `glBindBuffer`, `glBufferData`, `glBufferSubData`, `glDeleteBuffers` y `glIsBuffer`, con límites de memoria.
+- `glVertexPointer(..., 0)` usa ahora el desplazamiento cero de un VBO enlazado; `glDrawElements` lee los índices del buffer asociado. Se mantienen las conversiones `GL_FIXED`, UV originales, tiras y abanicos y el host de dibujo Vita.
+- **41 de 41 pruebas sin ROM aprobadas** en CI. El ELF VitaSDK se ha enlazado, pero **no prueba que el videojuego original sea jugable en la consola**.
+- [Documentación técnica](docs/AVANCE_138_ZEEBX_VBO_BUFFERS.md).
+
+
 ## Avance 137: coordenadas GL_FIXED Zeebo para modelos y texturas
 
 - Se extiende el puente original de Zeebx a vitaGL para interpretar `GL_FIXED` 16.16 **con signo** en posiciones 3D y coordenadas UV, además de `GL_FLOAT`; los dos formatos pueden combinarse por separado.

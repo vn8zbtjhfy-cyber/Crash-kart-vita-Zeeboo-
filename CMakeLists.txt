@@ -835,6 +835,12 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_gl_fixed_arrays PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_gl_fixed_arrays PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_gl_fixed_arrays COMMAND cnk_test_zeebx_gl_fixed_arrays)
+  # Zeebx source GL_LEGACY VBO/IBO objects, including offset zero and
+  # SubData, with guest RAM bounds and host draw regressions (no ROM).
+  add_executable(cnk_test_zeebx_vbo tests/test_native_zeebx_vbo.c)
+  target_link_libraries(cnk_test_zeebx_vbo PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_vbo PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_vbo COMMAND cnk_test_zeebx_vbo)
   # No ROM required: guard against finite-but-overflowing scene extents.
   add_executable(cnk_test_collision_grid_extents tests/test_native_collision_grid_extents.c)
   target_link_libraries(cnk_test_collision_grid_extents PRIVATE cnk_native_core z m)
