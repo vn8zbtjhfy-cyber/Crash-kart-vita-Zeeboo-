@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static float recorded_xyz[9],recorded_uv[6];
+static float recorded_xyz[9];
 static unsigned vertices_seen,begin_calls,end_calls;
 /* GL 1 immediate-mode APIs supplied by VitaGL on hardware; our host test
  * uses only these narrow functions to record the actual adapter traffic. */
