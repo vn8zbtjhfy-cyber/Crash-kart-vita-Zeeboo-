@@ -1,5 +1,17 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 132: dibujo de triangulos indexados desde Zeebo
+
+La ruta experimental Zeebx ahora acepta `glDrawElements` con indices
+originales de 8 y 16 bits, leyendo y validando toda la memoria ARM
+invitada antes de enviar triangulos a la GPU. `glDrawArrays` usa la
+misma ruta protegida. No se inventan vertices ni recursos originales.
+
+Las pruebas no usan ROM comercial. El hecho de que el puente compile
+no significa que el menu o una carrera original sean ya jugables.
+
+[Detalles del avance 132](docs/AVANCE_132_TRIANGULOS_INDEXADOS_ZEEBX.md).
+
 ## Avance 131: triangulos originales de memoria guest a vitaGL
 
 El puente experimental original de Zeebx reconoce glVertexPointer,

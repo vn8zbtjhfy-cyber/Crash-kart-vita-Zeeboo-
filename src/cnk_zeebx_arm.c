@@ -828,11 +828,57 @@ static int zeebx_egl_intern(cnk_zeebx_arm *c,uint32_t *cache,
 /* Zeebx AEEGL.h IGL: OLD Common-Lite slots with NO "this" pointer.
  * Unlike synthetic GL success flags, each supported GPU operation calls a
  * bound Vita renderer; no sink or inactive EGL context = explicit API stop.
- * DrawArrays/Elements and textures remain unsupported, and all matrix
- * commands require a real GPU callback before the guest can advance.
+ * Basic triangles support both bounded DrawArrays and indexed DrawElements.
+ * Textures and other unported operations still stop explicitly.
  */
 static float zeebx_gl_fixed(uint32_t raw){
  return (float)(int32_t)raw/65536.0f;
+}
+/* Expand the *guest* index stream into a fully checked, temporary XYZ
+ * triangle list. The GPU only sees host-owned floats, never raw ARM
+ * pointers. index_type==0 is the non-indexed DrawArrays path. */
+static int zeebx_gl_draw_vertices(cnk_zeebx_arm *c,uint32_t first,
+                                 uint32_t count,uint32_t index_type,
+                                 uint32_t index_pointer){
+ if(!c->gl_host.draw_triangles||!c->gl_vertex_enabled||
+    !c->gl_vertex_pointer||!count||count%3u||
+    count>CNK_ZEEBX_MAX_DRAW_VERTICES||
+    c->gl_draw_calls==UINT32_MAX||
+    c->gl_drawn_vertices>UINT32_MAX-count)return -4;
+ if(index_type==0u){
+  if(first>65536u||count>65536u-first)return -4;
+ }else{
+  if((index_type!=0x1401u&&index_type!=0x1403u)||
+     !index_pointer || (index_type==0x1403u&&(index_pointer&1u)))
+   return -4;
+ }
+ float xyz[CNK_ZEEBX_MAX_DRAW_VERTICES*3u];
+ for(uint32_t i=0;i<count;i++){
+  uint32_t vertex_index=first+i;
+  if(index_type){
+   uint32_t width=index_type==0x1403u?2u:1u;
+   uint64_t addr=(uint64_t)index_pointer+(uint64_t)i*width;
+   if(addr>UINT32_MAX||
+      load(c,(uint32_t)addr,width,&vertex_index))return -4;
+  }
+  if(vertex_index>=65536u)return -4;
+  uint64_t vertex=(uint64_t)c->gl_vertex_pointer+
+                  (uint64_t)vertex_index*c->gl_vertex_stride;
+  for(unsigned component=0;component<3u;component++){
+   uint64_t address=vertex+4u*component;
+   uint32_t bits=0;
+   if(address>UINT32_MAX || load(c,(uint32_t)address,4u,&bits))
+    return -4;
+   float v=0.f;
+   memcpy(&v,&bits,sizeof(v));
+   if(!isfinite(v))return -4;
+   xyz[3u*i+component]=v;
+  }
+ }
+ if(c->gl_host.draw_triangles(c->gl_host_user,xyz,count))return -4;
+ c->gl_draw_calls++;
+ c->gl_drawn_vertices+=count;
+ return cnk_zeebx_arm_return_from_api(c,0u);
 }
 static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
  if(!c||!c->initialized||!c->gl_host.present||
@@ -867,32 +913,12 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
   if(a0!=0x8074u)return -4; /* other client arrays not ported */
   c->gl_vertex_enabled=slot==29u?1u:0u;
   return cnk_zeebx_arm_return_from_api(c,0u);
- case 26u:{ /* glDrawArrays(GL_TRIANGLES, first, count) */
-  if(a0!=4u || (int32_t)a1<0 || !a2 ||
-     a2>CNK_ZEEBX_MAX_DRAW_VERTICES || a2%3u ||
-     a1>65536u || a2>65536u-a1 ||
-     !c->gl_vertex_enabled || !c->gl_vertex_pointer ||
-     !c->gl_host.draw_triangles)return -4;
-  float xyz[CNK_ZEEBX_MAX_DRAW_VERTICES*3u];
-  for(uint32_t i=0;i<a2;i++){
-   const uint64_t vertex=(uint64_t)c->gl_vertex_pointer+
-                         (uint64_t)(a1+i)*c->gl_vertex_stride;
-   for(unsigned component=0;component<3u;component++){
-    const uint64_t address=vertex+4u*component;
-    uint32_t bits=0;
-    if(address>UINT32_MAX ||
-       load(c,(uint32_t)address,4u,&bits))return -4;
-    float v=0.f;
-    memcpy(&v,&bits,sizeof(v));
-    if(!isfinite(v))return -4;
-    xyz[3u*i+component]=v;
-   }
-  }
-  if(c->gl_host.draw_triangles(c->gl_host_user,xyz,a2))return -4;
-  c->gl_draw_calls++;
-  c->gl_drawn_vertices+=a2;
-  return cnk_zeebx_arm_return_from_api(c,0u);
- }
+ case 26u: /* glDrawArrays(GL_TRIANGLES, first, count) */
+  if(a0!=4u)return -4;
+  return zeebx_gl_draw_vertices(c,a1,a2,0u,0u);
+ case 27u: /* glDrawElements(GL_TRIANGLES, count, type, guest_indices) */
+  if(a0!=4u || (a2!=0x1401u&&a2!=0x1403u))return -4;
+  return zeebx_gl_draw_vertices(c,0u,a1,a2,a3);
  case 37u: /* glGetError: only after supported host calls */
   return cnk_zeebx_arm_return_from_api(c,0u);
  case 46u: /* glLoadIdentity */
