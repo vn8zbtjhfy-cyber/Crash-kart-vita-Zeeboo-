@@ -221,7 +221,8 @@ int main(void){
  recorder.failure=0;
  assert(recorder.draw==1u&&c.gl_textured_draw_calls==1u);
  /* Plain triangles still use the older proven rendering path. */
- api(&c,24u,23u,0x0de1u,0u,0u,0u);assert(success(&c)==0u);
+ /* Zeebx AEEGL.h: glDisable is GL_LEGACY slot 24, not 23. */
+ api(&c,24u,24u,0x0de1u,0u,0u,0u);assert(success(&c)==0u);
  api(&c,24u,26u,4u,0u,3u,0u);assert(success(&c)==0u);
  assert(recorder.plain==1u&&recorder.draw==1u);
  api(&c,24u,20u,1u,out,0u,0u);assert(success(&c)==0u);
