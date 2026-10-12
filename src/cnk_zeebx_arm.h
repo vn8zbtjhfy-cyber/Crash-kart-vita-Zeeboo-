@@ -110,6 +110,9 @@ typedef struct {
  int (*texture_delete)(void *user,uint32_t count,const uint32_t *names);
  int (*texture_bind)(void *user,uint32_t name);
  int (*texture_parameter)(void *user,uint32_t pname,uint32_t value);
+ /* Crash requests GL_REPLACE with TexEnvxv (pointer), not only scalar.
+  * Enums are raw GL integers even in the fixed-point x API. */
+ int (*texture_env_mode)(void *user,uint32_t mode);
  int (*texture_upload)(void *user,uint32_t width,uint32_t height,
                        uint32_t format,uint32_t type,const uint8_t *pixels);
  int (*draw_textured_triangles)(void *user,const float *xyz,

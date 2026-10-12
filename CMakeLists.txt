@@ -822,6 +822,12 @@ if(NOT DEFINED ENV{VITASDK})
   target_link_libraries(cnk_test_zeebx_vitagl_textures PRIVATE cnk_native_core z m)
   target_compile_options(cnk_test_zeebx_vitagl_textures PRIVATE -UNDEBUG -Wall -Wextra -Werror)
   add_test(NAME zeebx_vitagl_textures COMMAND cnk_test_zeebx_vitagl_textures)
+  # Crash asks Zeebx's old GLES glTexEnvxv(GL_REPLACE) by guest pointer.
+  # Synthetic ARM memory and real vitaGL adapter verified independently.
+  add_executable(cnk_test_zeebx_texture_env tests/test_native_zeebx_texture_env.c)
+  target_link_libraries(cnk_test_zeebx_texture_env PRIVATE cnk_native_core z m)
+  target_compile_options(cnk_test_zeebx_texture_env PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+  add_test(NAME zeebx_texture_env COMMAND cnk_test_zeebx_texture_env)
   # Zeebx GL_LEGACY original triangle primitives, indexed & sequential.
   # No ROM assets: synthetic ARM guest bytes and strict GPU recorder.
   add_executable(cnk_test_zeebx_gl_primitives tests/test_native_zeebx_gl_primitives.c)

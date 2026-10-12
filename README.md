@@ -1,5 +1,23 @@
 # Crash Nitro Kart 3D para PS Vita (desarrollo)
 
+## Avance 142: color original de texturas GL_REPLACE (Zeebx → vitaGL)
+
+El código original de Crash pide el modo `GL_REPLACE` por medio de
+`glTexEnvxv` (modo enviado por **puntero guest**), tal como describe
+`ZeebxTeam/zeebx-emu/src/machine/gl.rs`. Se portaron las llamadas
+`glTexEnvx` y `glTexEnvxv` del IGL antiguo a C, con validaciones de
+memoria y GPU, y se conectaron a `glTexEnvi` de vitaGL. Esto evita
+tratar las enumeraciones como punto fijo y permite al juego elegir
+cómo combinar los colores de sus texturas al dibujar.
+
+- **44/44 pruebas automáticas sin ROM aprobadas**:
+  [GitHub Actions](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38213003070).
+- [Informe técnico](docs/AVANCE_142_ZEEBX_TEXTURE_ENV_CRASH.md).
+- Sigue **sin prueba de carrera original jugable en PS Vita física**.
+  Aún faltan llamadas GL, servicios BREW y el bucle completo del applet;
+  no se debe confundir un ELF de diagnóstico con un juego terminado.
+
+
 ## Avance 138: vertex buffers Zeebx para el original
 
 - Soporte original BREW `glGenBuffers`, `glBindBuffer`, `glBufferData`, `glBufferSubData`, `glDeleteBuffers` y `glIsBuffer`, con límites de memoria.

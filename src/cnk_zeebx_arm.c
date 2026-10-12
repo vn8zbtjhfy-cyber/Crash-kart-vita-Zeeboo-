@@ -1234,6 +1234,24 @@ static int zeebx_gl_legacy_call(cnk_zeebx_arm *c,unsigned slot){
   return zeebx_gl_delete_textures(c,a0,a1);
  case 36u: /* glGenTextures(n, pointer) */
   return zeebx_gl_gen_textures(c,a0,a1);
+ case 72u: /* glTexEnvx(target,pname,mode), raw GLES enum */
+ case 73u:{ /* glTexEnvxv(target,pname,guest GLfixed*) */
+  if(a0!=0x2300u || a1!=0x2200u || !c->gl_host.texture_env_mode)
+   return -4; /* only GL_TEXTURE_ENV / GL_TEXTURE_ENV_MODE */
+  uint32_t mode=a2;
+  if(slot==73u){
+   /* Crash passes GL_REPLACE by POINTER. A malformed guest pointer
+    * must not be dereferenced by VitaGL or become fake success. */
+   if(!a2 || (a2&3u) || load(c,a2,4u,&mode))return -4;
+  }
+  /* OpenGL ES 1.0 supported texture environment modes. The modes
+   * are GLenum values, NOT signed 16.16 fixed values. See Zeebx
+   * src/machine/gl.rs::TexEnvxv for the source behavior. */
+  if(mode!=0x2100u && mode!=0x1e01u && mode!=0x2101u &&
+     mode!=0x0be2u && mode!=0x0104u)return -4;
+  if(c->gl_host.texture_env_mode(c->gl_host_user,mode))return -4;
+  return cnk_zeebx_arm_return_from_api(c,0u);
+ }
  case 74u: /* glTexImage2D with five guest stack arguments */
   return zeebx_gl_tex_image(c);
  case 75u: /* glTexParameterx */

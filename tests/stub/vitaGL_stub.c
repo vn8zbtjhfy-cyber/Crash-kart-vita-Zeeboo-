@@ -128,6 +128,17 @@ void glTexParameteri(GLenum k,GLenum p,GLint v){
  if(k!=GL_TEXTURE_2D||(p!=GL_TEXTURE_MIN_FILTER&&p!=GL_TEXTURE_MAG_FILTER)||v!=GL_LINEAR)
  cnk_test_gl.invalid++;
 }
+void glTexEnvi(GLenum target,GLenum pname,GLint mode){
+ if(target!=GL_TEXTURE_ENV||pname!=GL_TEXTURE_ENV_MODE||
+    (mode!=GL_REPLACE&&mode!=GL_MODULATE&&mode!=0x2101&&
+     mode!=0x0be2&&mode!=0x0104)){
+  cnk_test_gl.invalid++;
+  cnk_test_gl.queued_error=0x0500u; /* GL_INVALID_ENUM */
+  return;
+ }
+ cnk_test_gl.texenv_calls++;
+ cnk_test_gl.texenv_mode=(GLenum)mode;
+}
 void glTexImage2D(GLenum target,GLint level,GLint internalfmt,GLsizei w,
  GLsizei h,GLint border,GLenum format,GLenum type,const void *data){
  if(target!=GL_TEXTURE_2D||level!=0||w<=0||h<=0||border||!data||
