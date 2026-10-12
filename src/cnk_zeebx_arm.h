@@ -66,6 +66,17 @@ typedef struct {
  int (*translate)(void *user,float x,float y,float z);
  int (*scale)(void *user,float x,float y,float z);
  int (*rotate)(void *user,float degrees,float x,float y,float z);
+ /* Zeebx AEEGL.h fixed-pipeline state, delegated to actual GPU.
+  * Each pointer stays optional until host implements it; unknown or
+  * unbound state changes must STOP the guest rather than fake success. */
+ int (*set_capability)(void *user,uint32_t capability,int enabled);
+ int (*blend_func)(void *user,uint32_t source,uint32_t destination);
+ int (*depth_func)(void *user,uint32_t comparison);
+ int (*depth_mask)(void *user,int enabled);
+ int (*cull_face)(void *user,uint32_t face);
+ int (*front_face)(void *user,uint32_t orientation);
+ int (*color4)(void *user,float red,float green,float blue,float alpha);
+ int (*color_mask)(void *user,int red,int green,int blue,int alpha);
  /* Real 3D guest vertex stream in XYZ float triplets, owned by caller
   * through return of this synchronous callback. No fake draw success. */
  int (*draw_triangles)(void *user,const float *xyz,uint32_t count);
