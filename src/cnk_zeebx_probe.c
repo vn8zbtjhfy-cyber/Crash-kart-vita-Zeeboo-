@@ -19,14 +19,10 @@ int cnk_zeebx_probe_original(const char *mod_path,const char *report_path,
  if(!mod_path||!report_path||!budget||budget>10000000u)return -1;
  FILE *input=fopen(mod_path,"rb");
  if(!input)return -2;
- if(fseek(input,0,SEEK_END)||ftell(input)<8||
-    ftell(input)>16*1024*1024L||fseek(input,0,SEEK_SET)){
+ if(fseek(input,0,SEEK_END)){
   fclose(input);return -3;
  }
  long len=ftell(input);
- /* After rewind, ftell is zero; measure via SEEK_END before rewind. */
- if(fseek(input,0,SEEK_END)){fclose(input);return -3;}
- len=ftell(input);
  if(len<8||len>16*1024*1024L||fseek(input,0,SEEK_SET)){
   fclose(input);return -3;
  }
