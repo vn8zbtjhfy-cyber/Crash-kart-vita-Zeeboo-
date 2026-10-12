@@ -39,6 +39,19 @@ int main(void){
  assert(cnk_test_gl.handles_created==2u);
  assert(!host.texture_bind(NULL,names[0]));
  assert(!host.texture_parameter(NULL,0x2801u,0x2601u));
+ /* Crash original GL_REPLACE must reach the actual VitaGL texture state.
+  * The recorder detects false success or missing GPU calls. */
+ assert(host.texture_env_mode);
+ assert(!host.texture_env_mode(NULL,GL_REPLACE));
+ assert(cnk_test_gl.texenv_calls==1u);
+ assert(cnk_test_gl.texenv_mode==GL_REPLACE);
+ assert(!host.texture_env_mode(NULL,GL_MODULATE));
+ assert(cnk_test_gl.texenv_calls==2u);
+ assert(cnk_test_gl.texenv_mode==GL_MODULATE);
+ cnk_test_gl.queued_error=GL_OUT_OF_MEMORY;
+ assert(host.texture_env_mode(NULL,GL_REPLACE));
+ assert(cnk_test_gl.texenv_calls==3u);
+ assert(cnk_test_gl.queued_error==GL_NO_ERROR);
  uint8_t pixels[16];
  for(unsigned i=0;i<16u;i++)pixels[i]=(uint8_t)(i+1u);
  assert(!host.texture_upload(NULL,2u,2u,0x1908u,0x1401u,pixels));
