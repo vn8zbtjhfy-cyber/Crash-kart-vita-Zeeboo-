@@ -2,6 +2,41 @@
 
 Repositorio **privado** del port nativo de Zeebo a PlayStation Vita. **Todavía no es un videojuego completo ni se ha verificado su ejecución en consola.**
 
+## Avances 123-124: CPU ARM/BREW y pantalla virtual original
+
+**Zeebx está siendo adaptado efectivamente al port, sin borrar nuestro
+motor nativo de carreras.** El submódulo conserva íntegra la fuente
+GPL de Zeebx para extender el puente de ejecución donde haga falta.
+
+- **123:** adaptadas las clases BREW originales IDisplay, IFileMgr e
+  ISound, `IShell::GetDeviceInfo` Zeebo 640×480/16 bpp, `memset`,
+  `dbgprintf`, reloj virtual `GetTimeMS/GetUpTimeMS` y la fábrica
+  `CreateInstance`. El objeto de pantalla permanece persistente.
+- **124:** `IBitmap::QueryInterface` reconoce el `IDIB` real y
+  reserva 614,400 bytes RGB565 de memoria **guest**, con `pBmp`,
+  dimensiones, pitch, color scheme y referencias coherentes.
+- **29/29 pruebas sin ROM aprobadas**:
+  [validación](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38196593506).
+  Estas pruebas ejecutan instrucciones ARM reales sobre datos de juego
+  **sintéticos**, sin redistribuir el juego comercial.
+- **VitaSDK ARM (avance 124)**:
+  [ver compilación y enlace](https://github.com/vn8zbtjhfy-cyber/Crash-kart-vita-Zeeboo-/actions/runs/38196723001).
+- Detalle técnico:
+  [123](docs/AVANCE_123_FABRICAS_Y_DISPOSITIVO_ZEEBX.md) y
+  [124](docs/AVANCE_124_ZEEBX_BITMAP_IDIB_RGB565.md).
+
+El último examen privado del `cnk2.mod` original con un intérprete
+**Python de referencia** identificó la siguiente clase pedida en la
+creación del applet: `0x01014bc4` (**EGL antiguo de BREW**), después
+de unas 6,444 instrucciones ARM de esta etapa. Esa traza **NO** es una
+prueba del binario C en PS Vita física.
+
+**Pendiente:** conectar el EGL/OpenGL ES de Zeebx al renderizador Vita,
+completar APIs BREW, generar gráficos reales en pantalla y comprobar
+una carrera completa en hardware. La pantalla RGB565 guest todavía
+no se muestra en la consola; sigue sin haber SELF o VPK, y el
+porcentaje anterior era una estimación histórica, no un certificado.
+
 ## Avance 121: emulador Zeebx completo disponible y ejecución ARM real
 
 **El port nativo de PS Vita sigue intacto.** Se añadió como parte del
