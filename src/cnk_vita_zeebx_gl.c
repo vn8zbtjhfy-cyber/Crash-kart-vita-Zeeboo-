@@ -190,6 +190,38 @@ static int vita_draw_textured_triangles(void *u,const float *xyz,
  glEnd();
  return glGetError()==GL_NO_ERROR?0:-1;
 }
+/* GLES 1.x per-vertex source colors. Zeebx normalizes GL_UNSIGNED_BYTE
+ * (0..255) before calling the host, and the guest interpreter validates
+ * every byte and vertex FIRST. Never use a raw ARM guest pointer as GPU RAM.
+ */
+static int vita_draw_colored_triangles(void *u,const float *xyz,
+                                        const float *rgba,uint32_t count){
+ (void)u;
+ if(!xyz||!rgba||!count||count>CNK_ZEEBX_MAX_DRAW_VERTICES||count%3u)
+  return -1;
+ glBegin(GL_TRIANGLES);
+ for(uint32_t i=0;i<count;i++){
+  glColor4f(rgba[4u*i],rgba[4u*i+1u],rgba[4u*i+2u],rgba[4u*i+3u]);
+  glVertex3f(xyz[3u*i],xyz[3u*i+1u],xyz[3u*i+2u]);
+ }
+ glEnd();
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
+static int vita_draw_colored_textured_triangles(
+                void *u,const float *xyz,const float *uv,
+                const float *rgba,uint32_t count){
+ (void)u;
+ if(!xyz||!uv||!rgba||!count||
+    count>CNK_ZEEBX_MAX_DRAW_VERTICES||count%3u)return -1;
+ glBegin(GL_TRIANGLES);
+ for(uint32_t i=0;i<count;i++){
+  glColor4f(rgba[4u*i],rgba[4u*i+1u],rgba[4u*i+2u],rgba[4u*i+3u]);
+  glTexCoord2f(uv[2u*i],uv[2u*i+1u]);
+  glVertex3f(xyz[3u*i],xyz[3u*i+1u],xyz[3u*i+2u]);
+ }
+ glEnd();
+ return glGetError()==GL_NO_ERROR?0:-1;
+}
 /* Explicit GLES 1.x state from the Zeebo original. No silent success:
  * report a Vita GPU error to the guest interpreter immediately. */
 static int vita_set_capability(void *user,uint32_t cap,int enabled){
@@ -247,6 +279,7 @@ cnk_zeebx_gl_host cnk_vita_zeebx_gl_callbacks(void){
   .load_matrix=vita_load_matrix,.mult_matrix=vita_mult_matrix,
   .frustum=vita_frustum,.ortho=vita_ortho,
   .draw_triangles=vita_draw_triangles,
+  .draw_colored_triangles=vita_draw_colored_triangles,
   .set_capability=vita_set_capability,.blend_func=vita_blend_func,
   .depth_func=vita_depth_func,.depth_mask=vita_depth_mask,
   .cull_face=vita_cull_face,.front_face=vita_front_face,
@@ -254,7 +287,8 @@ cnk_zeebx_gl_host cnk_vita_zeebx_gl_callbacks(void){
   .texture_gen=vita_texture_gen,.texture_delete=vita_texture_delete,
   .texture_bind=vita_texture_bind,.texture_parameter=vita_texture_parameter,
   .texture_upload=vita_texture_upload,
-  .draw_textured_triangles=vita_draw_textured_triangles
+  .draw_textured_triangles=vita_draw_textured_triangles,
+  .draw_colored_textured_triangles=vita_draw_colored_textured_triangles
  };
  return host;
 }
