@@ -1,68 +1,121 @@
+/* Original Zeebx module/APPMAN execution probe, GPL-2.0-or-later.
+ * Reads private .mod/.mif from user's own filesystem only.
+ * Every unimplemented BREW API, CPU instruction and memory fault
+ * is an explicit stop. This NEVER replaces the native racing engine.
+ */
 #include "cnk_zeebx_probe.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-/* Byte-owning startup adapter for Zeebx's optional CPU module.
- * No game data is put in the executable. A protected source path is read
- * in memory and freed before the diagnostic log is written. */
-int cnk_zeebx_probe_original(const char *mod_path,const char *report_path,
-                             uint32_t budget,cnk_arm_outcome *result){
+static int private_file(const char *path,size_t limit,uint8_t **bytes,size_t *size){
+ if(!path||!bytes||!size)return -1;
+ *bytes=NULL;*size=0;
+ FILE *f=fopen(path,"rb");
+ if(!f)return -2;
+ if(fseek(f,0,SEEK_END)){fclose(f);return -3;}
+ long length=ftell(f);
+ if(length<=0||(unsigned long)length>limit||
+    fseek(f,0,SEEK_SET)){fclose(f);return -3;}
+ uint8_t *p=(uint8_t*)malloc((size_t)length);
+ if(!p){fclose(f);return -4;}
+ if(fread(p,1,(size_t)length,f)!=(size_t)length){
+  fclose(f);free(p);return -5;
+ }
+ if(fclose(f)){free(p);return -6;}
+ *bytes=p;*size=(size_t)length;return 0;
+}
+static const char *reason_name(cnk_arm_reason r){
+ switch(r){
+ case CNK_ARM_API:return "BREW_API";
+ case CNK_ARM_RETURNED:return "RETURNED";
+ case CNK_ARM_FAULT:return "MEMORY_FAULT";
+ case CNK_ARM_UNSUPPORTED:return "UNSUPPORTED_OPCODE";
+ default:return "INSTRUCTION_BUDGET";
+ }
+}
+static int probe_internal(const char *mod_path,const char *mif_path,
+                          const char *report_path,uint32_t budget,
+                          cnk_arm_outcome *result){
+ uint8_t *mod=NULL,*mif=NULL;
+ size_t mod_bytes=0,mif_bytes=0;
+ cnk_brew_mif_info manifest={0};
  cnk_zeebx_arm cpu={0};
- cnk_arm_outcome outcome={0};
- uint8_t *data=NULL;
- size_t size=0;
- int status=-1;
- uint32_t handled=0,module_ptr=0;
+ cnk_arm_outcome load_out={0},applet_out={0};
+ uint32_t module_calls=0,applet_calls=0;
+ uint32_t modptr=0,apptr=0,guest_entry=0,clsid=0;
+ int started=0,module_ok=0,applet_ok=0,prep=-1;
  if(!result)return -1;
  memset(result,0,sizeof(*result));
  if(!mod_path||!report_path||!budget||budget>10000000u)return -1;
- FILE *input=fopen(mod_path,"rb");
- if(!input)return -2;
- if(fseek(input,0,SEEK_END)){
-  fclose(input);return -3;
+ int rc=private_file(mod_path,16u*1024u*1024u,&mod,&mod_bytes);
+ if(rc)return -2;
+ if(mif_path){
+  rc=private_file(mif_path,1024u*1024u,&mif,&mif_bytes);
+  if(rc){free(mod);return -3;}
+  if(cnk_brew_mif_inspect(mif,mif_bytes,&manifest)||
+     !manifest.main_applet){
+   free(mod);free(mif);return -4;
+  }
+  clsid=manifest.main_applet;
+  free(mif);
  }
- long len=ftell(input);
- if(len<8||len>16*1024*1024L||fseek(input,0,SEEK_SET)){
-  fclose(input);return -3;
+ rc=cnk_zeebx_arm_init(&cpu,mod,mod_bytes);
+ free(mod);
+ if(rc)return -5;
+ rc=cnk_zeebx_arm_bootstrap(&cpu,budget,&load_out,&module_calls);
+ if(rc){cnk_zeebx_arm_destroy(&cpu);return -6;}
+ module_ok=load_out.reason==CNK_ARM_RETURNED && cpu.regs[0]==0u;
+ if(!cnk_zeebx_arm_read_u32(&cpu,CNK_ARM_OBJECT_BASE+8u,&modptr)){
+  module_ok=module_ok&&modptr>=CNK_ARM_HEAP_BASE&&
+     (uint64_t)modptr+4u<=
+       (uint64_t)CNK_ARM_HEAP_BASE+cpu.heap_cursor;
+ }else{
+  modptr=0;module_ok=0;
  }
- size=(size_t)len;
- data=(uint8_t*)malloc(size);
- if(!data){fclose(input);return -4;}
- if(fread(data,1,size,input)!=size){
-  fclose(input);free(data);return -5;
+ *result=load_out;
+ if(clsid&&module_ok){
+  started=1;
+  prep=cnk_zeebx_arm_prepare_applet(&cpu,clsid,&guest_entry);
+  if(!prep){
+   rc=cnk_zeebx_arm_bootstrap(&cpu,budget,&applet_out,&applet_calls);
+   if(rc){cnk_zeebx_arm_destroy(&cpu);return -7;}
+   applet_ok=!cnk_zeebx_arm_applet_result(&cpu,&applet_out,&apptr);
+   *result=applet_out;
+  }
  }
- fclose(input);
- status=cnk_zeebx_arm_init(&cpu,data,size);
- free(data);
- if(status)return -6;
- status=cnk_zeebx_arm_bootstrap(&cpu,budget,&outcome,&handled);
- if(status){cnk_zeebx_arm_destroy(&cpu);return -7;}
- /* Zeebx's AEEMod_Load writes an IModule* to object memory +8.
-  * A successful return alone does not imply a usable module. */
- if(cnk_zeebx_arm_read_u32(&cpu,CNK_ARM_OBJECT_BASE+8u,&module_ptr))
-  module_ptr=0;
- int module_created=outcome.reason==CNK_ARM_RETURNED &&
-      cpu.regs[0]==0u && module_ptr>=CNK_ARM_HEAP_BASE &&
-      module_ptr<CNK_ARM_HEAP_BASE+cpu.heap_cursor;
  FILE *report=fopen(report_path,"wb");
  if(!report){cnk_zeebx_arm_destroy(&cpu);return -8;}
- const char *reason=outcome.reason==CNK_ARM_API?"BREW_API":
-                     outcome.reason==CNK_ARM_RETURNED?"RETURNED":
-                     outcome.reason==CNK_ARM_FAULT?"MEMORY_FAULT":
-                     outcome.reason==CNK_ARM_UNSUPPORTED?"UNSUPPORTED_OPCODE":
-                     "INSTRUCTION_BUDGET";
- int written=fprintf(report,
+ int length=fprintf(report,
   "original_mod_size=%lu\nreason=%s\nsteps=%llu\npc=0x%08x\n"
   "api_interface=%u\napi_slot=%u\nopcode=0x%08x\naddress=0x%08x\n"
   "bootstrap_apis_handled=%u\nmodule_ptr=0x%08x\n"
-  "module_load_completed=%s\ngenuine_game_playable=NO\n",
-  (unsigned long)size,reason,(unsigned long long)outcome.executed,
-  outcome.pc,outcome.api_interface,outcome.api_slot,outcome.opcode,
-  outcome.address,handled,module_ptr,module_created?"YES":"NO");
- int close_result=fclose(report);
- *result=outcome;
+  "module_load_completed=%s\n"
+  "applet_clsid=0x%08x\napplet_attempted=%s\napplet_prepare_code=%d\n"
+  "applet_entry=0x%08x\napplet_reason=%s\napplet_steps=%llu\n"
+  "applet_api_interface=%u\napplet_api_slot=%u\n"
+  "applet_apis_handled=%u\napplet_ptr=0x%08x\n"
+  "applet_created=%s\ngenuine_game_playable=NO\n",
+  (unsigned long)mod_bytes,reason_name(load_out.reason),
+  (unsigned long long)load_out.executed,load_out.pc,
+  load_out.api_interface,load_out.api_slot,load_out.opcode,
+  load_out.address,module_calls,modptr,module_ok?"YES":"NO",
+  clsid,started?"YES":"NO",prep,guest_entry,
+  (started&&!prep)?reason_name(applet_out.reason):"NOT_RUN",
+  (unsigned long long)applet_out.executed,applet_out.api_interface,
+  applet_out.api_slot,applet_calls,apptr,applet_ok?"YES":"NO");
+ int closed=fclose(report);
  cnk_zeebx_arm_destroy(&cpu);
- return written<0||close_result?-9:0;
+ return (length<0||closed)?-9:0;
+}
+int cnk_zeebx_probe_original(const char *mod_path,const char *report_path,
+                             uint32_t budget,cnk_arm_outcome *result){
+ return probe_internal(mod_path,NULL,report_path,budget,result);
+}
+int cnk_zeebx_probe_original_applet(const char *mod_path,const char *mif_path,
+                                    const char *report_path,uint32_t budget,
+                                    cnk_arm_outcome *result){
+ if(!mif_path)return -1;
+ return probe_internal(mod_path,mif_path,report_path,budget,result);
 }
