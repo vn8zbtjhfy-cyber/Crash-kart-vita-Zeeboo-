@@ -113,10 +113,55 @@ impl Running{
   }
   out.flush()
  }
+ // Replicate the host probe's RGB565 scene discriminators on the Vita's
+ // final RGBA pixels. They are *heuristics*, not gameplay-completion claims.
+ // Run this check only on the two diagnostic snapshots, never per frame.
+ fn original_scene_colors(&self)->(usize,usize){
+  let w=self.w as usize;
+  let h=self.h as usize;
+  if w<600||h<480||self.frame.len()!=w.saturating_mul(h).saturating_mul(4){
+   return (0,0);
+  }
+  let mut orange=0usize;
+  let mut road=0usize;
+  for y in 230..415{
+   for x in 150..510{
+    let i=(y*w+x)*4;
+    let (r,g,b)=(self.frame[i],self.frame[i+1],self.frame[i+2]);
+    if r>=160&&(20..=180).contains(&g)&&b<80{orange+=1;}
+   }
+  }
+  for y in 295..470{
+   for x in 110..530{
+    let i=(y*w+x)*4;
+    let (r,g,b)=(self.frame[i],self.frame[i+1],self.frame[i+2]);
+    if (165..=245).contains(&r)&&(100..=185).contains(&g)
+     &&(90..=200).contains(&b){road+=1;}
+   }
+  }
+  (orange,road)
+ }
+ fn log_scene_validation(&self,kind:&str){
+  let (orange,road)=self.original_scene_colors();
+  let ms=self.machine.clock_ms();
+  if let Ok(msg)=CString::new(format!(
+   "R.scene.{kind}.clock={ms}.orange={orange}.road={road}"
+  )){log_stage(&msg);}
+  if kind=="menu"{
+   if orange>10_000&&road<3_000{
+    log_stage(c"R.scene.menu.visual_match");
+   }else{log_stage(c"R.scene.menu.not_matched");}
+  }else if kind=="race"{
+   if road>30_000&&orange<3_000{
+    log_stage(c"R.scene.race.visual_match");
+   }else{log_stage(c"R.scene.race.not_matched");}
+  }
+ }
  fn capture_guest_milestones(&mut self){
   let clock=self.machine.clock_ms();
   if !self.menu_capture_saved && (25_000..30_000).contains(&clock) {
    self.menu_capture_saved=true;
+   self.log_scene_validation("menu");
    match self.save_guest_ppm("ux0:data/cnk_vita_menu_25s.ppm"){
     Ok(())=>log_stage(c"R.capture.menu.candidate.saved"),
     Err(e)=>{
@@ -126,6 +171,7 @@ impl Running{
   }
   if !self.race_capture_saved && (40_000..47_000).contains(&clock){
    self.race_capture_saved=true;
+   self.log_scene_validation("race");
    match self.save_guest_ppm("ux0:data/cnk_vita_race_40s.ppm"){
     Ok(())=>log_stage(c"R.capture.race.candidate.saved"),
     Err(e)=>{
