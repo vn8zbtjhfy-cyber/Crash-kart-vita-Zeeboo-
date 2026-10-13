@@ -5,6 +5,8 @@ on:
     paths:
       - 'ports/zeebx-rust-vita/probe_host/**'
       - 'ports/zeebx-rust-vita/src/vita_input.c'
+      - 'ports/zeebx-rust-vita/src/vita_video.c'
+      - 'ports/zeebx-rust-vita/src/vita_video.h'
       - 'ports/zeebx-rust-vita/tests/**'
       - 'ports/zeebx-rust-vita/rust/zeebx_vita/src/**'
       - 'ports/zeebx-rust-vita/tools/patch_zeebx_*.py'
@@ -30,6 +32,14 @@ jobs:
           cc -std=c11 -Wall -Wextra -Werror -I tests/stubs -I src \
             tests/test_vita_input.c src/vita_input.c -o /tmp/cnk_vita_input_test
           /tmp/cnk_vita_input_test
+      - name: Verificar via GPU RGB565 y recuperacion a RGBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ports/zeebx-rust-vita
+          cc -std=c11 -Wall -Wextra -Werror -I tests/stubs -I src \
+            tests/test_vita_video.c src/vita_video.c -lm -o /tmp/cnk_vita_video_test
+          /tmp/cnk_vita_video_test
       - name: Preparar recursos originales privados
         shell: bash
         run: |
