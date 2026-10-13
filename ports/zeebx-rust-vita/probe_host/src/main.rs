@@ -119,14 +119,18 @@ fn main()->Result<(),Box<dyn Error>> {
     let mut first_swap=false;
     let mut last_signature=0u64;
     let mut total_updates=0usize;
+    // Intro animation filled all 18 old screenshots in its first seconds.
+    // Record milestones through 90+ seconds of emulated gameplay instead.
+    let mut next_milestone_ms=1_000u64;
+    let mut milestones=0u32;
     let play_start=Instant::now();
     println!("PLAY_EXTENDED begin clock={}ms swaps={baseline}",machine.clock_ms());
     // Run through the Zeebo advertisement / intro, not merely the first swap.
     // Save only visually distinct frames; every image comes directly from the
     // emulated guest, not an illustration or a forced host-side splash.
-    for i in 1..=7500u32 {
-        if play_start.elapsed()>Duration::from_secs(38){
-            println!("PLAY_EXTENDED timed out after 38s");break;
+    for i in 1..=100_000u32 {
+        if play_start.elapsed()>Duration::from_secs(125){
+            println!("PLAY_EXTENDED timed out after 125s");break;
         }
         machine.comeca_volta();
         let outcomes=machine.advance(500_000)?;
@@ -156,6 +160,17 @@ fn main()->Result<(),Box<dyn Error>> {
                     println!("FRAMEBUFFER_DIFFERENCE swap={swaps} gl_frame=NONE cpu_min={cpu_min:#06x} cpu_max={cpu_max:#06x}");
                 }
             }
+            // Save an unmodified guest framebuffer at regular virtual-time
+            // milestones. Enables an objective search for the game's menu.
+            let guest_ms=machine.clock_ms();
+            if guest_ms>=next_milestone_ms && milestones<35 {
+                let filename=format!("milestone_{milestones:02}_{guest_ms:06}ms.ppm");
+                save_guest_screen(&machine,&filename)?;
+                println!("MILESTONE_CAPTURE time={guest_ms}ms swap={swaps} file={filename}");
+                milestones+=1;
+                next_milestone_ms=if guest_ms<5_000 {guest_ms+2_000}
+                    else {guest_ms+5_000};
+            }
             let frame=machine.screen();
             let mut checksum=0xcbf29ce484222325u64;
             let mut min=u16::MAX; let mut max=u16::MIN;
@@ -184,8 +199,8 @@ fn main()->Result<(),Box<dyn Error>> {
     save_guest_screen(&machine,"last_frame.ppm")?;
     println!("FILES_MISSING {:?}",machine.missing_files());
     println!("GL_IGNORED {:?}",machine.ignored_gl());
-    println!("FINAL_RENDER_EXTENDED swaps={} distinct_frames={} updates={total_updates} elapsed={:?}",
-        machine.gl_swaps(),saved,start.elapsed());
+    println!("FINAL_RENDER_EXTENDED swaps={} distinct_frames={} milestones={milestones} guest_ms={} updates={total_updates} elapsed={:?}",
+        machine.gl_swaps(),saved,machine.clock_ms(),start.elapsed());
     if !first_swap { return Err("Guest never called eglSwapBuffers".into()); }
     Ok(())
 }
