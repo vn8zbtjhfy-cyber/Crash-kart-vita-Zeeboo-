@@ -30,6 +30,22 @@ fn aliases(path: &str) -> Vec<String> {
 fn read(root:&Path,name:&str)->Result<Vec<u8>,Box<dyn Error>> {
     Ok(fs::read(root.join(name))?)
 }
+// Save the actual Zeebx RGB565 guest framebuffer for visual verification.
+// This is a lossless PPM snapshot, even if the guest never requests a flip.
+fn save_guest_screen(machine:&Machine<Interpretador>, filename:&str)->Result<(),Box<dyn Error>>{
+    let screen=machine.screen();
+    let w=screen.width(); let h=screen.height();
+    let mut ppm=format!("P6\\n{w} {h}\\n255\\n").into_bytes();
+    for &px in screen.pixels(){
+        let r=((px>>11)&31) as u8;
+        let g=((px>>5)&63) as u8;
+        let b=(px&31) as u8;
+        ppm.extend_from_slice(&[(r<<3)|(r>>2),(g<<2)|(g>>4),(b<<3)|(b>>2)]);
+    }
+    fs::write(filename,&ppm)?;
+    println!("FRAME_SNAPSHOT path={filename} dimensions={w}x{h} bytes={}",ppm.len());
+    Ok(())
+}
 fn main()->Result<(),Box<dyn Error>> {
     let root=PathBuf::from(env::var("CNK_ASSETS").unwrap_or("../assets".into()));
     let start=Instant::now();
@@ -120,6 +136,7 @@ fn main()->Result<(),Box<dyn Error>> {
                 machine.instructions(),machine.clock_ms(),nonzero,play_start.elapsed());
         }
     }
+    save_guest_screen(&machine,"first_frame.ppm")?;
     println!("FINAL_RENDER frame_seen={first_frame} total_instr={} t={:?}",machine.instructions(),start.elapsed());
     if !first_frame { return Err("No IDisplay_Update or GL swap observed on host".into()); }
     Ok(())

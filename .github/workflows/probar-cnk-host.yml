@@ -75,3 +75,11 @@ jobs:
         run: |
           cd ports/zeebx-rust-vita/probe_host
           cargo run --release --quiet
+      - name: Publicar captura real del framebuffer emulado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CNK_Host_Framebuffer
+          path: ports/zeebx-rust-vita/probe_host/first_frame.ppm
+          if-no-files-found: warn
+          retention-days: 7
