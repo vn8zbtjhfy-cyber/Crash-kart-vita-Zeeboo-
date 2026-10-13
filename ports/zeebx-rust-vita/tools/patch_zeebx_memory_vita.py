@@ -85,6 +85,42 @@ def main(root:Path)->None:
         #[cfg(not(target_os = "vita"))]
         self.cpu.reset(&self.module.mem)?;""",
         "Machine.run one-shot memory handoff")
+    # The loader memory was moved into the ARM CPU above. scan_stack() in
+    # Zeebx still accesses self.module.mem.regions()[0], which is now EMPTY
+    # only on Vita. The real guest MemoryFault must survive diagnostic capture.
+    diagnostics=root/"src/machine/diagnostico.rs"
+    replace_once(diagnostics,
+        """        let module = &self.module.mem.regions()[0];
+        let (low, high) = (module.base, module.base + module.bytes.len() as u32);""",
+        """        // CNK_VITA_SAFE_STACK_SCAN_V1: Vita moved module.mem into the CPU.
+        // A guest memory fault must not panic inside the diagnostic handler.
+        let Some(module) = self.module.mem.regions().first() else {
+            return Vec::new();
+        };
+        let (low, high) = (module.base, module.base + module.bytes.len() as u32);""",
+        "Vita diagnostic stack scan on empty moved memory")
+
+    replace_once(machine,
+        """                StopReason::MemoryFault { addr, pc } => {
+                    let lr = self.cpu.read_reg(Reg::Lr);
+                    self.fault_stack = self.scan_stack();""",
+        """                StopReason::MemoryFault { addr, pc } => {
+                    let lr = self.cpu.read_reg(Reg::Lr);
+                    // CNK_VITA_GUEST_FAULT_TRACE_V1: the actual guest fault,
+                    // which can otherwise be swallowed by nested callbacks.
+                    #[cfg(target_os = "vita")]
+                    if let Ok(message) = std::ffi::CString::new(format!(
+                        "Z.guest.memory_fault addr={addr:#010x} pc={pc:#010x} lr={lr:#010x} sp={:#010x}",
+                        self.cpu.read_reg(Reg::Sp),
+                    )) {
+                        unsafe extern "C" {
+                            fn zeebx_vita_debug_log(stage: *const std::ffi::c_char);
+                        }
+                        unsafe { zeebx_vita_debug_log(message.as_ptr()) }
+                    }
+                    self.fault_stack = self.scan_stack();""",
+        "Log true guest memory fault before stack scan")
+
     print("Vita guest memory handoff now avoids second 64 MiB heap allocation")
 
 if __name__=="__main__":
