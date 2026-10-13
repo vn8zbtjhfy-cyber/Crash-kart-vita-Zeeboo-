@@ -4,6 +4,7 @@
 use std::{env, error::Error, fs, path::{Path, PathBuf}, time::{Duration, Instant}};
 use zeebx::{
     cpu::{CpuBackend, Reg, interpretador::Interpretador},
+    input::{Pad, teclas_do_controle},
     loader::{self, miffile::MifFile, modfile::ModImage},
     machine::{AppletResult, Machine, Outcome},
     storage::StoragePaths,
@@ -123,6 +124,8 @@ fn main()->Result<(),Box<dyn Error>> {
     // Record milestones through 90+ seconds of emulated gameplay instead.
     let mut next_milestone_ms=1_000u32;
     let mut milestones=0u32;
+    let mut previous_pad=Pad::default();
+    let mut scripted_presses=0u32;
     let play_start=Instant::now();
     println!("PLAY_EXTENDED begin clock={}ms swaps={baseline}",machine.clock_ms());
     // Run through the Zeebo advertisement / intro, not merely the first swap.
@@ -132,6 +135,21 @@ fn main()->Result<(),Box<dyn Error>> {
         if play_start.elapsed()>Duration::from_secs(125){
             println!("PLAY_EXTENDED timed out after 125s");break;
         }
+        // The original Zeebo title/menu may require a real button press.
+        // Match the Vita port's HID state and BREW-key transition paths.
+        // No input is injected for the first 35 seconds of guest time.
+        let guest_ms=machine.clock_ms();
+        let pressed=(35_000..35_180).contains(&guest_ms)
+            ||(60_000..60_180).contains(&guest_ms)
+            ||(90_000..90_180).contains(&guest_ms);
+        let next_pad=Pad{buttons:if pressed {1}else{0},axes:[0;4]};
+        machine.set_port_pad(0,next_pad);
+        for (key,down) in teclas_do_controle(&previous_pad,&next_pad) {
+            println!("SCRIPTED_BUTTON clock={guest_ms}ms key={key:#x} down={down}");
+            machine.set_key(key,down);
+            if down {scripted_presses+=1;}
+        }
+        previous_pad=next_pad;
         machine.comeca_volta();
         let outcomes=machine.advance(500_000)?;
         let signals=machine.deliver_signals(500_000)?;
@@ -199,7 +217,7 @@ fn main()->Result<(),Box<dyn Error>> {
     save_guest_screen(&machine,"last_frame.ppm")?;
     println!("FILES_MISSING {:?}",machine.missing_files());
     println!("GL_IGNORED {:?}",machine.ignored_gl());
-    println!("FINAL_RENDER_EXTENDED swaps={} distinct_frames={} milestones={milestones} guest_ms={} updates={total_updates} elapsed={:?}",
+    println!("FINAL_RENDER_EXTENDED swaps={} distinct_frames={} milestones={milestones} scripted_presses={scripted_presses} guest_ms={} updates={total_updates} elapsed={:?}",
         machine.gl_swaps(),saved,machine.clock_ms(),start.elapsed());
     if !first_swap { return Err("Guest never called eglSwapBuffers".into()); }
     Ok(())
