@@ -14,6 +14,10 @@ jobs:
   probe:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # All guest probes use the Vita move-only memory path, which the ordinary
+    # host emulator does not exercise. Avoid platform-specific blind spots.
+    env:
+      RUSTFLAGS: "--cfg cnk_host_probe --cfg cnk_vita_owned_probe"
     steps:
       - uses: actions/checkout@v4
       - name: Preparar recursos originales privados
@@ -77,21 +81,18 @@ jobs:
       - name: Comparar arranque ARM y presupuesto CreateInstance
         env:
           CNK_ASSETS: ../assets
-          RUSTFLAGS: --cfg cnk_host_probe
         run: |
           cd ports/zeebx-rust-vita/probe_host
           cargo run --release --quiet --bin cnk-zeebx-host-probe
       - name: Ejecutar puente Rust exacto del VPK en host y validar menú y carrera
         env:
           CNK_ASSETS: ../assets
-          RUSTFLAGS: --cfg cnk_host_probe
         run: |
           cd ports/zeebx-rust-vita/probe_host
           cargo run --release --quiet --bin vita_ffi_parity
       - name: Comparar respuesta del kart a analógico y cruceta con controles neutrales
         env:
           CNK_ASSETS: ../assets
-          RUSTFLAGS: --cfg cnk_host_probe
         shell: bash
         run: |
           set -euo pipefail

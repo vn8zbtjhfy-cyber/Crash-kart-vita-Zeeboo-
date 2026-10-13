@@ -38,7 +38,7 @@ def main(root:Path)->None:
         """    fn reset(&mut self, mem: &GuestMemory) -> Result<(), CpuError>;
 
     // CNK_VITA_MOVE_MEMORY_V1: default fallback preserves other backends.
-    #[cfg(target_os = "vita")]
+    #[cfg(any(target_os = "vita", cnk_vita_owned_probe))]
     fn reset_owned(&mut self, mem: GuestMemory) -> Result<(), CpuError> {
         self.reset(&mem)
     }
@@ -57,7 +57,7 @@ def main(root:Path)->None:
     }
 
     // Vita-only: do not duplicate the 64 MiB guest heap on startup.
-    #[cfg(target_os = "vita")]
+    #[cfg(any(target_os = "vita", cnk_vita_owned_probe))]
     fn reset_owned(&mut self, mem: GuestMemory) -> Result<(), CpuError> {
         self.mem = mem;
         self.r = [0; 16];
@@ -77,12 +77,14 @@ def main(root:Path)->None:
         """        // CNK_VITA_MOVE_MEMORY_V1
         // The guest memory is used once during boot, then owned by the CPU.
         // Move instead of cloning all regions, in particular the 64 MiB heap.
-        #[cfg(target_os = "vita")]
+        #[cfg(any(target_os = "vita", cnk_vita_owned_probe))]
         {
             let mem = std::mem::take(&mut self.module.mem);
+            #[cfg(cnk_vita_owned_probe)]
+            println!("CNK_OWNED_MEMORY_PARITY: executing Vita move-only 64MiB GuestMemory path");
             self.cpu.reset_owned(mem)?;
         }
-        #[cfg(not(target_os = "vita"))]
+        #[cfg(not(any(target_os = "vita", cnk_vita_owned_probe)))]
         self.cpu.reset(&self.module.mem)?;""",
         "Machine.run one-shot memory handoff")
     # The loader memory was moved into the ARM CPU above. scan_stack() in
