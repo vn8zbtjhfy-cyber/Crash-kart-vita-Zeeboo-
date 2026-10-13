@@ -78,12 +78,21 @@ jobs:
           RUSTFLAGS: --cfg cnk_host_probe
         run: |
           cd ports/zeebx-rust-vita/probe_host
-          cargo run --release --quiet
+          cargo run --release --quiet --bin cnk-zeebx-host-probe
+      - name: Ejecutar puente Rust exacto del VPK en host y validar menú y carrera
+        env:
+          CNK_ASSETS: ../assets
+          RUSTFLAGS: --cfg cnk_host_probe
+        run: |
+          cd ports/zeebx-rust-vita/probe_host
+          cargo run --release --quiet --bin vita_ffi_parity
       - name: Publicar captura real del framebuffer emulado
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: CNK_Host_Framebuffer
-          path: ports/zeebx-rust-vita/probe_host/*.ppm
+          path: |
+            ports/zeebx-rust-vita/probe_host/*.ppm
+            ports/zeebx-rust-vita/probe_host/ux0:data/*.ppm
           if-no-files-found: warn
           retention-days: 7

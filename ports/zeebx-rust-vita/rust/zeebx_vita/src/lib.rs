@@ -12,7 +12,7 @@ unsafe extern "C" {
 fn log_stage(stage: &CStr) {
  unsafe { zeebx_vita_debug_log(stage.as_ptr()) }
 }
-#[repr(C)]#[derive(Clone,Copy)]pub struct EmbeddedAsset{bytes:*const u8,size:usize}
+#[repr(C)]#[derive(Clone,Copy)]pub struct EmbeddedAsset{pub bytes:*const u8,pub size:usize}
 type EmbeddedLookup=unsafe extern "C" fn(*const c_char)->EmbeddedAsset;
 #[repr(C)]#[derive(Clone,Copy)]pub struct ZeebxVitaPad{buttons:u32,axes:[i32;4]}
 const MOD:&CStr=c"brew/mod/274214/cnk2.mod";
@@ -359,5 +359,12 @@ pub unsafe extern "C" fn zeebx_vita_step(
 }
 #[unsafe(no_mangle)]pub extern "C" fn zeebx_vita_last_error()->*const c_char{
  global().error.as_ref().map_or(ptr::null(),|e|e.as_ptr())
+}
+// Report the guest clock for deterministic FFI parity tests and diagnostics.
+#[unsafe(no_mangle)]pub extern "C" fn zeebx_vita_guest_clock_ms()->u32{
+ global().running.as_ref().map_or(0,|r|r.machine.clock_ms())
+}
+#[unsafe(no_mangle)]pub extern "C" fn zeebx_vita_guest_gl_swaps()->u32{
+ global().running.as_ref().map_or(0,|r|r.machine.gl_swaps())
 }
 #[unsafe(no_mangle)]pub extern "C" fn zeebx_vita_shutdown(){global().running=None;}
