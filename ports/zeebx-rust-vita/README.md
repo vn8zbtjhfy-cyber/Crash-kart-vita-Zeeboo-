@@ -42,3 +42,26 @@ atrapada, este atajo no sustituye el menú de sistema de PS Vita.
 regresiones de menú/carrera con los mismos métodos Rust, pero no mide FPS
 ni descarta cuelgues en una PS Vita real. Registrar una prueba en la consola
 antes de anunciar mejoras medidas de fluidez.
+
+## Prueba de menú y carrera en una PS Vita real (sin depender del mando)
+
+Para diagnosticar si el problema es la emulación o el adaptador de controles,
+crear un archivo **vacío** con VitaShell en
+`ux0:data/cnk_vita_autotest.enable` **antes de abrir el juego**.
+Al arrancar, el puente reproduce la secuencia física equivalente a
+Cross a los 35, 60 y 90 segundos de tiempo **emulado** y movimientos
+de stick a los 70-85 y 95-110 segundos, la misma secuencia que alcanzó
+menú y carrera en el test de Linux. **No sustituye imágenes ni fabrica
+pantallas de juego.** El reloj emulado no equivale al tiempo real
+en una Vita, así que no promete que el menú aparezca en 20 segundos reales.
+
+El registro `ux0:data/cnk_vita_boot.log` incluirá
+`R.autotest.controls.enabled` al arrancar. Tras reconocer
+los fotogramas originales (heurísticas de color), registrará
+`R.scene.menu.verified_live` y
+`R.scene.race.verified_live`. Si la pantalla queda negra,
+copia ese registro junto con la captura del error. Esos mensajes
+no prueban los FPS ni la fluidez de la consola.
+**Borra `ux0:data/cnk_vita_autotest.enable` para jugar con tus propios
+controles:** con ese archivo presente, la prueba controla el mando.
+El archivo solo se lee al iniciar el juego.

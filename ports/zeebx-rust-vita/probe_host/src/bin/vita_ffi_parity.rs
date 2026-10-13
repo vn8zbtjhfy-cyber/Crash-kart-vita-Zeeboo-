@@ -66,6 +66,11 @@ fn main()->Result<(),Box<dyn Error>> {
  if ASSETS.set(map).is_err(){return Err("assets initialized twice".into());}
  // Emulated Vita's ux0:data is a relative directory on the host.
  fs::create_dir_all("ux0:data")?;
+ let auto_test=env::var("CNK_VITA_AUTO_TEST").is_ok_and(|x|x=="1");
+ let auto_test_file="ux0:data/cnk_vita_autotest.enable";
+ if auto_test {fs::write(auto_test_file,b"")?;}
+ else {let _=fs::remove_file(auto_test_file);}
+ println!("CNK_VITA_FFI_AUTOTEST_ENABLED={auto_test}");
  println!("CNK_VITA_FFI_BOOT begin exact Rust Vita bridge; hardware_unverified=true");
  if vita_bridge::zeebx_vita_boot(Some(lookup))!=0{
   let e=unsafe{CStr::from_ptr(vita_bridge::zeebx_vita_last_error())};
@@ -88,7 +93,7 @@ fn main()->Result<(),Box<dyn Error>> {
       ||(90_000..90_180).contains(&ms);
   let steer=if (70_000..85_000).contains(&ms){100}
       else if (95_000..110_000).contains(&ms){-100} else {0};
-  let pad=ZeebxVitaPad{buttons:if pressed{1}else{0},axes:[steer,0,0,0]};
+  let pad=if auto_test {ZeebxVitaPad{buttons:0,axes:[0;4]}} else {ZeebxVitaPad{buttons:if pressed{1}else{0},axes:[steer,0,0,0]}};
   let mut buf=std::ptr::null();
   let mut w=0u32;let mut h=0u32;
   let mut pixels565=std::ptr::null();
@@ -142,6 +147,7 @@ fn main()->Result<(),Box<dyn Error>> {
   if menu&&race {break;}
  }
  vita_bridge::zeebx_vita_shutdown();
+ if auto_test {let _=fs::remove_file(auto_test_file);}
  println!("VITA_FFI_FINAL menu={menu} race={race} frames={frames} guest_log_events={}",
    LOG_TIMELINE.load(Ordering::Relaxed));
  if !menu {return Err("Actual Vita Rust bridge did not render the original main menu".into());}

@@ -35,7 +35,7 @@ const MAX_CREATE_POLLS:u32=2048;
 struct Running{
  machine:Machine<Interpretador>,applet:Option<(u32,u32)>,pad_before:Pad,
  clsid:u32,creation_started:bool,creation_finished:bool,creation_polls:u32,
- frame:Vec<u8>,frame565:Vec<u16>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,logged_nonblank:bool,post_start_trace:u8,next_report_ms:u32,menu_capture_saved:bool,race_capture_saved:bool,capture_enabled:bool,_fufs:FufsView
+ frame:Vec<u8>,frame565:Vec<u16>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,logged_nonblank:bool,post_start_trace:u8,next_report_ms:u32,menu_capture_saved:bool,race_capture_saved:bool,capture_enabled:bool,autotest_enabled:bool,next_scene_validation_ms:u32,verified_menu:bool,verified_race:bool,_fufs:FufsView
 }
 struct State{running:Option<Running>,error:Option<CString>}
 struct StateCell(UnsafeCell<State>);
@@ -111,9 +111,14 @@ fn boot(lookup:EmbeddedLookup)->Result<Running,String>{
  let capture_enabled=std::path::Path::new("ux0:data/cnk_vita_capture.enable").is_file();
  if capture_enabled {log_stage(c"R.capture.ppm.opt_in.enabled");}
  else {log_stage(c"R.capture.ppm.disabled_for_gameplay");}
+ // Opt-in hardware replay of the exact input sequence proven to reach
+ // the original game menu/race on Linux. No synthetic graphics or assets.
+ let autotest_enabled=std::path::Path::new("ux0:data/cnk_vita_autotest.enable").is_file();
+ if autotest_enabled {log_stage(c"R.autotest.controls.enabled");}
+ else {log_stage(c"R.autotest.controls.disabled");}
  Ok(Running{machine,applet:None,pad_before:Pad::default(),
   clsid,creation_started:false,creation_finished:false,creation_polls:0,
-  frame:Vec::new(),frame565:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,logged_nonblank:false,post_start_trace:0,next_report_ms:1_000,menu_capture_saved:false,race_capture_saved:false,capture_enabled,_fufs:fufs})
+  frame:Vec::new(),frame565:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,logged_nonblank:false,post_start_trace:0,next_report_ms:1_000,menu_capture_saved:false,race_capture_saved:false,capture_enabled,autotest_enabled,next_scene_validation_ms:20_000,verified_menu:false,verified_race:false,_fufs:fufs})
 }
 fn check(outcomes:&[Outcome])->Result<(),String>{
  for x in outcomes{if !matches!(x,Outcome::Returned{..}|Outcome::Budget){return Err(format!("Guest stopped: {x:?}"));}}
@@ -186,6 +191,21 @@ impl Running{
  }
  fn capture_guest_milestones(&mut self){
   let clock=self.machine.clock_ms();
+  // Confirm the actual original menu/race on hardware. The race does not
+  // always start by 40s, so sample until it truly appears rather than
+  // reporting a false failure based on a single early screenshot.
+  if clock>=self.next_scene_validation_ms {
+   self.next_scene_validation_ms=clock.saturating_add(5_000);
+   let (orange,road)=self.original_scene_colors();
+   if !self.verified_menu && clock>=20_000 && orange>10_000 && road<3_000 {
+    self.verified_menu=true;
+    log_stage(c"R.scene.menu.verified_live");
+   }
+   if self.verified_menu && !self.verified_race && clock>=35_000 && road>30_000 && orange<3_000 {
+    self.verified_race=true;
+    log_stage(c"R.scene.race.verified_live");
+   }
+  }
   if !self.menu_capture_saved && (25_000..30_000).contains(&clock) {
    self.menu_capture_saved=true;
    self.log_scene_validation("menu");
@@ -283,6 +303,17 @@ impl Running{
     other => return Err(format!("CreateInstance: {other:?}"))
    }
   }
+  // Hardware-only optional deterministic test. Ordinary players still
+  // receive their actual physical Vita controller input untouched.
+  let input=if self.autotest_enabled {
+   let ms=self.machine.clock_ms();
+   let press=(35_000..35_180).contains(&ms)
+      || (60_000..60_180).contains(&ms)
+      || (90_000..90_180).contains(&ms);
+   let steer=if (70_000..85_000).contains(&ms){100}
+      else if (95_000..110_000).contains(&ms){-100}else{0};
+   ZeebxVitaPad{buttons:if press{1}else{0},axes:[steer,0,0,0]}
+  }else{input};
   let next=Pad{buttons:input.buttons & ((1<<zeebx::input::BUTTONS)-1),axes:input.axes.map(|a|a.clamp(-128,127))};
   self.machine.set_port_pad(0,next);
   for (key,down) in zeebx::input::teclas_do_controle(&self.pad_before,&next){self.machine.set_key(key,down);}
