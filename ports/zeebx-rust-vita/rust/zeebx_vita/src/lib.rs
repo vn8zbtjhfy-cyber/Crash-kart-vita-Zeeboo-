@@ -33,7 +33,7 @@ const MAX_CREATE_POLLS:u32=2048;
 struct Running{
  machine:Machine<Interpretador>,applet:Option<(u32,u32)>,pad_before:Pad,
  clsid:u32,creation_started:bool,creation_finished:bool,creation_polls:u32,
- frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,logged_nonblank:bool,next_report_ms:u32,menu_capture_saved:bool,race_capture_saved:bool,_fufs:FufsView
+ frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,logged_nonblank:bool,post_start_trace:u8,next_report_ms:u32,menu_capture_saved:bool,race_capture_saved:bool,_fufs:FufsView
 }
 struct State{running:Option<Running>,error:Option<CString>}
 struct StateCell(UnsafeCell<State>);
@@ -49,6 +49,13 @@ unsafe fn asset(lookup:EmbeddedLookup,name:&CStr)->Result<&'static[u8],String>{
  Ok(unsafe{slice::from_raw_parts(a.bytes,a.size)})
 }
 fn boot(lookup:EmbeddedLookup)->Result<Running,String>{
+ // panic=abort yields Vita's generic C2 crash. Persist Rust panic message
+ // and exact source location BEFORE the process aborts.
+ std::panic::set_hook(Box::new(|info| {
+  if let Ok(message)=CString::new(format!("R.PANIC: {info}")){
+   log_stage(&message);
+  } else { log_stage(c"R.PANIC.unprintable"); }
+ }));
  log_stage(c"R.boot.start");
  let modbytes=unsafe{asset(lookup,MOD)}?;
  let mif=unsafe{asset(lookup,MIF)}?;
@@ -95,7 +102,7 @@ fn boot(lookup:EmbeddedLookup)->Result<Running,String>{
  log_stage(c"R.boot.applet.create.deferred");
  Ok(Running{machine,applet:None,pad_before:Pad::default(),
   clsid,creation_started:false,creation_finished:false,creation_polls:0,
-  frame:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,logged_nonblank:false,next_report_ms:1_000,menu_capture_saved:false,race_capture_saved:false,_fufs:fufs})
+  frame:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,logged_nonblank:false,post_start_trace:0,next_report_ms:1_000,menu_capture_saved:false,race_capture_saved:false,_fufs:fufs})
 }
 fn check(outcomes:&[Outcome])->Result<(),String>{
  for x in outcomes{if !matches!(x,Outcome::Returned{..}|Outcome::Budget){return Err(format!("Guest stopped: {x:?}"));}}
@@ -271,29 +278,47 @@ impl Running{
    if matches!(start,Outcome::Budget) { log_stage(c"R.tick.applet.start.budget"); }
    check(&[start])?;
    log_stage(c"R.tick.applet.start.ok");
+   self.post_start_trace=4;
+  }
+  let trace=self.post_start_trace>0;
+  if trace {
+   self.post_start_trace-=1;
+   log_stage(c"R.trace.post_start.tick.enter");
+   log_stage(c"R.trace.queued_update.enter");
   }
   // EVT_APP_START can itself enqueue a frame: consume it before the next
   // comeca_volta()/fecha_volta(), which would discard a single update.
   if let Some(f)=self.machine.toma_quadro_do_update(){
+   if trace {log_stage(c"R.trace.queued_update.found");}
    self.w=f.width();self.h=f.height();self.frame.resize(f.pixels().len()*4,0);
    for (&v,b) in f.pixels().iter().zip(self.frame.chunks_exact_mut(4)){b.copy_from_slice(&pixel(v));}
    if !self.logged_video {log_stage(c"R.video.present.start_update");self.logged_video=true;}
    self.capture_guest_milestones();
    return Ok(true);
   }
+  if trace {log_stage(c"R.trace.queued_update.done");}
   let before=self.machine.gl_swaps();
+  if trace {log_stage(c"R.trace.swaps.read.ok");}
   for _ in 0..FRAME_PASSES{
    if first_step { log_stage(c"R.tick.advance.enter"); }
+   if trace {log_stage(c"R.trace.turn.begin");}
    self.machine.comeca_volta();
+   if trace {log_stage(c"R.trace.cpu.advance.enter");}
    let outcomes=self.machine.advance(FRAME_BUDGET).map_err(|e|e.to_string())?;
+   if trace {log_stage(c"R.trace.cpu.advance.returned");}
    let signals=self.machine.deliver_signals(FRAME_BUDGET).map_err(|e|e.to_string())?;
+   if trace {log_stage(c"R.trace.signals.returned");}
    let cb=self.machine.deliver_callbacks(FRAME_BUDGET).map_err(|e|e.to_string())?;
+   if trace {log_stage(c"R.trace.callbacks.returned");}
    // IMPORTANT: Zeebx clears the queued framebuffer on fecha_volta()
    // when there was only one IDisplay_Update in the current turn.
    // Take the latest update BEFORE closing this turn, never afterward.
    let mut latest_update=None;
+   if trace {log_stage(c"R.trace.update_drain.enter");}
    while let Some(f)=self.machine.toma_quadro_do_update(){ latest_update=Some(f); }
+   if trace {log_stage(c"R.trace.update_drain.done");}
    self.machine.fecha_volta();
+   if trace {log_stage(c"R.trace.turn.closed");}
    if first_step { log_stage(c"R.tick.advance.ok"); }
    check(&outcomes)?;check(&signals)?;check(&cb)?;
    if self.machine.pediu_para_fechar(){
@@ -306,7 +331,9 @@ impl Running{
     self.capture_guest_milestones();
     return Ok(true);
    }
+   if trace {log_stage(c"R.trace.gl_swap_check.enter");}
    if self.machine.gl_swaps()!=before{
+    if trace {log_stage(c"R.trace.gl_swap.found");}
     // The BREW CPU display and GLES rasterizer are separate surfaces.
     // Some games swap a valid 3D image while the device bitmap is still
     // black. Read Zeebx's GLES frame before deciding what to publish.
@@ -325,7 +352,11 @@ impl Running{
       }
      }
     }
-    if !used_gl_frame { self.publish_frame(); }
+    if !used_gl_frame {
+     if trace {log_stage(c"R.trace.cpu_frame.copy.enter");}
+     self.publish_frame();
+     if trace {log_stage(c"R.trace.cpu_frame.copy.done");}
+    }
     let nonblank=self.frame.chunks_exact(4).any(|p|p[0]!=0||p[1]!=0||p[2]!=0);
     if !self.logged_video {
      if nonblank {log_stage(c"R.video.present.egl_swap.nonblank");}
@@ -337,9 +368,11 @@ impl Running{
      self.logged_nonblank=true;
     }
     self.capture_guest_milestones();
+    if trace {log_stage(c"R.trace.post_swap.return");}
     return Ok(true);
    }
   }
+  if trace {log_stage(c"R.trace.post_start.tick.done");}
   // Sparse diagnostics. A framebuffer may change even when no present event
   // is emitted; show it occasionally while preserving a bounded CPU workload.
   if self.ticks==1 || self.ticks==20 || self.ticks==100 {
