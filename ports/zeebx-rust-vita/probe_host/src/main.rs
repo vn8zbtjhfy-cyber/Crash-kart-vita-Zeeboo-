@@ -121,25 +121,31 @@ fn main()->Result<(),Box<dyn Error>> {
             println!("TIMEOUT: CreateInstance still executing after 45 seconds");
             break;
         }
-        let batch=machine.advance(250_000)?;
-        let Some(step)=batch.into_iter().next() else{
-            println!("resume[{i}] no deferred execution found");break
-        };
+        // Use the very same explicit continuation that the Vita port calls,
+        // not the alternate Machine::advance() host shortcut.
+        let step=machine.resume_create_applet(250_000)?;
         polls=i;
-        if i<=8 || i.is_power_of_two() || i%128==0 || !matches!(step,Outcome::Budget){
-            println!("resume[{i}] outcome={step:?} instr={} pc={:#010x} clock={}ms elapsed={:?}",
+        if i<=8 || i.is_power_of_two() || i%128==0 ||
+            !matches!(step,AppletResult::Stopped(Outcome::Budget)){
+            println!("resume[{i}] via_vita_api={step:?} instr={} pc={:#010x} clock={}ms elapsed={:?}",
                 machine.instructions(),machine.cpu().read_reg(Reg::Pc),machine.clock_ms(),start.elapsed());
         }
-        result=AppletResult::Stopped(step);
+        result=step;
         if !matches!(result,AppletResult::Stopped(Outcome::Budget)){finished=true;break;}
     }
     println!("FINAL finished={finished} polls={polls} result={result:?} instr={} pc={:#010x} virtual_clock={}ms elapsed={:?}",
         machine.instructions(),machine.cpu().read_reg(Reg::Pc),machine.clock_ms(),start.elapsed());
-    if !matches!(result,AppletResult::Stopped(Outcome::Returned{code:0})) {
-        return Err(format!("CreateInstance did not return success after {polls} polls: {result:?}").into());
+    let applet=match result {
+        AppletResult::Called {code:0,applet} if applet!=0 => applet,
+        _=>return Err(format!("Vita CreateInstance continuation did not return a valid applet after {polls} polls: {result:?}").into()),
+    };
+    // Verify the Vita helper reads the identical pointer the host already
+    // observed in the guest's out parameter. No fabricated startup state.
+    let applet_from_guest=machine.host_probe_created_applet()?;
+    if applet!=applet_from_guest {
+        return Err(format!("Vita applet pointer mismatch: api={applet:#x} guest={applet_from_guest:#x}").into());
     }
-    let applet=machine.host_probe_created_applet()?;
-    println!("CreateInstance APPLET_POINTER={applet:#010x}");
+    println!("CreateInstance VITA_API_PARITY_OK APPLET_POINTER={applet:#010x}");
     if applet==0 { return Err("CreateInstance returned null applet pointer".into()); }
     let start_outcome=machine.start_applet(applet,clsid,500_000)?;
     println!("EVT_APP_START outcome={start_outcome:?} instr={} clock={}ms",

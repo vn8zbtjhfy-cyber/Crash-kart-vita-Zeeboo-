@@ -42,7 +42,7 @@ PATCHED = """        // CNK_VITA_RESUME_CREATE_V2
     }
 
     /// Resume the exact saved call without restarting its constructor.
-    #[cfg(target_os = "vita")]
+    #[cfg(any(target_os = "vita", cnk_host_probe))]
     pub fn resume_create_applet(&mut self, budget: u64) -> Result<AppletResult, CpuError> {
         let Some(outcome) = self.retoma_trecho(budget)? else {
             return Err(CpuError("CreateInstance lost its saved guest context".into()));

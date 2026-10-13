@@ -44,6 +44,9 @@ jobs:
           cd ports/zeebx-rust-vita
           git clone --depth 1 --branch development https://github.com/ZeebxTeam/zeebx-emu.git zeebx-emu
           python3 tools/patch_zeebx_embedded_fs.py zeebx-emu
+          # The Vita CreateInstance continuation must be exercised by the
+          # real Linux ARM probe too, rather than merely compile on PS Vita.
+          python3 tools/patch_zeebx_create_budget_vita.py zeebx-emu
           # Zeebx normally gates its interpreter to Vita/iOS/WASM/tests.
           # Expose that CPU implementation in this Linux-only probe, so we
           # measure the same ARM backend instead of desktop Dynarmic.
@@ -72,6 +75,7 @@ jobs:
       - name: Comparar arranque ARM y presupuesto CreateInstance
         env:
           CNK_ASSETS: ../assets
+          RUSTFLAGS: --cfg cnk_host_probe
         run: |
           cd ports/zeebx-rust-vita/probe_host
           cargo run --release --quiet
