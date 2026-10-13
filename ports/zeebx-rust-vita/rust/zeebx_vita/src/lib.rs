@@ -21,8 +21,12 @@ const MIF:&CStr=c"brew/mif/274214.mif";
 const BOOT_BUDGET:u64=20_000_000;
 // Short bounded slices yield control to the Vita UI rather than executing
 // hundreds of millions of interpreted guest instructions in a single frame.
-const FRAME_BUDGET:u64=1_000_000;
-const FRAME_PASSES:usize=4;
+// Lower bounded guest-execution slices let the UI poll Vita buttons often.
+// An interpreted callback may run to the entire budget before returning;
+// 1M instructions x 3 guest pipelines x 4 passes caused multi-second stalls.
+// Slice more often rather than reducing game logic, textures, or physics.
+const FRAME_BUDGET:u64=100_000;
+const FRAME_PASSES:usize=2;
 // CreateInstance is no longer a 24*20M-instruction blocking call.
 const CREATE_SLICE:u64=250_000;
 const MAX_CREATE_POLLS:u32=2048;
@@ -371,6 +375,12 @@ pub unsafe extern "C" fn zeebx_vita_step(
 }
 #[unsafe(no_mangle)]pub extern "C" fn zeebx_vita_last_error()->*const c_char{
  global().error.as_ref().map_or(ptr::null(),|e|e.as_ptr())
+}
+// A zero-frame result can mean "still interpreting the ARM game", NOT idle.
+// Report real guest-instruction progress to the Vita main loop so it never
+// sleeps while the interpreter is doing productive work.
+#[unsafe(no_mangle)]pub extern "C" fn zeebx_vita_guest_instructions()->u64{
+ global().running.as_ref().map_or(0,|r|r.machine.instructions())
 }
 // Report the guest clock for deterministic FFI parity tests and diagnostics.
 #[unsafe(no_mangle)]pub extern "C" fn zeebx_vita_guest_clock_ms()->u32{

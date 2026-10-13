@@ -42,6 +42,10 @@ int main(void) {
    ZeebxVitaPad pad=vita_input_read();
    if(vita_input_should_exit())break;
    if(frames==0)vita_debug_log("C.zeebx.step.first.enter");
+   // A long guest callback often yields a budget but no framebuffer yet.
+   // Keep working immediately in that case, rather than adding 1ms of
+   // artificial sleep on every ARM interpreter slice.
+   const uint64_t instructions_before=zeebx_vita_guest_instructions();
    int result=zeebx_vita_step(&pad,&rgba,&w,&h);
    if(result<0){
      vita_debug_log("C.zeebx.step.failed");
@@ -53,7 +57,11 @@ int main(void) {
      vita_video_draw(rgba,w,h);
      if(drawn++==0)vita_debug_log("C.video.draw.first.ok");
    }else{
-     sceKernelDelayThread(1000);
+     // Sleep only when Zeebx is genuinely idle (no guest CPU progress).
+     // This also lets us poll the input controller more frequently during
+     // interpreter-heavy game screens and race transitions.
+     if(zeebx_vita_guest_instructions()==instructions_before)
+       sceKernelDelayThread(1000);
    }
    if((++frames%180)==0)vita_debug_log("C.frame.heartbeat.180");
  }
