@@ -165,6 +165,13 @@ fn main()->Result<(),Box<dyn Error>> {
     let mut verified_main_menu=false;
     let mut verified_race=false;
     let play_start=Instant::now();
+    // Deterministic input A/B testing: identical original ROM, CPU timing
+    // and menu navigation, changing only steering after the race starts.
+    let scenario=env::var("CNK_INPUT_SCENARIO").unwrap_or_else(|_|"analog".into());
+    if !["analog","dpad","neutral"].contains(&scenario.as_str()){
+        return Err(format!("Invalid CNK_INPUT_SCENARIO={scenario}").into());
+    }
+    println!("INPUT_SCENARIO={scenario} (analog, dpad or neutral)");
     println!("PLAY_EXTENDED begin clock={}ms swaps={baseline}",machine.clock_ms());
     // Run through the Zeebo advertisement / intro, not merely the first swap.
     // Save only visually distinct frames; every image comes directly from the
@@ -183,8 +190,13 @@ fn main()->Result<(),Box<dyn Error>> {
         // After confirming the menu, exercise the original Zeebo analog
         // steering path during Crash's "TENTE FAZER CURVAS!" tutorial.
         // This is a guest controller event, not a modified screenshot.
-        let steer=if (70_000..85_000).contains(&guest_ms){100}
-            else if (95_000..110_000).contains(&guest_ms){-100}
+        let steer=if scenario=="analog" && (70_000..85_000).contains(&guest_ms){100}
+            else if scenario=="analog" && (95_000..110_000).contains(&guest_ms){-100}
+            else {0};
+        // The source console lists the digital D-pad as indices 13=left,
+        // 15=right; compare those BREW button transitions against analog X.
+        let dpad=if scenario=="dpad" && (70_000..85_000).contains(&guest_ms){1u32<<15}
+            else if scenario=="dpad" && (95_000..110_000).contains(&guest_ms){1u32<<13}
             else {0};
         if (70_000..70_100).contains(&guest_ms) ||
            (85_000..85_100).contains(&guest_ms) ||
@@ -192,7 +204,7 @@ fn main()->Result<(),Box<dyn Error>> {
            (110_000..110_100).contains(&guest_ms) {
             println!("SCRIPTED_STEERING clock={guest_ms}ms axis0={steer}");
         }
-        let next_pad=Pad{buttons:if pressed {1}else{0},axes:[steer,0,0,0]};
+        let next_pad=Pad{buttons:(if pressed {1}else{0})|dpad,axes:[steer,0,0,0]};
         machine.set_port_pad(0,next_pad);
         for (key,down) in teclas_do_controle(&previous_pad,&next_pad) {
             println!("SCRIPTED_BUTTON clock={guest_ms}ms key={key:#x} down={down}");
@@ -279,7 +291,7 @@ fn main()->Result<(),Box<dyn Error>> {
     save_guest_screen(&machine,"last_frame.ppm")?;
     println!("FILES_MISSING {:?}",machine.missing_files());
     println!("GL_IGNORED {:?}",machine.ignored_gl());
-    println!("FINAL_RENDER_EXTENDED swaps={} distinct_frames={} milestones={milestones} scripted_presses={scripted_presses} guest_ms={} updates={total_updates} elapsed={:?}",
+    println!("FINAL_RENDER_EXTENDED scenario={scenario} swaps={} distinct_frames={} milestones={milestones} scripted_presses={scripted_presses} guest_ms={} updates={total_updates} elapsed={:?}",
         machine.gl_swaps(),saved,machine.clock_ms(),start.elapsed());
     if !first_swap { return Err("Guest never called eglSwapBuffers".into()); }
     // Catches regressions where an emulator appears to boot but never reaches

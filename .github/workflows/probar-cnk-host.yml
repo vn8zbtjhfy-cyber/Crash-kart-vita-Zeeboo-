@@ -88,6 +88,39 @@ jobs:
         run: |
           cd ports/zeebx-rust-vita/probe_host
           cargo run --release --quiet --bin vita_ffi_parity
+      - name: Comparar respuesta del kart a analógico y cruceta con controles neutrales
+        env:
+          CNK_ASSETS: ../assets
+          RUSTFLAGS: --cfg cnk_host_probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ports/zeebx-rust-vita/probe_host
+          mkdir -p input_comparison
+          # Preserve original analog test screenshot before alternative replays.
+          cp milestone_17_*.ppm input_comparison/analog_80s.ppm
+          for scenario in neutral dpad; do
+            CNK_INPUT_SCENARIO="$scenario" cargo run --release --quiet --bin cnk-zeebx-host-probe > "input_comparison/$scenario.log"
+            cp milestone_17_*.ppm "input_comparison/${scenario}_80s.ppm"
+            grep 'CNK_GAMEPLAY_PROOF' "input_comparison/$scenario.log"
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          files={label: Path(f'input_comparison/{label}_80s.ppm').read_bytes() for label in ('analog','neutral','dpad')}
+          def ppm_rgb(data):
+              # Genuine P6 guest frame, exactly 640x480 RGB24.
+              header=b'P6\\n640 480\\n255\\n'
+              assert data.startswith(header), 'Unexpected guest framebuffer format'
+              return data[len(header):]
+          images={k:ppm_rgb(v) for k,v in files.items()}
+          def changed(a,b):
+              return sum(a[i:i+3]!=b[i:i+3] for i in range(0,len(a),3))
+          for mode in ('analog','dpad'):
+              diff=changed(images[mode],images['neutral'])
+              print(f'GUEST_STEERING_AB_TEST mode={mode} changed_pixels={diff} of=307200 clock=~80s')
+              # Zero difference is a useful negative result, not a reason to
+              # manufacture a gameplay pass. Investigate device input next.
+          PY
       # The *real* Vita saves to ux0:data, but GitHub artifacts reject
       # colon characters in both directory and file names on upload.
       # Copy host-generated frames without changing the emulator's save path.
@@ -114,5 +147,7 @@ jobs:
           path: |
             ports/zeebx-rust-vita/probe_host/*.ppm
             ports/zeebx-rust-vita/probe_host/ffi_frames/*.ppm
+            ports/zeebx-rust-vita/probe_host/input_comparison/*.ppm
+            ports/zeebx-rust-vita/probe_host/input_comparison/*.log
           if-no-files-found: warn
           retention-days: 7
