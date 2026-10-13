@@ -4,7 +4,7 @@
 //! No PS Vita/vitaGL hardware is emulated here.
 use std::{collections::HashMap, env, error::Error, ffi::{CStr,c_char},fs,path::PathBuf,
     sync::{OnceLock,atomic::{AtomicU32,Ordering}},time::{Duration,Instant}};
-#[path="../../rust/zeebx_vita/src/lib.rs"] mod vita_bridge;
+#[path="../../../rust/zeebx_vita/src/lib.rs"] mod vita_bridge;
 use vita_bridge::{EmbeddedAsset,ZeebxVitaPad};
 static ASSETS:OnceLock<HashMap<String,&'static [u8]>>=OnceLock::new();
 static LOG_TIMELINE:AtomicU32=AtomicU32::new(0);
