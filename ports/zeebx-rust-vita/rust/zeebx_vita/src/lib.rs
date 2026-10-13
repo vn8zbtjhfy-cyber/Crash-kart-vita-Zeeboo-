@@ -29,7 +29,7 @@ const MAX_CREATE_POLLS:u32=2048;
 struct Running{
  machine:Machine<Interpretador>,applet:Option<(u32,u32)>,pad_before:Pad,
  clsid:u32,creation_started:bool,creation_finished:bool,creation_polls:u32,
- frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,logged_nonblank:bool,_fufs:FufsView
+ frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,logged_nonblank:bool,next_report_ms:u32,_fufs:FufsView
 }
 struct State{running:Option<Running>,error:Option<CString>}
 struct StateCell(UnsafeCell<State>);
@@ -77,7 +77,7 @@ fn boot(lookup:EmbeddedLookup)->Result<Running,String>{
  log_stage(c"R.boot.applet.create.deferred");
  Ok(Running{machine,applet:None,pad_before:Pad::default(),
   clsid,creation_started:false,creation_finished:false,creation_polls:0,
-  frame:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,logged_nonblank:false,_fufs:fufs})
+  frame:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,logged_nonblank:false,next_report_ms:1_000,_fufs:fufs})
 }
 fn check(outcomes:&[Outcome])->Result<(),String>{
  for x in outcomes{if !matches!(x,Outcome::Returned{..}|Outcome::Budget){return Err(format!("Guest stopped: {x:?}"));}}
@@ -88,6 +88,22 @@ fn pixel(v:u16)->[u8;4]{
  [(r<<3)|(r>>2),(g<<2)|(g>>4),(b<<3)|(b>>2),255]
 }
 impl Running{
+ // Report real guest-clock/GL progress to persistent Vita logs. The host
+ // reproduced the original menu at ~25s guest time; this proves whether the
+ // console reaches the same code path rather than guessing from a black screen.
+ fn report_timeline(&mut self) {
+  let ms=self.machine.clock_ms();
+  if ms<self.next_report_ms{return;}
+  let swaps=self.machine.gl_swaps();
+  let instructions=self.machine.instructions();
+  let has_color=self.frame.chunks_exact(4).any(|p|p[0]!=0||p[1]!=0||p[2]!=0);
+  if let Ok(msg)=CString::new(format!(
+   "R.timeline.ms={ms} swaps={swaps} ticks={} instructions={instructions} visible={has_color}",
+   self.ticks
+  )){log_stage(&msg);}
+  self.next_report_ms=if ms<5_000 {5_000}
+   else {((ms/5_000).saturating_add(1)).saturating_mul(5_000)};
+ }
  fn publish_frame(&mut self){
   let screen=self.machine.screen();self.w=screen.width();self.h=screen.height();
   self.frame.resize(screen.pixels().len()*4,0);
@@ -95,6 +111,7 @@ impl Running{
  }
  fn tick(&mut self,input:ZeebxVitaPad)->Result<bool,String>{
   self.ticks=self.ticks.saturating_add(1);
+  self.report_timeline();
   let first_step=!self.logged_first_tick;
   self.logged_first_tick=true;
   if first_step { log_stage(c"R.tick.enter"); }
