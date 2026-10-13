@@ -30,7 +30,7 @@ int vita_video_init(void){
  vglSwapBuffers(GL_FALSE);
  return 0;
 }
-int vita_video_draw(const uint8_t*r,uint32_t w,uint32_t h){
+int vita_video_draw(const uint16_t*r,uint32_t w,uint32_t h){
  if(!r||w==0||h==0||w>2048||h>2048)return -1;
  // Always clear the entire display, not just last frame's letterboxed viewport.
  glViewport(0,0,W,H);
@@ -40,13 +40,13 @@ int vita_video_draw(const uint8_t*r,uint32_t w,uint32_t h){
   int vw=(int)(w*s+0.5f),vh=(int)(h*s+0.5f);
   glViewport((W-vw)/2,(H-vh)/2,vw,vh);glBindTexture(GL_TEXTURE_2D,tex);
   if(w!=old_w||h!=old_h){
-   glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,w,h,0,GL_RGBA,GL_UNSIGNED_BYTE,r);
+   glTexImage2D(GL_TEXTURE_2D,0,GL_RGB,w,h,0,GL_RGB,GL_UNSIGNED_SHORT_5_6_5,r);
    // Detect VRAM allocation failures at the moment of texture creation
    // instead of silently showing black or triggering a later GPU fault.
    GLenum err=glGetError();
    if(err!=GL_NO_ERROR)return (int)err;
    old_w=w;old_h=h;
-  }else glTexSubImage2D(GL_TEXTURE_2D,0,0,0,w,h,GL_RGBA,GL_UNSIGNED_BYTE,r);
+  }else glTexSubImage2D(GL_TEXTURE_2D,0,0,0,w,h,GL_RGB,GL_UNSIGNED_SHORT_5_6_5,r);
   const float v[]={-1,-1,1,-1,-1,1,1,1};
   const float t[]={0,1,1,1,0,0,1,0};
   glEnableClientState(GL_VERTEX_ARRAY);glEnableClientState(GL_TEXTURE_COORD_ARRAY);

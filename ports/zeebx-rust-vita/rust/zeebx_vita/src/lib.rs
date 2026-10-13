@@ -33,7 +33,7 @@ const MAX_CREATE_POLLS:u32=2048;
 struct Running{
  machine:Machine<Interpretador>,applet:Option<(u32,u32)>,pad_before:Pad,
  clsid:u32,creation_started:bool,creation_finished:bool,creation_polls:u32,
- frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,logged_nonblank:bool,post_start_trace:u8,next_report_ms:u32,menu_capture_saved:bool,race_capture_saved:bool,capture_enabled:bool,_fufs:FufsView
+ frame:Vec<u8>,frame565:Vec<u16>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,logged_nonblank:bool,post_start_trace:u8,next_report_ms:u32,menu_capture_saved:bool,race_capture_saved:bool,capture_enabled:bool,_fufs:FufsView
 }
 struct State{running:Option<Running>,error:Option<CString>}
 struct StateCell(UnsafeCell<State>);
@@ -108,7 +108,7 @@ fn boot(lookup:EmbeddedLookup)->Result<Running,String>{
  else {log_stage(c"R.capture.ppm.disabled_for_gameplay");}
  Ok(Running{machine,applet:None,pad_before:Pad::default(),
   clsid,creation_started:false,creation_finished:false,creation_polls:0,
-  frame:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,logged_nonblank:false,post_start_trace:0,next_report_ms:1_000,menu_capture_saved:false,race_capture_saved:false,capture_enabled,_fufs:fufs})
+  frame:Vec::new(),frame565:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,logged_nonblank:false,post_start_trace:0,next_report_ms:1_000,menu_capture_saved:false,race_capture_saved:false,capture_enabled,_fufs:fufs})
 }
 fn check(outcomes:&[Outcome])->Result<(),String>{
  for x in outcomes{if !matches!(x,Outcome::Returned{..}|Outcome::Budget){return Err(format!("Guest stopped: {x:?}"));}}
@@ -125,18 +125,19 @@ impl Running{
  fn save_guest_ppm(&self,path:&str)->std::io::Result<()>{
   use std::io::{BufWriter,Write};
   let expected=(self.w as usize)
-   .checked_mul(self.h as usize).and_then(|x|x.checked_mul(4))
+   .checked_mul(self.h as usize)
    .ok_or_else(||std::io::Error::other("frame size overflow"))?;
-  if self.w==0||self.h==0||self.frame.len()!=expected {
-   return Err(std::io::Error::other("missing or incomplete RGBA frame"));
+  if self.w==0||self.h==0||self.frame565.len()!=expected {
+   return Err(std::io::Error::other("missing or incomplete RGB565 frame"));
   }
   let f=std::fs::File::create(path)?;
   let mut out=BufWriter::with_capacity(64*1024,f);
   write!(out,"P6\n{} {}\n255\n",self.w,self.h)?;
   let mut rgb=[0u8;4096*3];
-  for chunk in self.frame.chunks(4096*4){
+  for chunk in self.frame565.chunks(4096){
    let mut end=0usize;
-   for px in chunk.chunks_exact(4){
+   for &v in chunk{
+    let px=pixel(v);
     rgb[end..end+3].copy_from_slice(&px[..3]);
     end+=3;
    }
@@ -148,28 +149,18 @@ impl Running{
  // final RGBA pixels. They are *heuristics*, not gameplay-completion claims.
  // Run this check only on the two diagnostic snapshots, never per frame.
  fn original_scene_colors(&self)->(usize,usize){
-  let w=self.w as usize;
-  let h=self.h as usize;
-  if w<600||h<480||self.frame.len()!=w.saturating_mul(h).saturating_mul(4){
-   return (0,0);
-  }
-  let mut orange=0usize;
-  let mut road=0usize;
-  for y in 230..415{
-   for x in 150..510{
-    let i=(y*w+x)*4;
-    let (r,g,b)=(self.frame[i],self.frame[i+1],self.frame[i+2]);
-    if r>=160&&(20..=180).contains(&g)&&b<80{orange+=1;}
-   }
-  }
-  for y in 295..470{
-   for x in 110..530{
-    let i=(y*w+x)*4;
-    let (r,g,b)=(self.frame[i],self.frame[i+1],self.frame[i+2]);
-    if (165..=245).contains(&r)&&(100..=185).contains(&g)
-     &&(90..=200).contains(&b){road+=1;}
-   }
-  }
+  let w=self.w as usize;let h=self.h as usize;
+  if w<600||h<480||self.frame565.len()!=w.saturating_mul(h){return (0,0);}
+  let mut orange=0usize;let mut road=0usize;
+  for y in 230..415{for x in 150..510{
+   let [r,g,b,_]=pixel(self.frame565[y*w+x]);
+   if r>=160&&(20..=180).contains(&g)&&b<80{orange+=1;}
+  }}
+  for y in 295..470{for x in 110..530{
+   let [r,g,b,_]=pixel(self.frame565[y*w+x]);
+   if (165..=245).contains(&r)&&(100..=185).contains(&g)
+    &&(90..=200).contains(&b){road+=1;}
+  }}
   (orange,road)
  }
  fn log_scene_validation(&self,kind:&str){
@@ -223,7 +214,7 @@ impl Running{
   if ms<self.next_report_ms{return;}
   let swaps=self.machine.gl_swaps();
   let instructions=self.machine.instructions();
-  let has_color=self.frame.chunks_exact(4).any(|p|p[0]!=0||p[1]!=0||p[2]!=0);
+  let has_color=self.frame565.iter().any(|&v|v!=0);
   if let Ok(msg)=CString::new(format!(
    "R.timeline.ms={ms} swaps={swaps} ticks={} instructions={instructions} visible={has_color}",
    self.ticks
@@ -232,9 +223,10 @@ impl Running{
    else {((ms/5_000).saturating_add(1)).saturating_mul(5_000)};
  }
  fn publish_frame(&mut self){
-  let screen=self.machine.screen();self.w=screen.width();self.h=screen.height();
-  self.frame.resize(screen.pixels().len()*4,0);
-  for (&v,b) in screen.pixels().iter().zip(self.frame.chunks_exact_mut(4)){b.copy_from_slice(&pixel(v));}
+  let screen=self.machine.screen();
+  self.w=screen.width();self.h=screen.height();
+  self.frame565.clear();
+  self.frame565.extend_from_slice(screen.pixels());
  }
  fn tick(&mut self,input:ZeebxVitaPad)->Result<bool,String>{
   self.ticks=self.ticks.saturating_add(1);
@@ -300,8 +292,8 @@ impl Running{
   // comeca_volta()/fecha_volta(), which would discard a single update.
   if let Some(f)=self.machine.toma_quadro_do_update(){
    if trace {log_stage(c"R.trace.queued_update.found");}
-   self.w=f.width();self.h=f.height();self.frame.resize(f.pixels().len()*4,0);
-   for (&v,b) in f.pixels().iter().zip(self.frame.chunks_exact_mut(4)){b.copy_from_slice(&pixel(v));}
+   self.w=f.width();self.h=f.height();
+   self.frame565.clear();self.frame565.extend_from_slice(f.pixels());
    if !self.logged_video {log_stage(c"R.video.present.start_update");self.logged_video=true;}
    self.capture_guest_milestones();
    return Ok(true);
@@ -335,8 +327,8 @@ impl Running{
     let _=self.machine.encerra_applet();return Err("Applet cerrado".into());
    }
    if let Some(f)=latest_update{
-    self.w=f.width();self.h=f.height();self.frame.resize(f.pixels().len()*4,0);
-    for (&v,b) in f.pixels().iter().zip(self.frame.chunks_exact_mut(4)){b.copy_from_slice(&pixel(v));}
+    self.w=f.width();self.h=f.height();
+   self.frame565.clear();self.frame565.extend_from_slice(f.pixels());
     if !self.logged_video {log_stage(c"R.video.present.display_update");self.logged_video=true;}
     self.capture_guest_milestones();
     return Ok(true);
@@ -353,10 +345,7 @@ impl Running{
      if let Some(gl_frame)=self.machine.gl_frame() {
       if gl_frame.pixels().iter().any(|&px| px!=0) {
        self.w=gl_frame.width();self.h=gl_frame.height();
-       self.frame.resize(gl_frame.pixels().len()*4,0);
-       for (&v,b) in gl_frame.pixels().iter().zip(self.frame.chunks_exact_mut(4)){
-        b.copy_from_slice(&pixel(v));
-       }
+       self.frame565.clear();self.frame565.extend_from_slice(gl_frame.pixels());
        used_gl_frame=true;
        if !self.logged_nonblank {log_stage(c"R.video.gl_readback.nonblank");self.logged_nonblank=true;}
       }
@@ -367,7 +356,7 @@ impl Running{
      self.publish_frame();
      if trace {log_stage(c"R.trace.cpu_frame.copy.done");}
     }
-    let nonblank=self.frame.chunks_exact(4).any(|p|p[0]!=0||p[1]!=0||p[2]!=0);
+    let nonblank=self.frame565.iter().any(|&px|px!=0);
     if !self.logged_video {
      if nonblank {log_stage(c"R.video.present.egl_swap.nonblank");}
      else {log_stage(c"R.video.present.egl_swap.blank");}
@@ -412,7 +401,30 @@ pub unsafe extern "C" fn zeebx_vita_step(
  let Some(r)=global().running.as_mut()else{return fail("Sin inicializar")};
  match r.tick(unsafe{*pad}){
   Ok(false)=>0,
-  Ok(true)=>{unsafe{*rgba=r.frame.as_ptr();*w=r.w;*h=r.h;}1},
+  Ok(true)=>{
+   // RGBA compatibility for existing host tests. The Vita video path
+   // requests RGB565 instead and avoids this 640x480x4 expansion.
+   r.frame.resize(r.frame565.len()*4,0);
+   for (&v,b) in r.frame565.iter().zip(r.frame.chunks_exact_mut(4)){
+    b.copy_from_slice(&pixel(v));
+   }
+   unsafe{*rgba=r.frame.as_ptr();*w=r.w;*h=r.h;}1
+  },
+  Err(e)=>fail(e)
+ }
+}
+// Native 16-bit guest framebuffer. Caller must render synchronously before
+// the next game step, which can reallocate this buffer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zeebx_vita_step_rgb565(
+ pad:*const ZeebxVitaPad,pixels:*mut*const u16,w:*mut u32,h:*mut u32
+)->i32{
+ if pad.is_null()||pixels.is_null()||w.is_null()||h.is_null(){return fail("Puntero nulo");}
+ unsafe{*pixels=ptr::null();*w=0;*h=0;}
+ let Some(r)=global().running.as_mut()else{return fail("Sin inicializar")};
+ match r.tick(unsafe{*pad}){
+  Ok(false)=>0,
+  Ok(true)=>{unsafe{*pixels=r.frame565.as_ptr();*w=r.w;*h=r.h;}1},
   Err(e)=>fail(e)
  }
 }

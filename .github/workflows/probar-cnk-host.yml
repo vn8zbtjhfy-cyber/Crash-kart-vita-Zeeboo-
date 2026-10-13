@@ -101,6 +101,16 @@ jobs:
           cargo run --release --quiet --bin vita_ffi_parity 2>&1 | tee owned_guest_memory_ffi.log
           grep -q 'CNK_OWNED_MEMORY_PARITY: executing Vita move-only' owned_guest_memory_ffi.log
           grep -q 'VITA_FFI_FINAL menu=true race=true' owned_guest_memory_ffi.log
+      - name: Verificar FFI nativa RGB565 hasta el menu original y la carrera
+        env:
+          CNK_ASSETS: ../assets
+          CNK_VITA_PIXEL_FORMAT: rgb565
+        run: |
+          cd ports/zeebx-rust-vita/probe_host
+          set -o pipefail
+          cargo run --release --quiet --bin vita_ffi_parity 2>&1 | tee rgb565_vita_ffi.log
+          grep -q 'VITA_FFI_PIXEL_FORMAT=rgb565' rgb565_vita_ffi.log
+          grep -q 'VITA_FFI_FINAL menu=true race=true' rgb565_vita_ffi.log
       - name: Comparar respuesta del kart a analógico y cruceta con controles neutrales
         env:
           CNK_ASSETS: ../assets
@@ -164,5 +174,6 @@ jobs:
             ports/zeebx-rust-vita/probe_host/input_comparison/*.log
             ports/zeebx-rust-vita/probe_host/owned_guest_memory_probe.log
             ports/zeebx-rust-vita/probe_host/owned_guest_memory_ffi.log
+            ports/zeebx-rust-vita/probe_host/rgb565_vita_ffi.log
           if-no-files-found: warn
           retention-days: 7

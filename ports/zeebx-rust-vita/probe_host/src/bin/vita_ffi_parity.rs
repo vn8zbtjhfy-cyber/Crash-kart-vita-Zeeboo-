@@ -72,6 +72,8 @@ fn main()->Result<(),Box<dyn Error>> {
   return Err(format!("Vita bridge boot failure: {}",e.to_string_lossy()).into());
  }
  let mut menu=false;let mut race=false;let mut frames=0usize;
+ let use_rgb565=env::var("CNK_VITA_PIXEL_FORMAT").is_ok_and(|x|x=="rgb565");
+ println!("VITA_FFI_PIXEL_FORMAT={}",if use_rgb565{"rgb565"}else{"rgba"});
  let start=Instant::now();
  let mut last_log_ms=0u32;
  for step in 0..100_000u32 {
@@ -89,7 +91,12 @@ fn main()->Result<(),Box<dyn Error>> {
   let pad=ZeebxVitaPad{buttons:if pressed{1}else{0},axes:[steer,0,0,0]};
   let mut buf=std::ptr::null();
   let mut w=0u32;let mut h=0u32;
-  let result=unsafe{vita_bridge::zeebx_vita_step(&pad,&mut buf,&mut w,&mut h)};
+  let mut pixels565=std::ptr::null();
+  let result=if use_rgb565 {
+   unsafe{vita_bridge::zeebx_vita_step_rgb565(&pad,&mut pixels565,&mut w,&mut h)}
+  }else{
+   unsafe{vita_bridge::zeebx_vita_step(&pad,&mut buf,&mut w,&mut h)}
+  };
   if result<0{
    let ptr=vita_bridge::zeebx_vita_last_error();
    let msg=if ptr.is_null(){"unknown".into()}
@@ -97,10 +104,22 @@ fn main()->Result<(),Box<dyn Error>> {
    return Err(format!("Vita bridge step={step} guest_ms={ms}: {msg}").into());
   }
   if result==1 {
-   if buf.is_null(){return Err("Vita step reported a null frame".into());}
-   let n=(w as usize).checked_mul(h as usize).and_then(|n|n.checked_mul(4))
-     .ok_or("frame dimensions overflow")?;
-   let rgba=unsafe{std::slice::from_raw_parts(buf,n)};
+   if !use_rgb565&&buf.is_null(){return Err("Vita RGBA step reported a null frame".into());}
+   if use_rgb565&&pixels565.is_null(){return Err("Vita RGB565 step reported a null frame".into());}
+   let n=(w as usize).checked_mul(h as usize).ok_or("frame dimensions overflow")?;
+   // Convert exclusively in the Linux test for scene parity. PS Vita
+   // uploads the guest's native RGB565 without the CPU-side conversion.
+   let converted;
+   let rgba:&[u8]=if use_rgb565 {
+    let px=unsafe{std::slice::from_raw_parts(pixels565,n)};
+    converted=px.iter().flat_map(|&v|{
+     let r=((v>>11)&31) as u8;let g=((v>>5)&63) as u8;let b=(v&31) as u8;
+     [(r<<3)|(r>>2),(g<<2)|(g>>4),(b<<3)|(b>>2),255]
+    }).collect::<Vec<u8>>();
+    &converted
+   }else{
+    unsafe{std::slice::from_raw_parts(buf,n*4)}
+   };
    frames+=1;
    if ms>=20_000&&!menu {
     let (orange,road)=classify(w as usize,h as usize,rgba);

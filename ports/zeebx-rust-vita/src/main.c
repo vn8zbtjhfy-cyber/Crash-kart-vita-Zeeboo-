@@ -43,7 +43,7 @@ static void vita_log_speed(uint32_t ticks,uint32_t drawn) {
 int main(void) {
  vita_debug_reset();
  vita_debug_log("C.main.enter");
- vita_debug_log("C.build.vita_crash_diagnostics_v1");
+ vita_debug_log("C.build.vita_rgb565_fastpath_v1");
  vita_log_free_memory("startup");
  vita_input_init();
  vita_debug_log("C.video.init.enter");
@@ -73,7 +73,7 @@ int main(void) {
  }
  vita_debug_log("C.zeebx.boot.ok");
  vita_log_free_memory("after_boot");
- const uint8_t*rgba=0;
+ const uint16_t*rgb565=0;
  uint32_t w=0,h=0,frames=0,drawn=0;
  for(;;){
    ZeebxVitaPad pad=vita_input_read();
@@ -83,7 +83,7 @@ int main(void) {
    // Keep working immediately in that case, rather than adding 1ms of
    // artificial sleep on every ARM interpreter slice.
    const uint64_t instructions_before=zeebx_vita_guest_instructions();
-   int result=zeebx_vita_step(&pad,&rgba,&w,&h);
+   int result=zeebx_vita_step_rgb565(&pad,&rgb565,&w,&h);
    if(result<0){
      vita_debug_log("C.zeebx.step.failed");
      vita_debug_log(zeebx_vita_last_error());
@@ -91,7 +91,7 @@ int main(void) {
    }
    if(result==1){
      if(drawn==0)vita_debug_log("C.video.draw.first.enter");
-     const int video_error=vita_video_draw(rgba,w,h);
+     const int video_error=vita_video_draw(rgb565,w,h);
      if(video_error!=0){
        char message[96];
        snprintf(message,sizeof(message),"C.video.error.code=0x%08x",(unsigned)video_error);
