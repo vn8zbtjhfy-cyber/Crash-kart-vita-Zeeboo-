@@ -112,32 +112,53 @@ fn main()->Result<(),Box<dyn Error>> {
     println!("EVT_APP_START outcome={start_outcome:?} instr={} clock={}ms",
         machine.instructions(),machine.clock_ms());
     let baseline=machine.gl_swaps();
-    let mut first_frame=false;
+    let mut latest_swaps=baseline;
+    let mut first_swap=false;
+    let mut nonblank=false;
+    let mut total_updates=0usize;
     let play_start=Instant::now();
-    for i in 1..=2000u32 {
-        if play_start.elapsed()>Duration::from_secs(30){println!("PLAY START timeout");break;}
+    for i in 1..=3500u32 {
+        if play_start.elapsed()>Duration::from_secs(40){
+            println!("PLAY timeout after 40 real seconds");break;
+        }
         machine.comeca_volta();
         let outcomes=machine.advance(500_000)?;
-        let _signals=machine.deliver_signals(500_000)?;
-        let _callbacks=machine.deliver_callbacks(500_000)?;
-        let mut updates=0;
+        let signals=machine.deliver_signals(500_000)?;
+        let callbacks=machine.deliver_callbacks(500_000)?;
+        let mut updates=0usize;
         while machine.toma_quadro_do_update().is_some(){updates+=1;}
+        total_updates+=updates;
         machine.fecha_volta();
         let swaps=machine.gl_swaps();
-        if updates>0 || swaps>baseline{
-            println!("FIRST_FRAME iteration={i} updates={updates} swaps={swaps} instr={} clock={}ms elapsed={:?}",
-                machine.instructions(),machine.clock_ms(),play_start.elapsed());
-            first_frame=true;
+        let presented=updates>0 || swaps!=latest_swaps;
+        latest_swaps=swaps;
+        let colorful=machine.screen().pixels().iter().any(|&px|px!=0);
+        if presented && !first_swap {
+            first_swap=true;
+            println!("FIRST_SWAP iteration={i} swaps={swaps} updates={updates} nonzero={colorful} instr={} clock={}ms",
+                machine.instructions(),machine.clock_ms());
+            save_guest_screen(&machine,"first_swap.ppm")?;
+        }
+        if colorful && presented {
+            println!("FIRST_NONBLACK_FRAME iteration={i} swaps={swaps} updates={updates} instr={} clock={}ms",
+                machine.instructions(),machine.clock_ms());
+            save_guest_screen(&machine,"first_color_frame.ppm")?;
+            nonblank=true;
             break;
         }
-        if i<=4 || i.is_power_of_two() || i%256==0 {
-            let nonzero=machine.screen().pixels().iter().any(|&px|px!=0);
-            println!("PLAY[{i}] outcome={outcomes:?} instr={} clock={}ms screen_nonzero={} elapsed={:?}",
-                machine.instructions(),machine.clock_ms(),nonzero,play_start.elapsed());
+        if i<=4 || i.is_power_of_two() || i%256==0 || (!outcomes.is_empty() && i%128==0) {
+            println!("PLAY[{i}] guest={outcomes:?} signals={signals:?} callbacks={callbacks:?} instr={} clock={}ms swaps={} updates={} nonzero={} elapsed={:?}",
+                machine.instructions(),machine.clock_ms(),swaps,updates,colorful,play_start.elapsed());
         }
     }
-    save_guest_screen(&machine,"first_frame.ppm")?;
-    println!("FINAL_RENDER frame_seen={first_frame} total_instr={} t={:?}",machine.instructions(),start.elapsed());
-    if !first_frame { return Err("No IDisplay_Update or GL swap observed on host".into()); }
+    save_guest_screen(&machine,"last_frame.ppm")?;
+    println!("FINAL_RENDER first_swap={first_swap} nonblack={nonblank} swaps={} updates={total_updates} total_instr={} t={:?}",
+        machine.gl_swaps(),machine.instructions(),start.elapsed());
+    if !first_swap {
+        return Err("No graphical swap or IDisplay_Update after applet start".into());
+    }
+    if !nonblank {
+        return Err("EGL swapped buffers but host CPU framebuffer remained black".into());
+    }
     Ok(())
 }
