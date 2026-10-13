@@ -25,10 +25,12 @@ const BOOT_BUDGET:u64=20_000_000;
 // An interpreted callback may run to the entire budget before returning;
 // 1M instructions x 3 guest pipelines x 4 passes caused multi-second stalls.
 // Slice more often rather than reducing game logic, textures, or physics.
-const FRAME_BUDGET:u64=100_000;
+// Smaller bounded slices improve button/exit responsiveness on a 333 MHz Vita.
+// This caps per-call interpreter latency, not total guest work.
+const FRAME_BUDGET:u64=64_000;
 const FRAME_PASSES:usize=2;
 // CreateInstance is no longer a 24*20M-instruction blocking call.
-const CREATE_SLICE:u64=250_000;
+const CREATE_SLICE:u64=125_000;
 const MAX_CREATE_POLLS:u32=2048;
 struct Running{
  machine:Machine<Interpretador>,applet:Option<(u32,u32)>,pad_before:Pad,
@@ -89,12 +91,15 @@ fn boot(lookup:EmbeddedLookup)->Result<Running,String>{
  log_stage(c"R.boot.mounted");
  machine.set_installed_applets([(clsid,"274214".to_string())]);
  machine.usa_placa(false,None);
- // Vita CPU rasterizer performance: halve only the INTERNAL 3D render size.
- // Zeebx resamples the guest image back to 640x480 on EGL swap, preserving
- // the game's viewport, menu coordinates and input mapping. This is a
- // quality/performance trade-off, NOT a claim of improved console FPS.
- machine.define_reducao(2);
- log_stage(c"R.video.software_3d.half_resolution");
+ // Full software 3D rasterization is the expensive part of the Vita port.
+ // Zeebx supports up to 4x INTERNAL reduction; the final RGB565 frame
+ // remains 640x480, preserving the original layout and input coordinates.
+ // High quality (2x) is opt-in via VitaShell without rebuilding the VPK.
+ let quality=std::path::Path::new("ux0:data/cnk_vita_quality.enable").is_file();
+ let reduction=if quality {2} else {4};
+ machine.define_reducao(reduction);
+ if quality {log_stage(c"R.video.software_3d.quality_2x");}
+ else {log_stage(c"R.video.software_3d.performance_4x");}
  log_stage(c"R.boot.run.enter");
  let result=machine.run(BOOT_BUDGET).map_err(|e|e.to_string())?;
  log_stage(c"R.boot.run.returned");
@@ -222,11 +227,19 @@ impl Running{
   self.next_report_ms=if ms<5_000 {5_000}
    else {((ms/5_000).saturating_add(1)).saturating_mul(5_000)};
  }
- fn publish_frame(&mut self){
+ // Only copy when pixels actually changed. Static screens can perform
+ // hundreds of EGL swaps; avoid redundant RGB565 transfers and vitaGL
+ // texture uploads without ever skipping guest CPU/event execution.
+ fn publish_frame(&mut self)->bool{
   let screen=self.machine.screen();
+  if self.w==screen.width() && self.h==screen.height()
+      && self.frame565.as_slice()==screen.pixels(){
+   return false;
+  }
   self.w=screen.width();self.h=screen.height();
   self.frame565.clear();
   self.frame565.extend_from_slice(screen.pixels());
+  true
  }
  fn tick(&mut self,input:ZeebxVitaPad)->Result<bool,String>{
   self.ticks=self.ticks.saturating_add(1);
@@ -341,11 +354,16 @@ impl Running{
     // black. Read Zeebx's GLES frame before deciding what to publish.
     let screen_blank=self.machine.screen().pixels().iter().all(|&px| px==0);
     let mut used_gl_frame=false;
+    let mut frame_changed=false;
     if screen_blank {
      if let Some(gl_frame)=self.machine.gl_frame() {
       if gl_frame.pixels().iter().any(|&px| px!=0) {
-       self.w=gl_frame.width();self.h=gl_frame.height();
-       self.frame565.clear();self.frame565.extend_from_slice(gl_frame.pixels());
+       frame_changed=self.w!=gl_frame.width() || self.h!=gl_frame.height()
+        || self.frame565.as_slice()!=gl_frame.pixels();
+       if frame_changed {
+        self.w=gl_frame.width();self.h=gl_frame.height();
+        self.frame565.clear();self.frame565.extend_from_slice(gl_frame.pixels());
+       }
        used_gl_frame=true;
        if !self.logged_nonblank {log_stage(c"R.video.gl_readback.nonblank");self.logged_nonblank=true;}
       }
@@ -353,7 +371,7 @@ impl Running{
     }
     if !used_gl_frame {
      if trace {log_stage(c"R.trace.cpu_frame.copy.enter");}
-     self.publish_frame();
+     frame_changed=self.publish_frame();
      if trace {log_stage(c"R.trace.cpu_frame.copy.done");}
     }
     let nonblank=self.frame565.iter().any(|&px|px!=0);
@@ -368,7 +386,9 @@ impl Running{
     }
     self.capture_guest_milestones();
     if trace {log_stage(c"R.trace.post_swap.return");}
-    return Ok(true);
+    // The guest still advanced and its virtual clock progressed. When this
+    // exact frame is already on screen, save a redundant GPU upload/swap.
+    return Ok(frame_changed);
    }
   }
   if trace {log_stage(c"R.trace.post_start.tick.done");}
