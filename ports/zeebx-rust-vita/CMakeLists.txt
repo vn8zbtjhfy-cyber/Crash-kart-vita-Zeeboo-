@@ -69,7 +69,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
  zeebx_rust
  vitaGL vitashark mathneon
  SceShaccCgExt SceShaccCg_stub SceCommonDialog_stub taihen_stub
- SceCtrl_stub SceGxm_stub SceDisplay_stub SceSysmodule_stub
+ SceCtrl_stub SceGxm_stub SceDisplay_stub SceSysmem_stub SceSysmodule_stub
  SceKernelDmacMgr_stub SceAppMgr_stub SceAppUtil_stub SceAudio_stub
  SceIofilemgr_stub SceProcessmgr_stub pthread m z stdc++)
 option(NITRO_EXPERIMENTAL_VPK "Package unverified game VPK" ON)
