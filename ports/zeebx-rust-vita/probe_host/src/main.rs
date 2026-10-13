@@ -35,7 +35,7 @@ fn read(root:&Path,name:&str)->Result<Vec<u8>,Box<dyn Error>> {
 fn save_guest_screen(machine:&Machine<Interpretador>, filename:&str)->Result<(),Box<dyn Error>>{
     let screen=machine.screen();
     let w=screen.width(); let h=screen.height();
-    let mut ppm=format!("P6\\n{w} {h}\\n255\\n").into_bytes();
+    let mut ppm=format!("P6\n{w} {h}\n255\n").into_bytes();
     for &px in screen.pixels(){
         let r=((px>>11)&31) as u8;
         let g=((px>>5)&63) as u8;
