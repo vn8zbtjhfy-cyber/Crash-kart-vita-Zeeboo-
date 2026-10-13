@@ -4,6 +4,7 @@
 #include "vita_debug.h"
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/kernel/sysmem.h>
+#include <psp2/kernel/processmgr.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -24,6 +25,19 @@ static void vita_log_free_memory(const char *stage) {
    snprintf(message,sizeof(message),
      "C.memory.%s.query_failed=%08x",stage,(unsigned)rc);
  }
+ vita_debug_log(message);
+}
+static void vita_log_speed(uint32_t ticks,uint32_t drawn) {
+ // Process-time and virtual clock are different measurements. Comparing
+ // them tells us whether the Vita is compute-limited before blaming GL.
+ unsigned long long process_ms =
+   (unsigned long long)(sceKernelGetProcessTimeWide()/1000u);
+ char message[192];
+ snprintf(message,sizeof(message),
+   "C.speed.ticks=%u.drawn=%u.process_ms=%llu.guest_ms=%u.gl_swaps=%u",
+   (unsigned)ticks,(unsigned)drawn,process_ms,
+   (unsigned)zeebx_vita_guest_clock_ms(),
+   (unsigned)zeebx_vita_guest_gl_swaps());
  vita_debug_log(message);
 }
 int main(void) {
@@ -92,7 +106,7 @@ int main(void) {
      if(zeebx_vita_guest_instructions()==instructions_before)
        sceKernelDelayThread(1000);
    }
-   if((++frames%180)==0)vita_debug_log("C.frame.heartbeat.180");
+   if((++frames%180)==0)vita_log_speed(frames,drawn);
  }
  vita_debug_log("C.shutdown");
  zeebx_vita_shutdown();
