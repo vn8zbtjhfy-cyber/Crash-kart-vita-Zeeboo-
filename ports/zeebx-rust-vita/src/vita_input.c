@@ -5,11 +5,17 @@
 
 static uint32_t last_buttons;
 static uint64_t last_sample_timestamp;
+// The ARM interpreter can be inside one long guest callback when a Vita
+// button is pressed. Hold a sampled tap for 120 ms of *guest* clock time so
+// the original BREW game can consume the event, even after release.
+#define TAP_LATCH_GUEST_MS 120u
+static uint32_t tap_deadlines[32];
 static int32_t axis(uint8_t x){return (int)x-128;}
 
 void vita_input_init(void){
  last_buttons=0;
  last_sample_timestamp=0;
+ memset(tap_deadlines,0,sizeof(tap_deadlines));
  sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
 }
 
@@ -38,9 +44,23 @@ ZeebxVitaPad vita_input_read(void){
    if(p->timeStamp>newest)newest=p->timeStamp;
   }
  }
+ const uint32_t previously_held=last_buttons;
  last_sample_timestamp=newest;
  last_buttons=have_latest?latest.buttons:0;
- const uint32_t buttons=last_buttons|fresh_buttons;
+ const uint32_t guest_ms=zeebx_vita_guest_clock_ms();
+ // Latch a newly sampled physical press, including a tap which began and
+ // ended between slow interpreter polls. Never use latched buttons to exit:
+ // the exit shortcut checks last_buttons, i.e. the real pad state.
+ const uint32_t new_presses=fresh_buttons & ~previously_held;
+ for(unsigned bit=0;bit<32;bit++){
+  if(new_presses & (1u<<bit))tap_deadlines[bit]=guest_ms+TAP_LATCH_GUEST_MS;
+ }
+ uint32_t buttons=last_buttons|fresh_buttons;
+ for(unsigned bit=0;bit<32;bit++){
+  const uint32_t deadline=tap_deadlines[bit];
+  // Signed difference supports wrapping of the guest's 32-bit ms clock.
+  if(deadline!=0 && (int32_t)(deadline-guest_ms)>0)buttons|=(1u<<bit);
+ }
  ZeebxVitaPad p={0};
  if(buttons&SCE_CTRL_CROSS)p.buttons|=BTN(0);
  if(buttons&SCE_CTRL_SQUARE)p.buttons|=BTN(1);

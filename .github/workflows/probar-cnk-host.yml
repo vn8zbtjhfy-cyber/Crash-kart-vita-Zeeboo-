@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'ports/zeebx-rust-vita/probe_host/**'
+      - 'ports/zeebx-rust-vita/src/vita_input.c'
+      - 'ports/zeebx-rust-vita/tests/**'
       - 'ports/zeebx-rust-vita/rust/zeebx_vita/src/**'
       - 'ports/zeebx-rust-vita/tools/patch_zeebx_*.py'
       - '.github/workflows/probar-cnk-host.yml'
@@ -20,6 +22,14 @@ jobs:
       RUSTFLAGS: "--cfg cnk_host_probe --cfg cnk_vita_owned_probe"
     steps:
       - uses: actions/checkout@v4
+      - name: Verificar que los toques breves lleguen al Zeebo
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ports/zeebx-rust-vita
+          cc -std=c11 -Wall -Wextra -Werror -I tests/stubs -I src \
+            tests/test_vita_input.c src/vita_input.c -o /tmp/cnk_vita_input_test
+          /tmp/cnk_vita_input_test
       - name: Preparar recursos originales privados
         shell: bash
         run: |
