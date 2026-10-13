@@ -33,7 +33,7 @@ const MAX_CREATE_POLLS:u32=2048;
 struct Running{
  machine:Machine<Interpretador>,applet:Option<(u32,u32)>,pad_before:Pad,
  clsid:u32,creation_started:bool,creation_finished:bool,creation_polls:u32,
- frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,logged_nonblank:bool,post_start_trace:u8,next_report_ms:u32,menu_capture_saved:bool,race_capture_saved:bool,_fufs:FufsView
+ frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,logged_nonblank:bool,post_start_trace:u8,next_report_ms:u32,menu_capture_saved:bool,race_capture_saved:bool,capture_enabled:bool,_fufs:FufsView
 }
 struct State{running:Option<Running>,error:Option<CString>}
 struct StateCell(UnsafeCell<State>);
@@ -100,9 +100,15 @@ fn boot(lookup:EmbeddedLookup)->Result<Running,String>{
  log_stage(c"R.boot.run.returned");
  if !matches!(result,Outcome::Returned{code:0}){return Err(format!("AEEMod_Load: {result:?}"));}
  log_stage(c"R.boot.applet.create.deferred");
+ // Diagnostic PPM snapshots each write almost 1MiB through Vita storage,
+ // interrupting game execution. Keep exact scene checks and log timestamps,
+ // but enable those large writes only after an explicit VitaShell opt-in.
+ let capture_enabled=std::path::Path::new("ux0:data/cnk_vita_capture.enable").is_file();
+ if capture_enabled {log_stage(c"R.capture.ppm.opt_in.enabled");}
+ else {log_stage(c"R.capture.ppm.disabled_for_gameplay");}
  Ok(Running{machine,applet:None,pad_before:Pad::default(),
   clsid,creation_started:false,creation_finished:false,creation_polls:0,
-  frame:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,logged_nonblank:false,post_start_trace:0,next_report_ms:1_000,menu_capture_saved:false,race_capture_saved:false,_fufs:fufs})
+  frame:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,logged_nonblank:false,post_start_trace:0,next_report_ms:1_000,menu_capture_saved:false,race_capture_saved:false,capture_enabled,_fufs:fufs})
 }
 fn check(outcomes:&[Outcome])->Result<(),String>{
  for x in outcomes{if !matches!(x,Outcome::Returned{..}|Outcome::Budget){return Err(format!("Guest stopped: {x:?}"));}}
@@ -187,20 +193,24 @@ impl Running{
   if !self.menu_capture_saved && (25_000..30_000).contains(&clock) {
    self.menu_capture_saved=true;
    self.log_scene_validation("menu");
-   match self.save_guest_ppm("ux0:data/cnk_vita_menu_25s.ppm"){
-    Ok(())=>log_stage(c"R.capture.menu.candidate.saved"),
-    Err(e)=>{
-     if let Ok(msg)=CString::new(format!("R.capture.menu.failed: {e}")){log_stage(&msg);}
+   if self.capture_enabled {
+    match self.save_guest_ppm("ux0:data/cnk_vita_menu_25s.ppm"){
+     Ok(())=>log_stage(c"R.capture.menu.candidate.saved"),
+     Err(e)=>{
+      if let Ok(msg)=CString::new(format!("R.capture.menu.failed: {e}")){log_stage(&msg);}
+     }
     }
    }
   }
   if !self.race_capture_saved && (40_000..47_000).contains(&clock){
    self.race_capture_saved=true;
    self.log_scene_validation("race");
-   match self.save_guest_ppm("ux0:data/cnk_vita_race_40s.ppm"){
-    Ok(())=>log_stage(c"R.capture.race.candidate.saved"),
-    Err(e)=>{
-     if let Ok(msg)=CString::new(format!("R.capture.race.failed: {e}")){log_stage(&msg);}
+   if self.capture_enabled {
+    match self.save_guest_ppm("ux0:data/cnk_vita_race_40s.ppm"){
+     Ok(())=>log_stage(c"R.capture.race.candidate.saved"),
+     Err(e)=>{
+      if let Ok(msg)=CString::new(format!("R.capture.race.failed: {e}")){log_stage(&msg);}
+     }
     }
    }
   }

@@ -91,7 +91,14 @@ int main(void) {
    }
    if(result==1){
      if(drawn==0)vita_debug_log("C.video.draw.first.enter");
-     vita_video_draw(rgba,w,h);
+     const int video_error=vita_video_draw(rgba,w,h);
+     if(video_error!=0){
+       char message[96];
+       snprintf(message,sizeof(message),"C.video.error.code=0x%08x",(unsigned)video_error);
+       vita_debug_log(message);
+       vita_debug_log("C.video.render.failed");
+       break;
+     }
      if(drawn++==0){
        vita_debug_log("C.video.draw.first.ok");
        vita_log_free_memory("first_frame");
