@@ -237,9 +237,15 @@ impl Running{
     },
     AppletResult::Stopped(Outcome::Budget) => {
      if self.creation_polls==1 {log_stage(c"R.create.budget.first");}
-     if self.creation_polls==64 {log_stage(c"R.create.budget.64");}
-     if self.creation_polls==256 {log_stage(c"R.create.budget.256");}
-     if self.creation_polls==1024 {log_stage(c"R.create.budget.1024");}
+     // Include a real instruction count on Vita, not only the slice number.
+     // This distinguishes slow initialization from a non-advancing CPU.
+     // Logging only once per 64 calls keeps filesystem overhead negligible.
+     if self.creation_polls%64==0 {
+      if let Ok(stage)=CString::new(format!(
+       "R.create.progress.polls={}.instructions={}",
+       self.creation_polls,self.machine.instructions()
+      )){log_stage(&stage);}
+     }
      return Ok(false);
     },
     other => return Err(format!("CreateInstance: {other:?}"))
