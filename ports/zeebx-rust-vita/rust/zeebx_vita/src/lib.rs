@@ -29,7 +29,7 @@ const MAX_CREATE_POLLS:u32=2048;
 struct Running{
  machine:Machine<Interpretador>,applet:Option<(u32,u32)>,pad_before:Pad,
  clsid:u32,creation_started:bool,creation_finished:bool,creation_polls:u32,
- frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,logged_nonblank:bool,next_report_ms:u32,_fufs:FufsView
+ frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,logged_nonblank:bool,next_report_ms:u32,menu_capture_saved:bool,race_capture_saved:bool,_fufs:FufsView
 }
 struct State{running:Option<Running>,error:Option<CString>}
 struct StateCell(UnsafeCell<State>);
@@ -77,7 +77,7 @@ fn boot(lookup:EmbeddedLookup)->Result<Running,String>{
  log_stage(c"R.boot.applet.create.deferred");
  Ok(Running{machine,applet:None,pad_before:Pad::default(),
   clsid,creation_started:false,creation_finished:false,creation_polls:0,
-  frame:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,logged_nonblank:false,next_report_ms:1_000,_fufs:fufs})
+  frame:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,logged_nonblank:false,next_report_ms:1_000,menu_capture_saved:false,race_capture_saved:false,_fufs:fufs})
 }
 fn check(outcomes:&[Outcome])->Result<(),String>{
  for x in outcomes{if !matches!(x,Outcome::Returned{..}|Outcome::Budget){return Err(format!("Guest stopped: {x:?}"));}}
@@ -88,6 +88,52 @@ fn pixel(v:u16)->[u8;4]{
  [(r<<3)|(r>>2),(g<<2)|(g>>4),(b<<3)|(b>>2),255]
 }
 impl Running{
+ // Capture the *actual* RGB pixels from the game, not a synthetic menu.
+ // These small, bounded on-device snapshots separate emulation faults from
+ // VitaGL/display faults and can be extracted with VitaShell if needed.
+ fn save_guest_ppm(&self,path:&str)->std::io::Result<()>{
+  use std::io::{BufWriter,Write};
+  let expected=(self.w as usize)
+   .checked_mul(self.h as usize).and_then(|x|x.checked_mul(4))
+   .ok_or_else(||std::io::Error::other("frame size overflow"))?;
+  if self.w==0||self.h==0||self.frame.len()!=expected {
+   return Err(std::io::Error::other("missing or incomplete RGBA frame"));
+  }
+  let f=std::fs::File::create(path)?;
+  let mut out=BufWriter::with_capacity(64*1024,f);
+  write!(out,"P6\\n{} {}\\n255\\n",self.w,self.h)?;
+  let mut rgb=[0u8;4096*3];
+  for chunk in self.frame.chunks(4096*4){
+   let mut end=0usize;
+   for px in chunk.chunks_exact(4){
+    rgb[end..end+3].copy_from_slice(&px[..3]);
+    end+=3;
+   }
+   out.write_all(&rgb[..end])?;
+  }
+  out.flush()
+ }
+ fn capture_guest_milestones(&mut self){
+  let clock=self.machine.clock_ms();
+  if !self.menu_capture_saved && (25_000..30_000).contains(&clock) {
+   self.menu_capture_saved=true;
+   match self.save_guest_ppm("ux0:data/cnk_vita_menu_25s.ppm"){
+    Ok(())=>log_stage(c"R.capture.menu.candidate.saved"),
+    Err(e)=>{
+     if let Ok(msg)=CString::new(format!("R.capture.menu.failed: {e}")){log_stage(&msg);}
+    }
+   }
+  }
+  if !self.race_capture_saved && (40_000..47_000).contains(&clock){
+   self.race_capture_saved=true;
+   match self.save_guest_ppm("ux0:data/cnk_vita_race_40s.ppm"){
+    Ok(())=>log_stage(c"R.capture.race.candidate.saved"),
+    Err(e)=>{
+     if let Ok(msg)=CString::new(format!("R.capture.race.failed: {e}")){log_stage(&msg);}
+    }
+   }
+  }
+ }
  // Report real guest-clock/GL progress to persistent Vita logs. The host
  // reproduced the original menu at ~25s guest time; this proves whether the
  // console reaches the same code path rather than guessing from a black screen.
@@ -162,6 +208,7 @@ impl Running{
    self.w=f.width();self.h=f.height();self.frame.resize(f.pixels().len()*4,0);
    for (&v,b) in f.pixels().iter().zip(self.frame.chunks_exact_mut(4)){b.copy_from_slice(&pixel(v));}
    if !self.logged_video {log_stage(c"R.video.present.start_update");self.logged_video=true;}
+   self.capture_guest_milestones();
    return Ok(true);
   }
   let before=self.machine.gl_swaps();
@@ -186,6 +233,7 @@ impl Running{
     self.w=f.width();self.h=f.height();self.frame.resize(f.pixels().len()*4,0);
     for (&v,b) in f.pixels().iter().zip(self.frame.chunks_exact_mut(4)){b.copy_from_slice(&pixel(v));}
     if !self.logged_video {log_stage(c"R.video.present.display_update");self.logged_video=true;}
+    self.capture_guest_milestones();
     return Ok(true);
    }
    if self.machine.gl_swaps()!=before{
@@ -218,6 +266,7 @@ impl Running{
      log_stage(c"R.video.first.nonblack");
      self.logged_nonblank=true;
     }
+    self.capture_guest_milestones();
     return Ok(true);
    }
   }
@@ -230,6 +279,7 @@ impl Running{
     log_stage(c"R.video.fallback.blank");
    }
    self.publish_frame();
+   self.capture_guest_milestones();
    return Ok(true);
   }
   Ok(false)
