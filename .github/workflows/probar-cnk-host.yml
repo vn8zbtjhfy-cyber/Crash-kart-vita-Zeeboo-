@@ -53,6 +53,9 @@ jobs:
           # The Vita CreateInstance continuation must be exercised by the
           # real Linux ARM probe too, rather than merely compile on PS Vita.
           python3 tools/patch_zeebx_create_budget_vita.py zeebx-emu
+          # Critical: the special cfg has no effect unless this Vita-specific
+          # memory handoff patch is also applied to Zeebx on Linux.
+          python3 tools/patch_zeebx_memory_vita.py zeebx-emu
           # Zeebx normally gates its interpreter to Vita/iOS/WASM/tests.
           # Expose that CPU implementation in this Linux-only probe, so we
           # measure the same ARM backend instead of desktop Dynarmic.
@@ -83,13 +86,21 @@ jobs:
           CNK_ASSETS: ../assets
         run: |
           cd ports/zeebx-rust-vita/probe_host
-          cargo run --release --quiet --bin cnk-zeebx-host-probe
+          set -o pipefail
+          cargo run --release --quiet --bin cnk-zeebx-host-probe 2>&1 | tee owned_guest_memory_probe.log
+          # Without this proof the same game can accidentally run against
+          # Linux's cloned GuestMemory instead of Vita's move-only ownership.
+          grep -q 'CNK_OWNED_MEMORY_PARITY: executing Vita move-only' owned_guest_memory_probe.log
+          grep -q 'CNK_GAMEPLAY_PROOF host_menu=true host_race=true' owned_guest_memory_probe.log
       - name: Ejecutar puente Rust exacto del VPK en host y validar menú y carrera
         env:
           CNK_ASSETS: ../assets
         run: |
           cd ports/zeebx-rust-vita/probe_host
-          cargo run --release --quiet --bin vita_ffi_parity
+          set -o pipefail
+          cargo run --release --quiet --bin vita_ffi_parity 2>&1 | tee owned_guest_memory_ffi.log
+          grep -q 'CNK_OWNED_MEMORY_PARITY: executing Vita move-only' owned_guest_memory_ffi.log
+          grep -q 'VITA_FFI_FINAL menu=true race=true' owned_guest_memory_ffi.log
       - name: Comparar respuesta del kart a analógico y cruceta con controles neutrales
         env:
           CNK_ASSETS: ../assets
@@ -151,5 +162,7 @@ jobs:
             ports/zeebx-rust-vita/probe_host/ffi_frames/*.ppm
             ports/zeebx-rust-vita/probe_host/input_comparison/*.ppm
             ports/zeebx-rust-vita/probe_host/input_comparison/*.log
+            ports/zeebx-rust-vita/probe_host/owned_guest_memory_probe.log
+            ports/zeebx-rust-vita/probe_host/owned_guest_memory_ffi.log
           if-no-files-found: warn
           retention-days: 7
