@@ -24,6 +24,11 @@ lto = "thin"
 codegen-units = 1
 opt-level = "s"
 
+# ARM emulation executes >100 million guest instructions before CreateInstance.
+# Compile the emulation core for throughput while keeping the Vita shell size-optimized.
+[profile.release.package.zeebx]
+opt-level = 3
+
 [package.metadata.vita]
 title_id = "CNKVITA01"
 title_name = "Crash Nitro Kart 3D"
