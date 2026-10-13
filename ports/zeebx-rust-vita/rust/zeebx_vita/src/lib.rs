@@ -172,8 +172,31 @@ impl Running{
     return Ok(true);
    }
    if self.machine.gl_swaps()!=before{
-    self.publish_frame();
-    if !self.logged_video {log_stage(c"R.video.present.egl_swap");self.logged_video=true;}
+    // The BREW CPU display and GLES rasterizer are separate surfaces.
+    // Some games swap a valid 3D image while the device bitmap is still
+    // black. Read Zeebx's GLES frame before deciding what to publish.
+    let screen_blank=self.machine.screen().pixels().iter().all(|&px| px==0);
+    let mut used_gl_frame=false;
+    if screen_blank {
+     if let Some(gl_frame)=self.machine.gl_frame() {
+      if gl_frame.pixels().iter().any(|&px| px!=0) {
+       self.w=gl_frame.width();self.h=gl_frame.height();
+       self.frame.resize(gl_frame.pixels().len()*4,0);
+       for (&v,b) in gl_frame.pixels().iter().zip(self.frame.chunks_exact_mut(4)){
+        b.copy_from_slice(&pixel(v));
+       }
+       used_gl_frame=true;
+       log_stage(c"R.video.gl_readback.nonblank");
+      }
+     }
+    }
+    if !used_gl_frame { self.publish_frame(); }
+    let nonblank=self.frame.chunks_exact(4).any(|p|p[0]!=0||p[1]!=0||p[2]!=0);
+    if !self.logged_video {
+     if nonblank {log_stage(c"R.video.present.egl_swap.nonblank");}
+     else {log_stage(c"R.video.present.egl_swap.blank");}
+     self.logged_video=true;
+    }
     return Ok(true);
    }
   }
