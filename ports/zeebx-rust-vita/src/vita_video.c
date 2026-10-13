@@ -9,6 +9,7 @@ static GLuint tex=0;static uint32_t old_w=0,old_h=0;static uint32_t draw_calls=0
 // RGB565 uploads, retry using a persistent CPU-side RGBA buffer rather than
 // terminating with a black screen. Never allocate or convert in fast mode.
 static int rgba_fallback=0;
+static int fallback_texture_defined=0;
 static uint8_t *fallback_pixels=NULL;
 static size_t fallback_capacity=0;
 int vita_video_uses_rgba_fallback(void){return rgba_fallback;}
@@ -85,6 +86,7 @@ int vita_video_draw(const uint16_t*r,uint32_t w,uint32_t h){
     if(err!=GL_NO_ERROR){
      if(!invalid_pixel_type(err))return (int)err;
      rgba_fallback=1;
+     fallback_texture_defined=0;
     }
    }
   }
@@ -92,13 +94,14 @@ int vita_video_draw(const uint16_t*r,uint32_t w,uint32_t h){
    if(prepare_fallback(r,w,h)!=0)return -2;
    // The first fallback upload must define a new RGBA texture, even when
    // a failed RGB565 upload already set old_w/old_h in an earlier frame.
-   if(new_size||old_w==0||draw_calls<3){
+   if(new_size||!fallback_texture_defined){
     glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,w,h,0,GL_RGBA,GL_UNSIGNED_BYTE,fallback_pixels);
    }else{
     glTexSubImage2D(GL_TEXTURE_2D,0,0,0,w,h,GL_RGBA,GL_UNSIGNED_BYTE,fallback_pixels);
    }
    GLenum err=glGetError();
    if(err!=GL_NO_ERROR)return (int)err;
+   fallback_texture_defined=1;
   }
   old_w=w;old_h=h;
   const float v[]={-1,-1,1,-1,-1,1,1,1};
@@ -120,7 +123,7 @@ int vita_video_draw(const uint16_t*r,uint32_t w,uint32_t h){
 void vita_video_shutdown(void){
  if(tex){glDeleteTextures(1,&tex);tex=0;}
  old_w=0;old_h=0;draw_calls=0;
- rgba_fallback=0;
+ rgba_fallback=0;fallback_texture_defined=0;
  free(fallback_pixels);fallback_pixels=NULL;fallback_capacity=0;
  // vitaGL has no public vglEnd() API. GL allocations are owned by process lifetime.
 }
