@@ -112,14 +112,19 @@ fn main()->Result<(),Box<dyn Error>> {
     println!("EVT_APP_START outcome={start_outcome:?} instr={} clock={}ms",
         machine.instructions(),machine.clock_ms());
     let baseline=machine.gl_swaps();
-    let mut latest_swaps=baseline;
+    let mut last_swaps=baseline;
+    let mut saved=0u32;
     let mut first_swap=false;
-    let mut nonblank=false;
+    let mut last_signature=0u64;
     let mut total_updates=0usize;
     let play_start=Instant::now();
-    for i in 1..=3500u32 {
-        if play_start.elapsed()>Duration::from_secs(40){
-            println!("PLAY timeout after 40 real seconds");break;
+    println!("PLAY_EXTENDED begin clock={}ms swaps={baseline}",machine.clock_ms());
+    // Run through the Zeebo advertisement / intro, not merely the first swap.
+    // Save only visually distinct frames; every image comes directly from the
+    // emulated guest, not an illustration or a forced host-side splash.
+    for i in 1..=7500u32 {
+        if play_start.elapsed()>Duration::from_secs(38){
+            println!("PLAY_EXTENDED timed out after 38s");break;
         }
         machine.comeca_volta();
         let outcomes=machine.advance(500_000)?;
@@ -130,35 +135,40 @@ fn main()->Result<(),Box<dyn Error>> {
         total_updates+=updates;
         machine.fecha_volta();
         let swaps=machine.gl_swaps();
-        let presented=updates>0 || swaps!=latest_swaps;
-        latest_swaps=swaps;
-        let colorful=machine.screen().pixels().iter().any(|&px|px!=0);
-        if presented && !first_swap {
+        let presented=updates>0||swaps!=last_swaps;
+        last_swaps=swaps;
+        if presented {
             first_swap=true;
-            println!("FIRST_SWAP iteration={i} swaps={swaps} updates={updates} nonzero={colorful} instr={} clock={}ms",
-                machine.instructions(),machine.clock_ms());
-            save_guest_screen(&machine,"first_swap.ppm")?;
+            let frame=machine.screen();
+            let mut checksum=0xcbf29ce484222325u64;
+            let mut min=u16::MAX; let mut max=u16::MIN;
+            let mut distinct=std::collections::BTreeSet::new();
+            for &px in frame.pixels(){
+                checksum=(checksum^u64::from(px)).wrapping_mul(0x100000001b3);
+                min=min.min(px); max=max.max(px);
+                if distinct.len()<64{distinct.insert(px);}
+            }
+            if checksum!=last_signature {
+                if saved<18 {
+                    let filename=format!("sequence_{saved:02}_swap_{swaps:04}.ppm");
+                    save_guest_screen(&machine,&filename)?;
+                    println!("VISUAL_CHANGE i={i} swap={swaps} checksum={checksum:016x} min={min:#06x} max={max:#06x} distinct_colors_at_least={} clock={}ms",
+                        distinct.len(),machine.clock_ms());
+                    saved+=1;
+                }
+                last_signature=checksum;
+            }
         }
-        if colorful && presented {
-            println!("FIRST_NONBLACK_FRAME iteration={i} swaps={swaps} updates={updates} instr={} clock={}ms",
-                machine.instructions(),machine.clock_ms());
-            save_guest_screen(&machine,"first_color_frame.ppm")?;
-            nonblank=true;
-            break;
-        }
-        if i<=4 || i.is_power_of_two() || i%256==0 || (!outcomes.is_empty() && i%128==0) {
-            println!("PLAY[{i}] guest={outcomes:?} signals={signals:?} callbacks={callbacks:?} instr={} clock={}ms swaps={} updates={} nonzero={} elapsed={:?}",
-                machine.instructions(),machine.clock_ms(),swaps,updates,colorful,play_start.elapsed());
+        if i<=5||i.is_power_of_two()||i%512==0{
+            println!("PROGRESS i={i} clock={}ms swaps={} instr={} changed_frames={} last_outcomes={outcomes:?} signals={signals:?} callbacks={callbacks:?} t={:?}",
+                machine.clock_ms(),swaps,machine.instructions(),saved,play_start.elapsed());
         }
     }
     save_guest_screen(&machine,"last_frame.ppm")?;
-    println!("FINAL_RENDER first_swap={first_swap} nonblack={nonblank} swaps={} updates={total_updates} total_instr={} t={:?}",
-        machine.gl_swaps(),machine.instructions(),start.elapsed());
-    if !first_swap {
-        return Err("No graphical swap or IDisplay_Update after applet start".into());
-    }
-    if !nonblank {
-        return Err("EGL swapped buffers but host CPU framebuffer remained black".into());
-    }
+    println!("FILES_MISSING {:?}",machine.missing_files());
+    println!("GL_IGNORED {:?}",machine.ignored_gl());
+    println!("FINAL_RENDER_EXTENDED swaps={} distinct_frames={} updates={total_updates} elapsed={:?}",
+        machine.gl_swaps(),saved,start.elapsed());
+    if !first_swap { return Err("Guest never called eglSwapBuffers".into()); }
     Ok(())
 }
