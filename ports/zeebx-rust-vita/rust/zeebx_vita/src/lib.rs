@@ -59,6 +59,14 @@ fn boot(lookup:EmbeddedLookup)->Result<Running,String>{
  let cpu=Interpretador::new().map_err(|e|e.to_string())?;
  log_stage(c"R.boot.cpu.ok");
  let storage=StoragePaths::from_root("ux0:data/CNKVITA01");
+ // Machine::new_with_storage configures paths but does not create them.
+ // FileMgr::OpenFile(OFM_CREATE) does not create parent directories.
+ // The original game reads/writes udata/settings.dat and saved progress,
+ // so prepare the persistent guest save tree before any BREW callbacks.
+ storage.create_dirs().map_err(|e|format!("No se pudo inicializar el almacenamiento del juego: {e}"))?;
+ std::fs::create_dir_all(storage.saves.join("cnk3d/udata"))
+  .map_err(|e|format!("No se pudo crear la carpeta de ajustes del juego: {e}"))?;
+ log_stage(c"R.boot.storage.ready");
  log_stage(c"R.boot.machine.enter");
  let mut machine=Machine::new_with_storage(cpu,loaded,"app0:/virtual-mod",&storage,Some(storage.saves.join("cnk3d")));
  log_stage(c"R.boot.machine.ok");
