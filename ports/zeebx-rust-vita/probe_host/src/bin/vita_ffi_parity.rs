@@ -77,6 +77,10 @@ fn main()->Result<(),Box<dyn Error>> {
   return Err(format!("Vita bridge boot failure: {}",e.to_string_lossy()).into());
  }
  let mut menu=false;let mut race=false;let mut frames=0usize;
+ // Give optional hardware-autotest scene logging time to perform its sparse
+ // 5-second checks after first seeing a racing frame. Normal parity tests
+ // still finish as soon as the first racing frame has been proven.
+ let mut autotest_race_wait_until:Option<u32>=None;
  let use_rgb565=env::var("CNK_VITA_PIXEL_FORMAT").is_ok_and(|x|x=="rgb565");
  println!("VITA_FFI_PIXEL_FORMAT={}",if use_rgb565{"rgb565"}else{"rgba"});
  let start=Instant::now();
@@ -144,7 +148,11 @@ fn main()->Result<(),Box<dyn Error>> {
     println!("VITA_FFI_PROGRESS step={step} ms={ms} frames={frames} swaps={} menu={menu} race={race}",
       vita_bridge::zeebx_vita_guest_gl_swaps());
   }
-  if menu&&race {break;}
+  if menu&&race {
+    if !auto_test {break;}
+    let until=*autotest_race_wait_until.get_or_insert(ms.saturating_add(6_000));
+    if ms>=until{break;}
+  }
  }
  vita_bridge::zeebx_vita_shutdown();
  if auto_test {let _=fs::remove_file(auto_test_file);}
