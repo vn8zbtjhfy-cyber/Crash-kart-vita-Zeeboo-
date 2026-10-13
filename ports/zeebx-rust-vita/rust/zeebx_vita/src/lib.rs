@@ -78,6 +78,12 @@ fn boot(lookup:EmbeddedLookup)->Result<Running,String>{
  log_stage(c"R.boot.mounted");
  machine.set_installed_applets([(clsid,"274214".to_string())]);
  machine.usa_placa(false,None);
+ // Vita CPU rasterizer performance: halve only the INTERNAL 3D render size.
+ // Zeebx resamples the guest image back to 640x480 on EGL swap, preserving
+ // the game's viewport, menu coordinates and input mapping. This is a
+ // quality/performance trade-off, NOT a claim of improved console FPS.
+ machine.define_reducao(2);
+ log_stage(c"R.video.software_3d.half_resolution");
  log_stage(c"R.boot.run.enter");
  let result=machine.run(BOOT_BUDGET).map_err(|e|e.to_string())?;
  log_stage(c"R.boot.run.returned");
