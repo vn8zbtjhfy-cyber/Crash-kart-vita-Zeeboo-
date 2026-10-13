@@ -101,7 +101,7 @@ impl Running{
   }
   let f=std::fs::File::create(path)?;
   let mut out=BufWriter::with_capacity(64*1024,f);
-  write!(out,"P6\\n{} {}\\n255\\n",self.w,self.h)?;
+  write!(out,"P6\n{} {}\n255\n",self.w,self.h)?;
   let mut rgb=[0u8;4096*3];
   for chunk in self.frame.chunks(4096*4){
    let mut end=0usize;
