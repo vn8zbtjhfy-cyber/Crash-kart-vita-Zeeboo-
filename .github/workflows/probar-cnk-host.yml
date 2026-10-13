@@ -88,6 +88,24 @@ jobs:
         run: |
           cd ports/zeebx-rust-vita/probe_host
           cargo run --release --quiet --bin vita_ffi_parity
+      # The *real* Vita saves to ux0:data, but GitHub artifacts reject
+      # colon characters in both directory and file names on upload.
+      # Copy host-generated frames without changing the emulator's save path.
+      - name: Preparar capturas Vita FFI con rutas compatibles con GitHub
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          src='ports/zeebx-rust-vita/probe_host/ux0:data'
+          dst='ports/zeebx-rust-vita/probe_host/ffi_frames'
+          mkdir -p "$dst"
+          if [ -d "$src" ]; then
+            for snapshot in "$src"/*.ppm; do
+              [ -f "$snapshot" ] || continue
+              cp "$snapshot" "$dst/$(basename "$snapshot")"
+            done
+          fi
+          ls -lh "$dst" || true
       - name: Publicar captura real del framebuffer emulado
         if: always()
         uses: actions/upload-artifact@v4
@@ -95,6 +113,6 @@ jobs:
           name: CNK_Host_Framebuffer
           path: |
             ports/zeebx-rust-vita/probe_host/*.ppm
-            ports/zeebx-rust-vita/probe_host/ux0:data/*.ppm
+            ports/zeebx-rust-vita/probe_host/ffi_frames/*.ppm
           if-no-files-found: warn
           retention-days: 7
