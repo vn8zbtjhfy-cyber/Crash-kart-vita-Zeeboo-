@@ -29,7 +29,7 @@ const MAX_CREATE_POLLS:u32=2048;
 struct Running{
  machine:Machine<Interpretador>,applet:Option<(u32,u32)>,pad_before:Pad,
  clsid:u32,creation_started:bool,creation_finished:bool,creation_polls:u32,
- frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,_fufs:FufsView
+ frame:Vec<u8>,w:u32,h:u32,logged_first_tick:bool,ticks:u32,logged_video:bool,logged_nonblank:bool,_fufs:FufsView
 }
 struct State{running:Option<Running>,error:Option<CString>}
 struct StateCell(UnsafeCell<State>);
@@ -77,7 +77,7 @@ fn boot(lookup:EmbeddedLookup)->Result<Running,String>{
  log_stage(c"R.boot.applet.create.deferred");
  Ok(Running{machine,applet:None,pad_before:Pad::default(),
   clsid,creation_started:false,creation_finished:false,creation_polls:0,
-  frame:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,_fufs:fufs})
+  frame:Vec::new(),w:0,h:0,logged_first_tick:false,ticks:0,logged_video:false,logged_nonblank:false,_fufs:fufs})
 }
 fn check(outcomes:&[Outcome])->Result<(),String>{
  for x in outcomes{if !matches!(x,Outcome::Returned{..}|Outcome::Budget){return Err(format!("Guest stopped: {x:?}"));}}
@@ -186,7 +186,7 @@ impl Running{
         b.copy_from_slice(&pixel(v));
        }
        used_gl_frame=true;
-       log_stage(c"R.video.gl_readback.nonblank");
+       if !self.logged_nonblank {log_stage(c"R.video.gl_readback.nonblank");self.logged_nonblank=true;}
       }
      }
     }
@@ -196,6 +196,10 @@ impl Running{
      if nonblank {log_stage(c"R.video.present.egl_swap.nonblank");}
      else {log_stage(c"R.video.present.egl_swap.blank");}
      self.logged_video=true;
+    }
+    if nonblank && !self.logged_nonblank {
+     log_stage(c"R.video.first.nonblack");
+     self.logged_nonblank=true;
     }
     return Ok(true);
    }
