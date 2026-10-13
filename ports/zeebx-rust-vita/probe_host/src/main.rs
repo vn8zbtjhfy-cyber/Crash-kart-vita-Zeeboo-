@@ -174,7 +174,19 @@ fn main()->Result<(),Box<dyn Error>> {
         let pressed=(35_000..35_180).contains(&guest_ms)
             ||(60_000..60_180).contains(&guest_ms)
             ||(90_000..90_180).contains(&guest_ms);
-        let next_pad=Pad{buttons:if pressed {1}else{0},axes:[0;4]};
+        // After confirming the menu, exercise the original Zeebo analog
+        // steering path during Crash's "TENTE FAZER CURVAS!" tutorial.
+        // This is a guest controller event, not a modified screenshot.
+        let steer=if (70_000..85_000).contains(&guest_ms){100}
+            else if (95_000..110_000).contains(&guest_ms){-100}
+            else {0};
+        if (70_000..70_100).contains(&guest_ms) ||
+           (85_000..85_100).contains(&guest_ms) ||
+           (95_000..95_100).contains(&guest_ms) ||
+           (110_000..110_100).contains(&guest_ms) {
+            println!("SCRIPTED_STEERING clock={guest_ms}ms axis0={steer}");
+        }
+        let next_pad=Pad{buttons:if pressed {1}else{0},axes:[steer,0,0,0]};
         machine.set_port_pad(0,next_pad);
         for (key,down) in teclas_do_controle(&previous_pad,&next_pad) {
             println!("SCRIPTED_BUTTON clock={guest_ms}ms key={key:#x} down={down}");
