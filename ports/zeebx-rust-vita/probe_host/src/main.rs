@@ -49,6 +49,36 @@ fn save_guest_screen(machine:&Machine<Interpretador>,filename:&str)->Result<(),B
     let s=machine.screen();
     save_rgb565(s.width(),s.height(),s.pixels(),filename)
 }
+// Structural scene checks obtained from verified original guest frames.
+// Counts are read from Zeebx's RGB565 framebuffer (never from a fabricated
+// screenshot). A logo-only boot is no longer considered a successful test.
+fn scene_pixels(machine:&Machine<Interpretador>)->(usize,usize){
+    let frame=machine.screen();
+    if frame.width()<600 || frame.height()<450{return (0,0);}
+    let w=frame.width() as usize;
+    let px=frame.pixels();
+    let mut menu_orange=0usize;
+    let mut race_road=0usize;
+    for y in 230..415usize {
+        for x in 150..510usize {
+            let v=px[y*w+x];
+            let r=((v>>11)&31) as u8; let g=((v>>5)&63) as u8; let b=(v&31) as u8;
+            let r=(r<<3)|(r>>2);let g=(g<<2)|(g>>4);let b=(b<<3)|(b>>2);
+            if r>=160 && (20..=180).contains(&g) && b<80 {menu_orange+=1;}
+        }
+    }
+    for y in 295..470usize {
+        for x in 110..530usize {
+            let v=px[y*w+x];
+            let r=((v>>11)&31) as u8; let g=((v>>5)&63) as u8; let b=(v&31) as u8;
+            let r=(r<<3)|(r>>2);let g=(g<<2)|(g>>4);let b=(b<<3)|(b>>2);
+            if (165..=245).contains(&r) && (100..=185).contains(&g) && (90..=200).contains(&b) {
+                race_road+=1;
+            }
+        }
+    }
+    (menu_orange,race_road)
+}
 fn main()->Result<(),Box<dyn Error>> {
     let root=PathBuf::from(env::var("CNK_ASSETS").unwrap_or("../assets".into()));
     let start=Instant::now();
@@ -126,6 +156,8 @@ fn main()->Result<(),Box<dyn Error>> {
     let mut milestones=0u32;
     let mut previous_pad=Pad::default();
     let mut scripted_presses=0u32;
+    let mut verified_main_menu=false;
+    let mut verified_race=false;
     let play_start=Instant::now();
     println!("PLAY_EXTENDED begin clock={}ms swaps={baseline}",machine.clock_ms());
     // Run through the Zeebo advertisement / intro, not merely the first swap.
@@ -185,6 +217,18 @@ fn main()->Result<(),Box<dyn Error>> {
                 let filename=format!("milestone_{milestones:02}_{guest_ms:06}ms.ppm");
                 save_guest_screen(&machine,&filename)?;
                 println!("MILESTONE_CAPTURE time={guest_ms}ms swap={swaps} file={filename}");
+                let (orange,road)=scene_pixels(&machine);
+                println!("SCENE_PIXELS guest_ms={guest_ms} orange={orange} road={road}");
+                // Calibrated on the intact Zeebo title and original Crash kart
+                // race in two independent long-run captures.
+                if (20_000..35_000).contains(&guest_ms) && orange>10_000 && road<3_000{
+                    if !verified_main_menu{println!("MAIN_MENU_VERIFIED guest_ms={guest_ms} orange={orange}");}
+                    verified_main_menu=true;
+                }
+                if (39_000..75_000).contains(&guest_ms) && road>30_000 && orange<3_000{
+                    if !verified_race{println!("RACE_SCENE_VERIFIED guest_ms={guest_ms} road={road}");}
+                    verified_race=true;
+                }
                 milestones+=1;
                 next_milestone_ms=if guest_ms<5_000 {guest_ms+2_000}
                     else {guest_ms+5_000};
@@ -220,5 +264,10 @@ fn main()->Result<(),Box<dyn Error>> {
     println!("FINAL_RENDER_EXTENDED swaps={} distinct_frames={} milestones={milestones} scripted_presses={scripted_presses} guest_ms={} updates={total_updates} elapsed={:?}",
         machine.gl_swaps(),saved,machine.clock_ms(),start.elapsed());
     if !first_swap { return Err("Guest never called eglSwapBuffers".into()); }
+    // Catches regressions where an emulator appears to boot but never reaches
+    // either the real menu or a 3D race after the player's confirmation input.
+    if !verified_main_menu { return Err("Real Crash Nitro Kart main menu never rendered".into()); }
+    if !verified_race { return Err("No authentic kart racing scene after button-1 input".into()); }
+    println!("CNK_GAMEPLAY_PROOF host_menu=true host_race=true vita_hardware_unverified=true");
     Ok(())
 }
