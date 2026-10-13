@@ -100,6 +100,7 @@ jobs:
           # Preserve original analog test screenshot before alternative replays.
           cp milestone_17_*.ppm input_comparison/analog_80s.ppm
           for scenario in neutral dpad; do
+            rm -f milestone_17_*.ppm
             CNK_INPUT_SCENARIO="$scenario" cargo run --release --quiet --bin cnk-zeebx-host-probe > "input_comparison/$scenario.log"
             cp milestone_17_*.ppm "input_comparison/${scenario}_80s.ppm"
             grep 'CNK_GAMEPLAY_PROOF' "input_comparison/$scenario.log"
@@ -109,7 +110,7 @@ jobs:
           files={label: Path(f'input_comparison/{label}_80s.ppm').read_bytes() for label in ('analog','neutral','dpad')}
           def ppm_rgb(data):
               # Genuine P6 guest frame, exactly 640x480 RGB24.
-              header=b'P6\\n640 480\\n255\\n'
+              header=b'P6\n640 480\n255\n'
               assert data.startswith(header), 'Unexpected guest framebuffer format'
               return data[len(header):]
           images={k:ppm_rgb(v) for k,v in files.items()}
