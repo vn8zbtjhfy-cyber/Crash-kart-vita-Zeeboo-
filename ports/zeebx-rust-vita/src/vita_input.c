@@ -48,7 +48,10 @@ ZeebxVitaPad vita_input_read(void){
  if(buttons&SCE_CTRL_TRIANGLE)p.buttons|=BTN(3);
  if(buttons&SCE_CTRL_RTRIGGER)p.buttons|=BTN(4);
  if(buttons&SCE_CTRL_LTRIGGER)p.buttons|=BTN(6);
- // The Zeebo Z-Pad uses HOME/BACK (UID at index 9), not a Vita-style\n // START button (index 11). Map Vita START to the genuine BREW HOME action\n // so pause/back works in the game's menus; Start+Select still exits in C.\n if(buttons&SCE_CTRL_START)p.buttons|=BTN(9);
+ // The Zeebo Z-Pad uses HOME/BACK (UID at index 9), not a Vita-style
+ // START button (index 11). Map Vita START to the genuine BREW HOME action
+ // so pause/back works in the game's menus; Start+Select still exits in C.
+ if(buttons&SCE_CTRL_START)p.buttons|=BTN(9);
  if(buttons&SCE_CTRL_UP)p.buttons|=BTN(12);
  if(buttons&SCE_CTRL_LEFT)p.buttons|=BTN(13);
  if(buttons&SCE_CTRL_DOWN)p.buttons|=BTN(14);
