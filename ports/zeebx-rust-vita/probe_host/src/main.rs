@@ -30,13 +30,11 @@ fn aliases(path: &str) -> Vec<String> {
 fn read(root:&Path,name:&str)->Result<Vec<u8>,Box<dyn Error>> {
     Ok(fs::read(root.join(name))?)
 }
-// Save the actual Zeebx RGB565 guest framebuffer for visual verification.
-// This is a lossless PPM snapshot, even if the guest never requests a flip.
-fn save_guest_screen(machine:&Machine<Interpretador>, filename:&str)->Result<(),Box<dyn Error>>{
-    let screen=machine.screen();
-    let w=screen.width(); let h=screen.height();
+// Save actual RGB565 output, not a fake menu. Compare the BREW 2D bitmap
+// against the Zeebx OpenGL rasterizer to identify where color is lost.
+fn save_rgb565(w:u32,h:u32,pixels:&[u16],filename:&str)->Result<(),Box<dyn Error>>{
     let mut ppm=format!("P6\n{w} {h}\n255\n").into_bytes();
-    for &px in screen.pixels(){
+    for &px in pixels{
         let r=((px>>11)&31) as u8;
         let g=((px>>5)&63) as u8;
         let b=(px&31) as u8;
@@ -45,6 +43,10 @@ fn save_guest_screen(machine:&Machine<Interpretador>, filename:&str)->Result<(),
     fs::write(filename,&ppm)?;
     println!("FRAME_SNAPSHOT path={filename} dimensions={w}x{h} bytes={}",ppm.len());
     Ok(())
+}
+fn save_guest_screen(machine:&Machine<Interpretador>,filename:&str)->Result<(),Box<dyn Error>>{
+    let s=machine.screen();
+    save_rgb565(s.width(),s.height(),s.pixels(),filename)
 }
 fn main()->Result<(),Box<dyn Error>> {
     let root=PathBuf::from(env::var("CNK_ASSETS").unwrap_or("../assets".into()));
@@ -139,6 +141,21 @@ fn main()->Result<(),Box<dyn Error>> {
         last_swaps=swaps;
         if presented {
             first_swap=true;
+            // First 4 EGL swaps: save both paths separately. A near-black
+            // CPU bitmap does not prove the 3D output is black.
+            if swaps>0 && swaps<=4 {
+                let (cpu_min,cpu_max)=machine.screen().pixels().iter().fold(
+                    (u16::MAX,u16::MIN), |(mn,mx),&v|(mn.min(v),mx.max(v)));
+                if let Some(gl)=machine.gl_frame(){
+                    let (gl_min,gl_max)=gl.pixels().iter().fold(
+                        (u16::MAX,u16::MIN), |(mn,mx),&v|(mn.min(v),mx.max(v)));
+                    let out=format!("gles_swap_{swaps:03}.ppm");
+                    save_rgb565(gl.width(),gl.height(),gl.pixels(),&out)?;
+                    println!("FRAMEBUFFER_DIFFERENCE swap={swaps} cpu_min={cpu_min:#06x} cpu_max={cpu_max:#06x} gl_min={gl_min:#06x} gl_max={gl_max:#06x}");
+                } else {
+                    println!("FRAMEBUFFER_DIFFERENCE swap={swaps} gl_frame=NONE cpu_min={cpu_min:#06x} cpu_max={cpu_max:#06x}");
+                }
+            }
             let frame=machine.screen();
             let mut checksum=0xcbf29ce484222325u64;
             let mut min=u16::MAX; let mut max=u16::MIN;
