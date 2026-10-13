@@ -75,6 +75,7 @@ int main(void) {
  vita_log_free_memory("after_boot");
  const uint16_t*rgb565=0;
  uint32_t w=0,h=0,frames=0,drawn=0;
+ int logged_rgba_fallback=0;
  for(;;){
    ZeebxVitaPad pad=vita_input_read();
    if(vita_input_should_exit())break;
@@ -98,6 +99,10 @@ int main(void) {
        vita_debug_log(message);
        vita_debug_log("C.video.render.failed");
        break;
+     }
+     if(!logged_rgba_fallback&&vita_video_uses_rgba_fallback()){
+       vita_debug_log("C.video.rgb565_unsupported.rgba_fallback_active");
+       logged_rgba_fallback=1;
      }
      if(drawn++==0){
        vita_debug_log("C.video.draw.first.ok");

@@ -1,9 +1,41 @@
 #include "vita_video.h"
 #include <vitaGL.h>
 #include <math.h>
+#include <stdlib.h>
 #define W 960
 #define H 544
 static GLuint tex=0;static uint32_t old_w=0,old_h=0;static uint32_t draw_calls=0;
+// Use RGB565 directly for performance. On devices whose vitaGL build rejects
+// RGB565 uploads, retry using a persistent CPU-side RGBA buffer rather than
+// terminating with a black screen. Never allocate or convert in fast mode.
+static int rgba_fallback=0;
+static uint8_t *fallback_pixels=NULL;
+static size_t fallback_capacity=0;
+int vita_video_uses_rgba_fallback(void){return rgba_fallback;}
+static int prepare_fallback(const uint16_t *pixels,uint32_t w,uint32_t h){
+ const size_t count=(size_t)w*(size_t)h;
+ if(count==0||count>2048u*2048u)return -1;
+ if(count*4>fallback_capacity){
+  uint8_t *next=(uint8_t*)realloc(fallback_pixels,count*4);
+  if(!next)return -1;
+  fallback_pixels=next;
+  fallback_capacity=count*4;
+ }
+ for(size_t i=0;i<count;i++){
+  const uint16_t v=pixels[i];
+  const uint8_t r=(uint8_t)((v>>11)&31);
+  const uint8_t g=(uint8_t)((v>>5)&63);
+  const uint8_t b=(uint8_t)(v&31);
+  fallback_pixels[4*i+0]=(uint8_t)((r<<3)|(r>>2));
+  fallback_pixels[4*i+1]=(uint8_t)((g<<2)|(g>>4));
+  fallback_pixels[4*i+2]=(uint8_t)((b<<3)|(b>>2));
+  fallback_pixels[4*i+3]=255;
+ }
+ return 0;
+}
+static int invalid_pixel_type(GLenum err){
+ return err==GL_INVALID_ENUM||err==GL_INVALID_VALUE||err==GL_INVALID_OPERATION;
+}
 int vita_video_init(void){
  // vitaGL's vglInit() returns GL_TRUE only when requested resolution
  // was clamped to display limits; GL_FALSE is also returned on normal
@@ -39,14 +71,36 @@ int vita_video_draw(const uint16_t*r,uint32_t w,uint32_t h){
   float s=fminf((float)W/w,(float)H/h);
   int vw=(int)(w*s+0.5f),vh=(int)(h*s+0.5f);
   glViewport((W-vw)/2,(H-vh)/2,vw,vh);glBindTexture(GL_TEXTURE_2D,tex);
-  if(w!=old_w||h!=old_h){
-   glTexImage2D(GL_TEXTURE_2D,0,GL_RGB,w,h,0,GL_RGB,GL_UNSIGNED_SHORT_5_6_5,r);
-   // Detect VRAM allocation failures at the moment of texture creation
-   // instead of silently showing black or triggering a later GPU fault.
+  const int new_size=w!=old_w||h!=old_h;
+  if(!rgba_fallback){
+   if(new_size){
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGB,w,h,0,GL_RGB,GL_UNSIGNED_SHORT_5_6_5,r);
+   }else{
+    glTexSubImage2D(GL_TEXTURE_2D,0,0,0,w,h,GL_RGB,GL_UNSIGNED_SHORT_5_6_5,r);
+   }
+   // Check the first uploads and periodically thereafter. A rejected pixel
+   // type is recoverable; VRAM exhaustion is not and remains an error.
+   if(new_size||draw_calls<3||draw_calls%120==0){
+    GLenum err=glGetError();
+    if(err!=GL_NO_ERROR){
+     if(!invalid_pixel_type(err))return (int)err;
+     rgba_fallback=1;
+    }
+   }
+  }
+  if(rgba_fallback){
+   if(prepare_fallback(r,w,h)!=0)return -2;
+   // The first fallback upload must define a new RGBA texture, even when
+   // a failed RGB565 upload already set old_w/old_h in an earlier frame.
+   if(new_size||old_w==0||draw_calls<3){
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,w,h,0,GL_RGBA,GL_UNSIGNED_BYTE,fallback_pixels);
+   }else{
+    glTexSubImage2D(GL_TEXTURE_2D,0,0,0,w,h,GL_RGBA,GL_UNSIGNED_BYTE,fallback_pixels);
+   }
    GLenum err=glGetError();
    if(err!=GL_NO_ERROR)return (int)err;
-   old_w=w;old_h=h;
-  }else glTexSubImage2D(GL_TEXTURE_2D,0,0,0,w,h,GL_RGB,GL_UNSIGNED_SHORT_5_6_5,r);
+  }
+  old_w=w;old_h=h;
   const float v[]={-1,-1,1,-1,-1,1,1,1};
   const float t[]={0,1,1,1,0,0,1,0};
   glEnableClientState(GL_VERTEX_ARRAY);glEnableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -66,5 +120,7 @@ int vita_video_draw(const uint16_t*r,uint32_t w,uint32_t h){
 void vita_video_shutdown(void){
  if(tex){glDeleteTextures(1,&tex);tex=0;}
  old_w=0;old_h=0;draw_calls=0;
+ rgba_fallback=0;
+ free(fallback_pixels);fallback_pixels=NULL;fallback_capacity=0;
  // vitaGL has no public vglEnd() API. GL allocations are owned by process lifetime.
 }
