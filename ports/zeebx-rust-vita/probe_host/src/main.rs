@@ -121,7 +121,7 @@ fn main()->Result<(),Box<dyn Error>> {
     let mut total_updates=0usize;
     // Intro animation filled all 18 old screenshots in its first seconds.
     // Record milestones through 90+ seconds of emulated gameplay instead.
-    let mut next_milestone_ms=1_000u64;
+    let mut next_milestone_ms=1_000u32;
     let mut milestones=0u32;
     let play_start=Instant::now();
     println!("PLAY_EXTENDED begin clock={}ms swaps={baseline}",machine.clock_ms());
