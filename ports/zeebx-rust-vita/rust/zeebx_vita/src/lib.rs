@@ -14,7 +14,7 @@ fn log_stage(stage: &CStr) {
 }
 #[repr(C)]#[derive(Clone,Copy)]pub struct EmbeddedAsset{pub bytes:*const u8,pub size:usize}
 type EmbeddedLookup=unsafe extern "C" fn(*const c_char)->EmbeddedAsset;
-#[repr(C)]#[derive(Clone,Copy)]pub struct ZeebxVitaPad{buttons:u32,axes:[i32;4]}
+#[repr(C)]#[derive(Clone,Copy)]pub struct ZeebxVitaPad{pub buttons:u32,pub axes:[i32;4]}
 const MOD:&CStr=c"brew/mod/274214/cnk2.mod";
 const VFS:&CStr=c"brew/mod/274214/data.vfs";
 const MIF:&CStr=c"brew/mif/274214.mif";
