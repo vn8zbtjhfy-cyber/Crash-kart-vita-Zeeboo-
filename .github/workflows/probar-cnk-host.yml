@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'ports/zeebx-rust-vita/probe_host/**'
+      - 'ports/zeebx-rust-vita/rust/zeebx_vita/src/**'
+      - 'ports/zeebx-rust-vita/tools/patch_zeebx_*.py'
       - '.github/workflows/probar-cnk-host.yml'
   workflow_dispatch:
 permissions:
