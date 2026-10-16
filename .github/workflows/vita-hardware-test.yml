@@ -1,16 +1,10 @@
 # Installable diagnostics only. This user-requested VPK is NOT a released game.
 # No Zeebo ROM, MOD, MIF, images, music, or data.vfs are packaged.
 name: CNK3D Vita hardware test VPK
+# Manual only: no push or pull_request runs; keep all build/test steps.
 on:
-  push:
-    branches:
-      - feature/zeebx-vita-hardware-test-125
-    paths:
-      - 'src/**'
-      - 'CMakeLists.txt'
-      - '.github/workflows/vita-hardware-test.yml'
-      - 'scripts/vita_elf_preflight.sh'
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:

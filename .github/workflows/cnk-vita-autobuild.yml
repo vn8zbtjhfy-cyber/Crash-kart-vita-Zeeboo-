@@ -1,14 +1,8 @@
 # Compilación automática del VPK de diagnóstico actualmente disponible.
 # NO es un port jugable ni contiene la ROM original.
 name: CNK Vita compilacion automatica (diagnostico)
+# Manual only: no push or pull_request runs; keep all build/test steps.
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/cnk-vita-autobuild.yml'
-      - 'src/**'
-      - 'CMakeLists.txt'
-      - 'scripts/**'
   workflow_dispatch:
 
 permissions:

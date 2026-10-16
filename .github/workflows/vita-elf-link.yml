@@ -2,15 +2,10 @@
 # Upload only original project source and these scripts to the private repo.
 # Do NOT commit licensed ROM assets, data.vfs, extracted music or textures.
 name: VitaSDK diagnostic ELF
+# Manual only: no push or pull_request runs; keep all build/test steps.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'CMakeLists.txt'
-      - 'scripts/vita_elf_preflight.sh'
-      - '.github/workflows/vita-elf-link.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:

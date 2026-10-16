@@ -1,17 +1,8 @@
 name: Crash Nitro Kart - probar Zeebx ARM en host
+# Manual only: no push or pull_request runs; keep all build/test steps.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'ports/zeebx-rust-vita/probe_host/**'
-      - 'ports/zeebx-rust-vita/src/vita_input.c'
-      - 'ports/zeebx-rust-vita/src/vita_video.c'
-      - 'ports/zeebx-rust-vita/src/vita_video.h'
-      - 'ports/zeebx-rust-vita/tests/**'
-      - 'ports/zeebx-rust-vita/rust/zeebx_vita/src/**'
-      - 'ports/zeebx-rust-vita/tools/patch_zeebx_*.py'
-      - '.github/workflows/probar-cnk-host.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:

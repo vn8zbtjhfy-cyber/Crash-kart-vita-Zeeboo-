@@ -1,21 +1,7 @@
 name: Validación de código (sin ROM)
 
+# Manual only: no push or pull_request runs; keep all build/test steps.
 on:
-  push:
-    paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'tools/**'
-      - 'scripts/**'
-      - 'CMakeLists.txt'
-      - '.github/workflows/verificacion.yml'
-  pull_request:
-    paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'tools/**'
-      - 'scripts/**'
-      - 'CMakeLists.txt'
   workflow_dispatch:
 
 permissions:
